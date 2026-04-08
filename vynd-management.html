@@ -1036,7 +1036,7 @@ tr.clickable:hover td{background:var(--bg)}
           <div class="pog-body" id="pog-body"></div>
 
           <!-- DEX View Overlay -->
-          <div id="dex-view-overlay" style="display:none;position:absolute;inset:0;background:var(--bg);z-index:10;overflow-y:auto;padding:20px">
+          <div id="dex-view-overlay" style="display:none;position:absolute;inset:0;background:var(--bg);z-index:50;overflow-y:auto;padding:20px">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
               <div>
                 <div style="font-size:16px;font-weight:700" id="dex-overlay-title">DEX slots</div>
@@ -1059,7 +1059,7 @@ tr.clickable:hover td{background:var(--bg)}
         </div>
 
         <!-- DEX Mismatch Warning Modal -->
-        <div id="dex-mismatch-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:none;align-items:center;justify-content:center">
+        <div id="dex-mismatch-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center">
           <div style="background:var(--card);border-radius:12px;padding:28px;max-width:480px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,.3)">
             <div style="font-size:18px;font-weight:700;margin-bottom:8px">⚠️ Slot number mismatch</div>
             <div style="font-size:14px;color:var(--muted);margin-bottom:16px" id="dex-mismatch-msg"></div>
@@ -2052,19 +2052,7 @@ const MACHINE_STATS = {
 };
 
 const PLANOGRAMS = {
-  'M-001': {
-    trays: ['A','B','C'],
-    slots: [
-      {id:'A1',product:'Coca-Cola 375ml',price:3.50,current:12,par:10,capacity:12},
-      {id:'A2',product:'Pepsi Max 375ml',price:3.50,current:11,par:10,capacity:12},
-      {id:'A3',product:'Mount Franklin Water 600ml',price:2.50,current:9,par:10,capacity:12},
-      {id:'B1',product:'Red Bull 250ml',price:4.50,current:8,par:8,capacity:10},
-      {id:'B2',product:'V Energy 250ml',price:4.50,current:10,par:8,capacity:10},
-      {id:'C1',product:"Smith's Original 45g",price:2.00,current:7,par:8,capacity:10},
-      {id:'C2',product:'Twix 58g',price:2.50,current:10,par:8,capacity:10},
-      {id:'C3',product:'Snickers 50g',price:2.50,current:9,par:8,capacity:10},
-    ]
-  },
+  'M-001': { trays: ['A','B','C'], slots: [] },  // loaded from Firebase
   'M-002': {
     trays: ['A','B','C'],
     slots: [
@@ -2742,7 +2730,6 @@ function initPogMachineList() {
 
 function showPlanogram(machineId) {
   if (machineId !== currentPogMachine) {
-    // Reset DEX view state when switching machines
     dexViewSlots    = {};
     dexViewSelected = new Set();
     closeDexView();
@@ -2752,16 +2739,89 @@ function showPlanogram(machineId) {
   closePogPanel();
   initPogMachineList();
 
-  const data = PLANOGRAMS[machineId];
   const meta = MACHINE_META[machineId] || {};
-  if (!data) return;
-
   document.getElementById('pog-title').textContent = machineId;
   document.getElementById('pog-subtitle').textContent = (meta.name||'') + (meta.customer ? ' · ' + meta.customer : '');
 
-  // Badges
-  refreshPogBadges(data);
-  renderPogBody(data);
+  // Load live DEX data from Firebase and merge with planogram
+  if (fbReady && fbDb) {
+    Promise.all([
+      fbDb.ref('vynd/machines/' + machineId + '/dex').once('value'),
+      fbDb.ref('vynd/planograms/' + machineId + '/slots').once('value'),
+    ]).then(([dexSnap, pogSnap]) => {
+      const dexData = dexSnap.val();
+      const pogData = pogSnap.val();
+
+      if (!dexViewJustApplied && dexData && dexData.slots && Object.keys(dexData.slots).length > 0) {
+        // Build planogram from live DEX data
+        const dexSlots = Object.values(dexData.slots).sort((a,b) => {
+          return String(a.id).localeCompare(String(b.id), undefined, {numeric:true});
+        });
+
+        // Group by shelf for tray assignment
+        const shelfMap = {};
+        dexSlots.forEach(slot => {
+          const num = parseInt(slot.id) || 0;
+          const shelfKey = isNaN(num) ? slot.id.charAt(0) : (num >= 100 ? Math.floor(num/100) : Math.floor(num/10));
+          if (!shelfMap[shelfKey]) shelfMap[shelfKey] = [];
+          shelfMap[shelfKey].push(slot);
+        });
+
+        const trayLetters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        const shelfKeys   = Object.keys(shelfMap).sort((a,b) => String(a).localeCompare(String(b), undefined, {numeric:true}));
+        const liveSlots   = [];
+
+        shelfKeys.forEach((shelfKey, shelfIdx) => {
+          const letter = trayLetters[shelfIdx] || String(shelfKey);
+          shelfMap[shelfKey].forEach(slot => {
+            // Get saved planogram data for this slot if it exists
+            const saved = pogData && pogData[slot.id];
+            liveSlots.push({
+              id:       slot.id,
+              tray:     letter,
+              product:  saved ? saved.product  : 'Empty',
+              price:    saved ? saved.priceDollars ? parseFloat(saved.priceDollars) : saved.priceCents/100 : parseFloat(slot.priceDollars || 0),
+              current:  slot.currentSOH !== null && slot.currentSOH !== undefined ? slot.currentSOH : (saved ? saved.currentSOH : 0),
+              par:      saved ? saved.par      : 10,
+              capacity: saved ? saved.capacity : 10,
+              dexPrice: parseFloat(slot.priceDollars || 0),
+              dexVends: slot.cumulativeVends || 0,
+              dexSOH:   slot.currentSOH || 0,
+              vendsSinceLastRead: slot.vendsSinceLastRead || 0,
+            });
+          });
+        });
+
+        PLANOGRAMS[machineId] = { slots: liveSlots };
+        refreshPogBadges(PLANOGRAMS[machineId]);
+        renderPogBody(PLANOGRAMS[machineId]);
+        initPogMachineList(); // refresh sidebar with correct slot count
+      } else {
+        // No live DEX data — use local planogram
+        const data = PLANOGRAMS[machineId];
+        if (!data || !data.slots || data.slots.length === 0) {
+          document.getElementById('pog-body').innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)">No planogram data yet — click <strong>DEX view</strong> to import slots from the machine</div>';
+          return;
+        }
+        refreshPogBadges(data);
+        renderPogBody(data);
+      }
+    }).catch(() => {
+      const data = PLANOGRAMS[machineId];
+      if (data && data.slots && data.slots.length > 0) {
+        refreshPogBadges(data);
+        renderPogBody(data);
+      }
+    });
+  } else {
+    const data = PLANOGRAMS[machineId];
+    if (!data || !data.slots || data.slots.length === 0) {
+      document.getElementById('pog-body').innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)">Connect to Firebase to load live machine data, or click <strong>DEX view</strong> to import slots</div>';
+      return;
+    }
+    refreshPogBadges(data);
+    renderPogBody(data);
+  }
 }
 
 function renderPogBody(data) {
@@ -3526,6 +3586,7 @@ setInterval(() => {
 // ══════════════════════════════════════
 
 let dexViewActive    = false;
+let dexViewJustApplied = false; // prevents Firebase reload overwriting DEX apply
 let dexViewSlots     = {};      // raw DEX slot data keyed by slotId
 let dexViewSelected  = new Set(); // slots toggled ON
 let dexViewPending   = null;    // pending DEX data waiting for mismatch resolution
@@ -3535,13 +3596,13 @@ function toggleDexView() {
     closeDexView();
     return;
   }
-  // If we already have DEX data for this machine, reopen overlay directly
-  if (Object.keys(dexViewSlots).length && currentPogMachine) {
-    openDexViewOverlay(currentPogMachine, dexViewSlots);
+  const machineId = currentPogMachine;
+  // If we already have DEX data loaded for this machine, reopen with existing selection
+  if (Object.keys(dexViewSlots).length > 0) {
+    openDexViewOverlay(machineId, dexViewSlots);
     return;
   }
-  // Load DEX data for current machine from Firebase
-  const machineId = currentPogMachine;
+  // Otherwise load fresh from Firebase
   if (!machineId) { showToast('No machine selected'); return; }
 
   const btn = document.getElementById('btn-dex-view');
@@ -3557,8 +3618,8 @@ function toggleDexView() {
     checkDexVsPlanogram(machineId, data);
   }
 
-  if (window.fbReady && window.fbDb) {
-    window.fbDb.ref('vynd/machines/' + machineId + '/dex/slots').once('value')
+  if (fbReady && fbDb) {
+    fbDb.ref('vynd/machines/' + machineId + '/dex/slots').once('value')
       .then(snap => loadDexData(snap.val()))
       .catch(() => {
         if (btn) { btn.textContent = 'DEX view'; btn.disabled = false; }
@@ -3596,64 +3657,61 @@ function toggleDexView() {
 }
 
 function applyDexViewToPlanogram() {
-  if (!dexViewSelected.size) { showToast('Select at least one slot first'); return; }
+  if (!dexViewSelected.size) { alert('No slots selected'); return; }
 
-  const machineId = currentPogMachine;
-  const pog       = PLANOGRAMS[machineId];
-
-  // Sort selected slots numerically
-  const selectedIds = Array.from(dexViewSelected).sort((a,b) => parseInt(a)-parseInt(b));
-
-  // Group by shelf for tray labelling — but KEEP original DEX slot numbers as IDs
-  const shelfMap = {};
-  selectedIds.forEach(id => {
-    const num = parseInt(id);
-    const shelfKey = num >= 100 ? Math.floor(num/100) : Math.floor(num/10);
-    if (!shelfMap[shelfKey]) shelfMap[shelfKey] = [];
-    shelfMap[shelfKey].push(id);
+  var machineId = currentPogMachine;
+  var pog = PLANOGRAMS[machineId];
+  var selectedIds = Array.from(dexViewSelected).sort(function(a,b){
+    return String(a).localeCompare(String(b), undefined, {numeric:true});
   });
 
-  const shelfKeys   = Object.keys(shelfMap).map(Number).sort((a,b)=>a-b);
-  const trayLetters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-
-  const newSlots = [];
-  shelfKeys.forEach((shelfKey, shelfIdx) => {
-    const letter     = trayLetters[shelfIdx] || String(shelfKey);
-    const shelfSlots = shelfMap[shelfKey];
-    shelfSlots.forEach(id => {
-      const dex      = dexViewSlots[id] || {};
-      const existing = pog && pog.slots.find(s => s.id === id || s.dexId === id);
-      newSlots.push({
-        id:       id,      // ← keep the DEX slot number (11, 13, 21...)
-        tray:     letter,  // ← tray letter for grouping display
-        product:  existing ? existing.product  : 'Empty',
-        price:    existing ? existing.price     : parseFloat(dex.priceDollars || (dex.priceCents||0)/100 || 0),
-        current:  existing ? existing.current   : (dex.currentSOH || 0),
-        par:      existing ? existing.par       : 10,
-        capacity: existing ? existing.capacity  : 10,
-        dexPrice: parseFloat(dex.priceDollars || (dex.priceCents||0)/100 || 0),
-        dexVends: dex.cumulativeVends || 0,
-        dexSOH:   dex.currentSOH || 0,
-      });
+  // Build new slots directly — no shelf grouping complexity
+  var newSlots = [];
+  selectedIds.forEach(function(id) {
+    var dex = dexViewSlots[id] || {};
+    var existing = pog && pog.slots ? pog.slots.find(function(s){ return s.id === id; }) : null;
+    // Determine tray from first character of id
+    var tray = id.charAt(0);
+    if (!isNaN(parseInt(id))) {
+      var num = parseInt(id);
+      var shelfIdx = Math.floor(num >= 100 ? num/100 : num/10);
+      tray = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[shelfIdx] || 'A';
+    }
+    newSlots.push({
+      id: id,
+      tray: tray,
+      product: existing ? existing.product : 'Empty',
+      price: existing ? existing.price : parseFloat(dex.priceDollars || 0),
+      current: existing ? existing.current : (dex.currentSOH || 0),
+      par: existing ? existing.par : 10,
+      capacity: existing ? existing.capacity : 10,
+      dexPrice: parseFloat(dex.priceDollars || 0),
+      dexVends: dex.cumulativeVends || 0,
+      dexSOH: dex.currentSOH || 0,
     });
   });
 
-  if (PLANOGRAMS[machineId]) {
-    PLANOGRAMS[machineId].slots = newSlots;
-  } else {
-    PLANOGRAMS[machineId] = { slots: newSlots };
-  }
+  PLANOGRAMS[machineId] = { slots: newSlots };
 
-  closeDexView();
-  showPlanogram(machineId);
-  showToast(`Planogram rebuilt with ${newSlots.length} slots across ${shelfKeys.length} shelves ✓`);
+  document.getElementById('dex-view-overlay').style.display = 'none';
+  dexViewActive = false;
+  var btn = document.getElementById('btn-dex-view');
+  if (btn) { btn.textContent = 'DEX view'; btn.style.background = ''; btn.style.color = ''; }
+
+  dexViewJustApplied = true;
+  refreshPogBadges(PLANOGRAMS[machineId]);
+  renderPogBody(PLANOGRAMS[machineId]);
+  initPogMachineList();
+  setTimeout(function(){ dexViewJustApplied = false; }, 3000);
+  showToast('Planogram updated with ' + newSlots.length + ' slots ✓');
 }
+
 
 function checkDexVsPlanogram(machineId, dexData) {
   const pog = PLANOGRAMS[machineId];
   const dexIds = Object.keys(dexData).filter(id => {
     const s = dexData[id];
-    return (s.cumulativeVends > 0 || s.currentSOH > 0 || s.priceCents > 0);
+    return (s.cumulativeVends > 0 || s.currentSOH > 0 || s.priceCents > 0 || parseFloat(s.priceDollars||0) > 0);
   }).sort();
 
   // If no planogram yet — just open DEX view directly
@@ -3671,10 +3729,9 @@ function checkDexVsPlanogram(machineId, dexData) {
   const allMatch = dexIds.every(id => pogSet.has(id)) && pogIds.every(id => dexSet.has(id));
 
   if (allMatch) {
-    // Silent apply — enrich planogram tiles with DEX data
-    dexViewSelected = new Set(dexIds);
-    applyDexDataToPlanogram(machineId, dexData);
-    showToast('DEX data applied to planogram ✓');
+    // Slots match — open overlay, keep existing selection or pre-select all
+    if (dexViewSelected.size === 0) dexViewSelected = new Set(dexIds);
+    openDexViewOverlay(machineId, dexData);
     return;
   }
 
@@ -3802,61 +3859,6 @@ function dexViewSelectAll(on) {
     else dexViewSelected.delete(id);
   });
   renderDexOverlayGrid(dexViewSlots);
-}
-
-function applyDexViewToPlanogram() {
-  if (!dexViewSelected.size) { showToast('Select at least one slot first'); return; }
-
-  const machineId = currentPogMachine;
-  const pog       = PLANOGRAMS[machineId];
-
-  // Sort selected slots numerically
-  const selectedIds = Array.from(dexViewSelected).sort((a,b) => parseInt(a)-parseInt(b));
-
-  // Group by shelf to assign tray letters
-  const shelfMap = {};
-  selectedIds.forEach(id => {
-    const num = parseInt(id);
-    const shelfKey = num >= 100 ? Math.floor(num/100) : Math.floor(num/10);
-    if (!shelfMap[shelfKey]) shelfMap[shelfKey] = [];
-    shelfMap[shelfKey].push(id);
-  });
-
-  // Map shelf numbers to tray letters A, B, C... for grouping only
-  const shelfKeys   = Object.keys(shelfMap).map(Number).sort((a,b)=>a-b);
-  const trayLetters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-
-  const newSlots = [];
-  shelfKeys.forEach((shelfKey, shelfIdx) => {
-    const letter     = trayLetters[shelfIdx] || String(shelfKey);
-    const shelfSlots = shelfMap[shelfKey];
-    shelfSlots.forEach(id => {
-      const dex      = dexViewSlots[id] || {};
-      const existing = pog && pog.slots.find(s => s.id === id || s.dexId === id);
-      newSlots.push({
-        id:       id,      // ← keep the DEX slot number (11, 13, 21...)
-        tray:     letter,  // ← tray letter for shelf grouping display only
-        product:  existing ? existing.product  : 'Empty',
-        price:    existing ? existing.price     : parseFloat(dex.priceDollars || (dex.priceCents||0)/100 || 0),
-        current:  existing ? existing.current   : (dex.currentSOH || 0),
-        par:      existing ? existing.par       : 10,
-        capacity: existing ? existing.capacity  : 10,
-        dexPrice: parseFloat(dex.priceDollars || (dex.priceCents||0)/100 || 0),
-        dexVends: dex.cumulativeVends || 0,
-        dexSOH:   dex.currentSOH || 0,
-      });
-    });
-  });
-
-  if (PLANOGRAMS[machineId]) {
-    PLANOGRAMS[machineId].slots = newSlots;
-  } else {
-    PLANOGRAMS[machineId] = { slots: newSlots };
-  }
-
-  closeDexView();
-  showPlanogram(machineId);
-  showToast(`Planogram rebuilt with ${newSlots.length} slots across ${shelfKeys.length} shelves ✓`);
 }
 
 function applyDexDataToPlanogram(machineId, dexData) {

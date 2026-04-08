@@ -3835,7 +3835,93 @@ function syncStopOnComplete(mid) {
     store.set(SYNC_TO_KEY, JSON.stringify(existing));
     store.set('vynd_last_driver_sync', new Date().toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit'}));
     updateSyncStatus();
+
+    // Complete pending reconciliation record in Firebase
+    completeReconciliation(mid, slots);
+
   } catch(e) {}
+}
+
+function completeReconciliation(machineId, slots) {
+  try {
+    if (!fbDb) return;
+
+    // Find the most recent pending reconciliation for this machine
+    fbDb.ref('vynd/reconciliation/' + machineId)
+      .orderByChild('status')
+      .equalTo('pending')
+      .limitToLast(1)
+      .once('value')
+      .then(snap => {
+        if (!snap.exists()) return;
+
+        // Get the pending record key and data
+        let recoKey, recoData;
+        snap.forEach(child => { recoKey = child.key; recoData = child.val(); });
+
+        if (!recoKey || !recoData) return;
+
+        // Build picked quantities and post-restock SOH from driver slot data
+        const pickedQuantities = {};
+        const postRestockSOH   = {};
+        let totalPicked        = 0;
+
+        slots.forEach(slot => {
+          pickedQuantities[slot.id] = {
+            product: slot.product,
+            added:   slot.added   || 0,
+            spoilt:  slot.spoilt  || 0,
+            damaged: slot.damaged || 0,
+          };
+          postRestockSOH[slot.id] = {
+            id:         slot.id,
+            product:    slot.product,
+            currentSOH: slot.sohAfter || 0,
+            added:      slot.added    || 0,
+          };
+          totalPicked += (slot.added || 0);
+        });
+
+        // Calculate variance per slot (what driver said vs what DEX said was sold)
+        const variance = {};
+        if (recoData.preRestockSOH) {
+          slots.forEach(slot => {
+            const pre      = recoData.preRestockSOH[slot.id];
+            const soldByDex = pre ? (pre.vendsSinceLastRead || 0) : 0;
+            const picked    = slot.added || 0;
+            const expected  = pre ? Math.max(0, (pre.currentSOH || 0)) : 0;
+            variance[slot.id] = {
+              soldByDex,
+              picked,
+              preSOH:     expected,
+              postSOH:    slot.sohAfter || 0,
+              variance:   (slot.sohAfter || 0) - (expected + picked - soldByDex),
+            };
+          });
+        }
+
+        // Update the reconciliation record to complete
+        const update = {
+          status:            'complete',
+          completedAt:       new Date().toISOString(),
+          pickedQuantities,
+          postRestockSOH,
+          totalPicked,
+          variance,
+          cashCollected:     STOPS[machineId]?.cash || 0,
+          bagNumber:         bagNumbers[machineId]  || null,
+        };
+
+        fbDb.ref('vynd/reconciliation/' + machineId + '/' + recoKey)
+          .update(update)
+          .then(() => console.log('Reconciliation completed for', machineId))
+          .catch(e => console.warn('Reco update failed', e));
+
+      }).catch(e => console.warn('Reco lookup failed', e));
+
+  } catch(e) {
+    console.warn('completeReconciliation error', e);
+  }
 }
 
 // ══════════════════════════════════════

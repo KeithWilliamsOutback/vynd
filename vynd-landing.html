@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VYND — Vending Operations Platform</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  --bg:#0a0c10;
+  --surface:#0f1219;
+  --card:#141820;
+  --border:rgba(255,255,255,0.07);
+  --border2:rgba(255,255,255,0.12);
+  --text:#eef0f5;
+  --muted:#6b7280;
+  --green:#4ade80;
+  --green-dim:rgba(74,222,128,0.12);
+  --green-border:rgba(74,222,128,0.25);
+  --amber:#f59e0b;
+  --blue:#60a5fa;
+  --red:#f87171;
+}
+
+html{scroll-behavior:smooth}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);overflow-x:hidden;line-height:1.6}
+
+/* ── GRAIN OVERLAY ── */
+body::before{
+  content:'';position:fixed;inset:0;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events:none;z-index:1000;opacity:.4;
+}
+
+/* ── NAV ── */
+nav{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  padding:0 48px;height:64px;
+  display:flex;align-items:center;justify-content:space-between;
+  border-bottom:1px solid var(--border);
+  background:rgba(10,12,16,0.85);
+  backdrop-filter:blur(20px);
+}
+.nav-logo{display:flex;align-items:center;gap:12px}
+.nav-logo-mark{
+  width:36px;height:36px;border-radius:8px;
+  background:linear-gradient(135deg,#1a4f2a,#0d2b16);
+  border:1px solid var(--green-border);
+  display:flex;align-items:center;justify-content:center;
+  font-family:'DM Mono',monospace;font-size:13px;font-weight:500;color:var(--green);
+  letter-spacing:.5px;
+}
+.nav-logo-text{font-family:'Syne',sans-serif;font-size:18px;font-weight:800;letter-spacing:-.3px}
+.nav-links{display:flex;align-items:center;gap:32px}
+.nav-links a{font-size:13px;color:var(--muted);text-decoration:none;transition:color .15s}
+.nav-links a:hover{color:var(--text)}
+.nav-cta{display:flex;gap:10px}
+.btn-ghost{padding:8px 18px;border:1px solid var(--border2);border-radius:8px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;color:var(--text);cursor:pointer;background:none;text-decoration:none;transition:all .15s}
+.btn-ghost:hover{border-color:var(--green);color:var(--green)}
+.btn-primary{padding:8px 18px;border:none;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;color:#0a0c10;cursor:pointer;background:var(--green);text-decoration:none;transition:all .15s}
+.btn-primary:hover{background:#22c55e;transform:translateY(-1px)}
+
+/* ── HERO ── */
+.hero{
+  min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:120px 48px 80px;position:relative;overflow:hidden;
+}
+.hero-glow{
+  position:absolute;top:-200px;left:50%;transform:translateX(-50%);
+  width:800px;height:800px;border-radius:50%;
+  background:radial-gradient(circle,rgba(74,222,128,0.06) 0%,transparent 70%);
+  pointer-events:none;
+}
+.hero-grid-bg{
+  position:absolute;inset:0;
+  background-image:linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);
+  background-size:48px 48px;
+  mask-image:radial-gradient(ellipse 80% 60% at 50% 0%,black 0%,transparent 100%);
+}
+.hero-eyebrow{
+  font-family:'DM Mono',monospace;font-size:11px;font-weight:500;
+  letter-spacing:3px;text-transform:uppercase;color:var(--green);
+  border:1px solid var(--green-border);background:var(--green-dim);
+  padding:5px 14px;border-radius:99px;margin-bottom:28px;
+  animation:fadeUp .6s ease both;
+}
+.hero-title{
+  font-family:'Syne',sans-serif;font-size:clamp(48px,7vw,88px);font-weight:800;
+  line-height:1.0;letter-spacing:-2px;text-align:center;margin-bottom:24px;
+  animation:fadeUp .6s .1s ease both;
+}
+.hero-title em{font-style:normal;color:var(--green)}
+.hero-sub{
+  font-size:18px;color:var(--muted);text-align:center;max-width:520px;
+  line-height:1.6;margin-bottom:48px;font-weight:300;
+  animation:fadeUp .6s .2s ease both;
+}
+.hero-actions{
+  display:flex;gap:14px;align-items:center;margin-bottom:80px;
+  animation:fadeUp .6s .3s ease both;
+}
+.hero-actions .btn-primary{padding:14px 28px;font-size:15px;border-radius:10px}
+.hero-actions .btn-ghost{padding:14px 28px;font-size:15px;border-radius:10px}
+
+/* ── APP CARDS ── */
+.app-cards{
+  display:grid;grid-template-columns:1fr 1fr;gap:20px;
+  width:100%;max-width:880px;
+  animation:fadeUp .6s .4s ease both;
+}
+.app-card{
+  border:1px solid var(--border);border-radius:16px;
+  padding:28px;background:var(--surface);
+  transition:all .2s;cursor:pointer;text-decoration:none;
+  position:relative;overflow:hidden;
+  display:block;
+}
+.app-card::before{
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(ellipse 60% 40% at 50% 0%,rgba(74,222,128,0.04),transparent);
+  opacity:0;transition:opacity .3s;
+}
+.app-card:hover{border-color:var(--green-border);transform:translateY(-3px);box-shadow:0 20px 40px rgba(0,0,0,.4)}
+.app-card:hover::before{opacity:1}
+.app-card-icon{
+  width:48px;height:48px;border-radius:12px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:22px;margin-bottom:16px;
+  border:1px solid var(--border2);background:var(--card);
+}
+.app-card-label{font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:2px;text-transform:uppercase;color:var(--green);margin-bottom:6px}
+.app-card-title{font-family:'Syne',sans-serif;font-size:20px;font-weight:700;margin-bottom:8px}
+.app-card-desc{font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:20px}
+.app-card-tags{display:flex;flex-wrap:wrap;gap:6px}
+.tag{font-size:10px;font-weight:500;padding:3px 9px;border-radius:99px;border:1px solid var(--border2);color:var(--muted);font-family:'DM Mono',monospace}
+.app-card-arrow{
+  position:absolute;top:28px;right:28px;
+  width:32px;height:32px;border-radius:8px;
+  border:1px solid var(--border2);background:var(--card);
+  display:flex;align-items:center;justify-content:center;
+  color:var(--muted);transition:all .2s;
+}
+.app-card:hover .app-card-arrow{border-color:var(--green);color:var(--green);background:var(--green-dim)}
+
+/* ── STATS STRIP ── */
+.stats-strip{
+  padding:64px 48px;
+  border-top:1px solid var(--border);border-bottom:1px solid var(--border);
+  display:grid;grid-template-columns:repeat(4,1fr);gap:0;
+  background:var(--surface);
+}
+.stat-item{
+  padding:32px 40px;border-right:1px solid var(--border);
+  animation:fadeUp .6s ease both;
+}
+.stat-item:last-child{border-right:none}
+.stat-num{
+  font-family:'Syne',sans-serif;font-size:48px;font-weight:800;
+  color:var(--green);line-height:1;margin-bottom:8px;
+  font-variant-numeric:tabular-nums;
+}
+.stat-label{font-size:13px;color:var(--muted);font-weight:400}
+
+/* ── FEATURES ── */
+.features{padding:100px 48px;max-width:1200px;margin:0 auto}
+.section-label{
+  font-family:'DM Mono',monospace;font-size:10px;font-weight:500;
+  letter-spacing:3px;text-transform:uppercase;color:var(--green);
+  margin-bottom:16px;
+}
+.section-title{font-family:'Syne',sans-serif;font-size:clamp(32px,4vw,48px);font-weight:800;letter-spacing:-1px;margin-bottom:16px}
+.section-sub{font-size:16px;color:var(--muted);max-width:480px;line-height:1.7;margin-bottom:60px;font-weight:300}
+
+.features-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.feature-card{
+  padding:28px;border:1px solid var(--border);border-radius:14px;
+  background:var(--surface);transition:all .2s;
+  opacity:0;transform:translateY(20px);
+}
+.feature-card.visible{opacity:1;transform:translateY(0);transition:opacity .5s ease,transform .5s ease}
+.feature-card:hover{border-color:var(--border2);background:var(--card)}
+.feature-icon{font-size:24px;margin-bottom:14px}
+.feature-title{font-family:'Syne',sans-serif;font-size:16px;font-weight:700;margin-bottom:8px}
+.feature-desc{font-size:13px;color:var(--muted);line-height:1.65}
+.feature-tag{
+  display:inline-block;margin-top:12px;
+  font-size:10px;font-family:'DM Mono',monospace;font-weight:500;
+  padding:2px 8px;border-radius:99px;
+}
+.feature-tag.driver{background:rgba(96,165,250,0.12);color:var(--blue);border:1px solid rgba(96,165,250,0.2)}
+.feature-tag.mgmt{background:var(--green-dim);color:var(--green);border:1px solid var(--green-border)}
+.feature-tag.both{background:rgba(245,158,11,0.1);color:var(--amber);border:1px solid rgba(245,158,11,0.2)}
+
+/* ── WORKFLOW ── */
+.workflow{padding:100px 48px;background:var(--surface);border-top:1px solid var(--border)}
+.workflow-inner{max-width:1200px;margin:0 auto}
+.workflow-steps{display:grid;grid-template-columns:repeat(4,1fr);gap:0;margin-top:60px;position:relative}
+.workflow-steps::before{
+  content:'';position:absolute;top:28px;left:10%;right:10%;height:1px;
+  background:linear-gradient(90deg,transparent,var(--green-border),var(--green-border),transparent);
+  z-index:0;
+}
+.workflow-step{text-align:center;padding:0 20px;position:relative;z-index:1}
+.workflow-step-num{
+  width:56px;height:56px;border-radius:50%;
+  background:var(--card);border:1px solid var(--green-border);
+  display:flex;align-items:center;justify-content:center;
+  font-family:'DM Mono',monospace;font-size:14px;font-weight:500;color:var(--green);
+  margin:0 auto 20px;position:relative;
+}
+.workflow-step-num::after{
+  content:'';position:absolute;inset:-4px;border-radius:50%;
+  border:1px solid var(--green-border);opacity:.3;
+}
+.workflow-step-title{font-family:'Syne',sans-serif;font-size:15px;font-weight:700;margin-bottom:8px}
+.workflow-step-desc{font-size:12px;color:var(--muted);line-height:1.6}
+
+/* ── CTA ── */
+.cta-section{
+  padding:120px 48px;text-align:center;
+  background:linear-gradient(180deg,var(--bg) 0%,rgba(74,222,128,0.03) 100%);
+  border-top:1px solid var(--border);
+  position:relative;overflow:hidden;
+}
+.cta-section::before{
+  content:'';position:absolute;bottom:-200px;left:50%;transform:translateX(-50%);
+  width:600px;height:600px;border-radius:50%;
+  background:radial-gradient(circle,rgba(74,222,128,0.08) 0%,transparent 70%);
+  pointer-events:none;
+}
+.cta-title{font-family:'Syne',sans-serif;font-size:clamp(36px,5vw,64px);font-weight:800;letter-spacing:-1.5px;margin-bottom:20px}
+.cta-sub{font-size:17px;color:var(--muted);max-width:440px;margin:0 auto 48px;font-weight:300;line-height:1.7}
+.cta-buttons{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+.cta-buttons .btn-primary{padding:16px 36px;font-size:16px;border-radius:12px}
+.cta-buttons .btn-ghost{padding:16px 36px;font-size:16px;border-radius:12px}
+
+/* ── FOOTER ── */
+footer{
+  padding:32px 48px;border-top:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+  background:var(--surface);
+}
+.footer-logo{font-family:'Syne',sans-serif;font-size:15px;font-weight:800;letter-spacing:-.3px}
+.footer-copy{font-size:12px;color:var(--muted)}
+.footer-links{display:flex;gap:24px}
+.footer-links a{font-size:12px;color:var(--muted);text-decoration:none;transition:color .15s}
+.footer-links a:hover{color:var(--text)}
+
+/* ── STATUS PILL ── */
+.status-pill{
+  display:inline-flex;align-items:center;gap:6px;
+  font-family:'DM Mono',monospace;font-size:10px;font-weight:500;
+  padding:4px 10px;border-radius:99px;
+  background:rgba(74,222,128,0.08);border:1px solid rgba(74,222,128,0.2);
+  color:var(--green);margin-bottom:20px;
+}
+.status-dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 2s ease infinite}
+
+/* ── ANIMATIONS ── */
+@keyframes fadeUp{
+  from{opacity:0;transform:translateY(24px)}
+  to{opacity:1;transform:translateY(0)}
+}
+@keyframes pulse{
+  0%,100%{opacity:1;transform:scale(1)}
+  50%{opacity:.5;transform:scale(.8)}
+}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:99px}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-logo">
+    <div class="nav-logo-mark">V</div>
+    <span class="nav-logo-text">VYND</span>
+  </div>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#workflow">Workflow</a>
+    <a href="#apps">Open apps</a>
+  </div>
+  <div class="nav-cta">
+    <a href="vynd-driver.html" class="btn-ghost">Driver app</a>
+    <a href="vynd-management.html" class="btn-primary">Management portal</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-glow"></div>
+  <div class="hero-grid-bg"></div>
+
+  <div class="status-pill">
+    <span class="status-dot"></span>
+    Platform v1.0 — Beta
+  </div>
+
+  <div class="hero-eyebrow">Vending Operations Platform</div>
+  <h1 class="hero-title">
+    Vending,<br><em>fully managed</em>
+  </h1>
+  <p class="hero-sub">
+    Two apps, one platform. Give your drivers the tools to fill faster, and your managers the data to run smarter.
+  </p>
+  <div class="hero-actions">
+    <a href="vynd-management.html" class="btn-primary">Open management portal →</a>
+    <a href="vynd-driver.html" class="btn-ghost">Open driver app</a>
+  </div>
+
+  <!-- APP CARDS -->
+  <div class="app-cards" id="apps">
+    <a href="vynd-driver.html" class="app-card">
+      <div class="app-card-arrow">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="app-card-icon">📱</div>
+      <div class="app-card-label">Mobile · Drivers</div>
+      <div class="app-card-title">Driver App</div>
+      <div class="app-card-desc">Route management, fill guide, stock pick, cash collection, DEX price checking, SOH audits and machine photos — all in one mobile-first app.</div>
+      <div class="app-card-tags">
+        <span class="tag">Fill guide</span>
+        <span class="tag">Stock pick</span>
+        <span class="tag">Cash & bags</span>
+        <span class="tag">DEX sync</span>
+        <span class="tag">SOH audit</span>
+        <span class="tag">Photos</span>
+      </div>
+    </a>
+    <a href="vynd-management.html" class="app-card">
+      <div class="app-card-arrow">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="app-card-icon">🖥</div>
+      <div class="app-card-label">Desktop · Managers</div>
+      <div class="app-card-title">Management Portal</div>
+      <div class="app-card-desc">Customers, locations, machines, planograms, routing, pricing, commission rules, reconciliation and reports — everything ops needs in one place.</div>
+      <div class="app-card-tags">
+        <span class="tag">Planograms</span>
+        <span class="tag">Routing</span>
+        <span class="tag">Commission</span>
+        <span class="tag">Reconciliation</span>
+        <span class="tag">Reports</span>
+        <span class="tag">Products</span>
+      </div>
+    </a>
+  </div>
+</section>
+
+<!-- STATS -->
+<div class="stats-strip">
+  <div class="stat-item">
+    <div class="stat-num" data-target="94">0</div>
+    <div class="stat-label">% fill rate across active routes</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-num" data-target="24">0</div>
+    <div class="stat-label">Active machines tracked live</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-num" data-prefix="$" data-target="18420">0</div>
+    <div class="stat-label">Weekly revenue visibility</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-num" data-target="6">0</div>
+    <div class="stat-label">Drivers on active routes today</div>
+  </div>
+</div>
+
+<!-- FEATURES -->
+<section class="features" id="features">
+  <div class="section-label">Platform features</div>
+  <h2 class="section-title">Built for how vending<br>actually works</h2>
+  <p class="section-sub">Every feature exists because a real vending operator needed it — not because it looked good on a roadmap.</p>
+
+  <div class="features-grid">
+    <div class="feature-card">
+      <div class="feature-icon">🗺</div>
+      <div class="feature-title">Smart route management</div>
+      <div class="feature-desc">Stop cards with fault alerts, fill status, cash estimates and bag tracking. Drivers see exactly what each stop needs before they arrive.</div>
+      <span class="feature-tag driver">Driver app</span>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">📋</div>
+      <div class="feature-title">Fill guide with swipe gestures</div>
+      <div class="feature-desc">Swipe right to confirm a slot, swipe left to record waste inline. Price mismatch flagging shows DEX vs VMS discrepancies per slot.</div>
+      <span class="feature-tag driver">Driver app</span>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">📦</div>
+      <div class="feature-title">Stock pick & prekit</div>
+      <div class="feature-desc">Minimum pick thresholds by unit or % of par. Fresh product prekit locks quantity to par and auto-records current stock as spoilage.</div>
+      <span class="feature-tag both">Both apps</span>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">💰</div>
+      <div class="feature-title">DEX price verification</div>
+      <div class="feature-desc">Every slot flags when the machine's DEX-reported price differs from the VMS target. Driver is prompted to update label and keypad on the spot.</div>
+      <span class="feature-tag driver">Driver app</span>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">📷</div>
+      <div class="feature-title">Machine photo capture</div>
+      <div class="feature-desc">Configurable photo frequency — every fill, every Nth fill, or triggered automatically when a price change is activated on this visit.</div>
+      <span class="feature-tag driver">Driver app</span>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🏷</div>
+      <div class="feature-title">Cash bag scanning</div>
+      <div class="feature-desc">Individual bag numbers per machine or a single route bag. Barcode scanning via BarcodeDetector API with manual fallback. Syncs to the cash screen live.</div>
+      <span class="feature-tag driver">Driver app</span>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🔢</div>
+      <div class="feature-title">SOH audit with DEX automation</div>
+      <div class="feature-desc">Triggered every N fills. DEX vend data pre-calculates expected counts per slot — driver confirms or adjusts. Variances colour-coded by severity.</div>
+      <span class="feature-tag driver">Driver app</span>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🖼</div>
+      <div class="feature-title">Visual planogram editor</div>
+      <div class="feature-desc">Tray-grouped slot grid with product images. Tab through Current, Par and Capacity fields across the whole machine. DEX view overlays price mismatches.</div>
+      <span class="feature-tag mgmt">Management</span>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🤝</div>
+      <div class="feature-title">Commission engine</div>
+      <div class="feature-desc">Rules per customer — % of net cash, % of gross, or flat monthly fee. Applied at product family level. Monthly net revenue summary auto-calculated.</div>
+      <span class="feature-tag mgmt">Management</span>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">⚖️</div>
+      <div class="feature-title">Reconciliation</div>
+      <div class="feature-desc">DEX vend data matched against cash collected per machine per run. Variance highlighting, No DEX flagging, and open reconciliation tracking.</div>
+      <span class="feature-tag mgmt">Management</span>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🥬</div>
+      <div class="feature-title">Fresh product management</div>
+      <div class="feature-desc">Life span in days triggers expiry alerts. Override prekit to par locks pick quantity and writes off current machine stock automatically on fill.</div>
+      <span class="feature-tag both">Both apps</span>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🔍</div>
+      <div class="feature-title">Multi-barcode products</div>
+      <div class="feature-desc">Primary barcode plus unlimited aliases per product. Essential for micromarket scanning where any barcode on the product must resolve to the same SKU.</div>
+      <span class="feature-tag mgmt">Management</span>
+    </div>
+  </div>
+</section>
+
+<!-- WORKFLOW -->
+<section class="workflow" id="workflow">
+  <div class="workflow-inner">
+    <div class="section-label">How it works</div>
+    <h2 class="section-title">One platform, two views</h2>
+    <p class="section-sub">Management sets everything up. Drivers execute on the ground. Data flows both ways.</p>
+
+    <div class="workflow-steps">
+      <div class="workflow-step">
+        <div class="workflow-step-num">01</div>
+        <div class="workflow-step-title">Manager sets up</div>
+        <div class="workflow-step-desc">Products, machines, planograms, pricing and commission rules configured in the management portal.</div>
+      </div>
+      <div class="workflow-step">
+        <div class="workflow-step-num">02</div>
+        <div class="workflow-step-title">Route is built</div>
+        <div class="workflow-step-desc">Stops ordered, driver assigned, stock pick pre-calculated using current SOH vs par levels and min pick thresholds.</div>
+      </div>
+      <div class="workflow-step">
+        <div class="workflow-step-num">03</div>
+        <div class="workflow-step-title">Driver executes</div>
+        <div class="workflow-step-desc">Pick, fill, audit, photograph, collect cash. Every action captured and time-stamped in the driver app.</div>
+      </div>
+      <div class="workflow-step">
+        <div class="workflow-step-num">04</div>
+        <div class="workflow-step-title">Data reconciled</div>
+        <div class="workflow-step-desc">Cash collected matched to DEX vend data. Variances flagged, commission calculated, reports available immediately.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section">
+  <h2 class="cta-title">Ready to explore<br><em style="font-style:normal;color:var(--green)">VYND</em>?</h2>
+  <p class="cta-sub">Open either app below. Both run entirely in the browser — no login required for this demo.</p>
+  <div class="cta-buttons">
+    <a href="vynd-management.html" class="btn-primary">Management portal →</a>
+    <a href="vynd-driver.html" class="btn-ghost">Driver app →</a>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-logo">VYND</div>
+  <div class="footer-copy">© 2026 VYND · Vending Operations Platform · Beta</div>
+  <div class="footer-links">
+    <a href="vynd-driver.html">Driver app</a>
+    <a href="vynd-management.html">Management</a>
+  </div>
+</footer>
+
+<!-- SETUP NOTICE -->
+<div id="setup-notice" style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:200;background:#1a1f2e;border:1px solid rgba(74,222,128,.3);border-radius:12px;padding:14px 20px;max-width:560px;width:calc(100% - 40px);display:flex;align-items:flex-start;gap:12px;box-shadow:0 8px 32px rgba(0,0,0,.5)">
+  <span style="font-size:18px;flex-shrink:0">💡</span>
+  <div style="flex:1;min-width:0">
+    <div style="font-size:13px;font-weight:600;color:#eef0f5;margin-bottom:3px">Demo setup required</div>
+    <div style="font-size:12px;color:#6b7280;line-height:1.5">Download all three files and place them in the same folder, then open <span style="font-family:'DM Mono',monospace;color:#4ade80">vynd-landing.html</span> in your browser. The app links will work automatically.</div>
+    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+      <a href="vynd-driver.html" style="font-size:11px;font-family:'DM Mono',monospace;padding:4px 12px;border-radius:6px;border:1px solid rgba(74,222,128,.25);color:#4ade80;text-decoration:none;background:rgba(74,222,128,.08)">vynd-driver.html ↗</a>
+      <a href="vynd-management.html" style="font-size:11px;font-family:'DM Mono',monospace;padding:4px 12px;border-radius:6px;border:1px solid rgba(74,222,128,.25);color:#4ade80;text-decoration:none;background:rgba(74,222,128,.08)">vynd-management.html ↗</a>
+      <button onclick="document.getElementById('setup-notice').style.display='none'" style="font-size:11px;padding:4px 12px;border-radius:6px;border:1px solid rgba(255,255,255,.1);color:#6b7280;background:none;cursor:pointer;font-family:'DM Sans',sans-serif">Dismiss</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Dynamic local file links ──
+// Builds correct file:// paths relative to wherever this file is saved
+function getAppUrl(filename) {
+  const base = window.location.href.replace(/\/[^\/]*$/, '/');
+  return base + filename;
+}
+
+function openApp(filename) {
+  window.location.href = getAppUrl(filename);
+}
+
+// Replace all app links with JS onclick handlers
+document.querySelectorAll('a[href="vynd-driver.html"], a[href="vynd-management.html"]').forEach(link => {
+  const file = link.getAttribute('href');
+  link.removeAttribute('href');
+  link.style.cursor = 'pointer';
+  link.addEventListener('click', e => {
+    e.preventDefault();
+    openApp(file);
+  });
+});
+
+// ── Animated counters ──
+function animateCounters() {
+  document.querySelectorAll('.stat-num[data-target]').forEach(el => {
+    const target   = parseInt(el.dataset.target);
+    const prefix   = el.dataset.prefix || '';
+    const duration = 1800;
+    const start    = performance.now();
+    const isLarge  = target > 1000;
+
+    function step(now) {
+      const elapsed  = now - start;
+      const progress = Math.min(elapsed / duration, 1);
+      const ease     = 1 - Math.pow(1 - progress, 3);
+      const val      = Math.round(ease * target);
+      el.textContent = prefix + (isLarge ? val.toLocaleString() : val) + (el.dataset.suffix || '');
+      if (progress < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  });
+}
+
+// ── Scroll-triggered feature cards ──
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach((entry, i) => {
+    if (entry.isIntersecting) {
+      setTimeout(() => entry.target.classList.add('visible'), i * 60);
+      observer.unobserve(entry.target);
+    }
+  });
+}, { threshold: 0.1 });
+
+document.querySelectorAll('.feature-card').forEach(card => observer.observe(card));
+
+// ── Trigger counters when stats section is visible ──
+const statsObserver = new IntersectionObserver((entries) => {
+  if (entries[0].isIntersecting) {
+    animateCounters();
+    statsObserver.disconnect();
+  }
+}, { threshold: 0.3 });
+statsObserver.observe(document.querySelector('.stats-strip'));
+</script>
+</body>
+</html>

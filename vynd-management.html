@@ -357,6 +357,12 @@ tr.clickable:hover td{background:var(--bg)}
 .toggle-sw-track{position:absolute;inset:0;background:var(--border2);border-radius:99px;cursor:pointer;transition:.2s}
 .toggle-sw-track:before{content:'';position:absolute;width:16px;height:16px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s}
 .toggle-sw input:checked + .toggle-sw-track{background:var(--accent)}
+.toggle-sw input:checked + .toggle-sw-track:before{transform:translateX(18px)}
+.toggle-track{width:40px;height:22px;border-radius:99px;background:var(--border2);cursor:pointer;transition:background .2s;position:relative;flex-shrink:0}
+.toggle-track.on{background:var(--accent)}
+.toggle-knob{position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .2s}
+.toggle-track.on .toggle-knob{transform:translateX(18px)}
+.toggle-wrap{display:flex;align-items:center;gap:8px;cursor:pointer}
 .toggle-sw input:checked + .toggle-sw-track:before{transform:translateX(18px)};border:1px solid var(--border);border-radius:var(--r-sm);padding:14px 16px;margin-bottom:8px;transition:all .15s}
 .lan-card:hover{box-shadow:var(--shadow-md)}
 .lan-card.unassigned{border-color:rgba(217,119,6,.3);background:var(--warn-bg)}
@@ -1020,82 +1026,155 @@ tr.clickable:hover td{background:var(--bg)}
     </div>
 
     <!-- ══ PRODUCTS ══ -->
-    <div class="page" id="page-products">
-      <div class="filter-bar">
-        <input class="search-input" placeholder="Search products…" oninput="filterTable('products-tbody',this.value,[0,1])">
-        <button class="filter-btn on" onclick="setTF(this,'all','products-tbody','cat')">All</button>
-        <button class="filter-btn" onclick="setTF(this,'drink','products-tbody','cat')">Drinks</button>
-        <button class="filter-btn" onclick="setTF(this,'snack','products-tbody','cat')">Snacks</button>
-        <button class="filter-btn" onclick="setTF(this,'food','products-tbody','cat')">Food</button>
+    <div class="page page-flex" id="page-products" style="height:calc(100vh - 60px);overflow:hidden">
+
+      <!-- Filter bar -->
+      <div class="filter-bar" style="flex-shrink:0">
+        <input class="search-input" id="prod-search" placeholder="Search products, barcodes, brands…" oninput="renderProductsPage()">
+        <button class="filter-btn on" onclick="setProdFilter('all',this)">All</button>
+        <button class="filter-btn"   onclick="setProdFilter('drink',this)">Drinks</button>
+        <button class="filter-btn"   onclick="setProdFilter('snack',this)">Snacks</button>
+        <button class="filter-btn"   onclick="setProdFilter('food',this)">Food</button>
+        <button class="filter-btn"   onclick="setProdFilter('other',this)">Other</button>
+        <div style="margin-left:auto;display:flex;gap:8px">
+          <button class="btn btn-secondary btn-sm" onclick="exportProductsCSV()">⬇ Export CSV</button>
+          <button class="btn btn-primary btn-sm"   onclick="openProductModal()">+ Add product</button>
+        </div>
       </div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Image</th><th>Product</th><th>Brand / Family</th><th>Barcodes</th><th>Tax</th><th>Life</th><th>Cost</th><th>RRP</th><th>Margin</th><th>Flags</th><th></th></tr></thead>
-          <tbody id="products-tbody">
-            <tr class="clickable" data-cat="drink" onclick="openProductModal('Coca-Cola 375ml','SKU-001','9300675000015','Coca-Cola','Coca-Cola Amatil','Carbonated Soft Drinks','drink','gst','','1.20','3.50','24','')">
-              <td><div class="prod-img-thumb">🥤</div></td>
-              <td><strong>Coca-Cola 375ml</strong></td>
-              <td><span style="font-size:12px">Coca-Cola</span><br><span class="text-muted" style="font-size:11px">Carbonated Soft Drinks</span></td>
-              <td class="text-mono" style="font-size:11px">9300675000015<br><span class="text-muted">+1 alias</span></td>
-              <td><span class="pill gray" style="font-size:10px">GST</span></td>
-              <td class="text-muted text-mono" style="font-size:12px">—</td>
-              <td class="text-mono">$1.20</td><td class="text-mono">$3.50</td>
-              <td><span style="color:var(--accent);font-weight:600">66%</span></td>
-              <td><span class="pill blue" style="font-size:10px">30% min pick</span></td><svg width="13" height="13" viewBox="0 0 20 20" fill="none"><path d="M4 13.5V16h2.5l7.37-7.37-2.5-2.5L4 13.5zM16.71 6.04a1 1 0 000-1.41l-1.34-1.34a1 1 0 00-1.41 0l-1.05 1.05 2.75 2.75 1.05-1.05z" fill="currentColor"/></svg></button></td>
-            </tr>
-            <tr class="clickable" data-cat="drink" onclick="openProductModal('Red Bull 250ml','SKU-002','9002490100070','Red Bull','Red Bull GmbH','Energy Drinks','drink','gst','','1.85','4.50','24','')">
-              <td><div class="prod-img-thumb">⚡</div></td>
-              <td><strong>Red Bull 250ml</strong></td>
-              <td><span style="font-size:12px">Red Bull</span><br><span class="text-muted" style="font-size:11px">Energy Drinks</span></td>
-              <td class="text-mono" style="font-size:11px">9002490100070</td>
-              <td><span class="pill gray" style="font-size:10px">GST</span></td>
-              <td class="text-muted text-mono" style="font-size:12px">—</td>
-              <td class="text-mono">$1.85</td><td class="text-mono">$4.50</td>
-              <td><span style="color:var(--accent);font-weight:600">59%</span></td>
-              <td></td>
-              <td><button class="btn-icon btn-sm" onclick="event.stopPropagation()"><svg width="13" height="13" viewBox="0 0 20 20" fill="none"><path d="M4 13.5V16h2.5l7.37-7.37-2.5-2.5L4 13.5zM16.71 6.04a1 1 0 000-1.41l-1.34-1.34a1 1 0 00-1.41 0l-1.05 1.05 2.75 2.75 1.05-1.05z" fill="currentColor"/></svg></button></td>
-            </tr>
-            <tr class="clickable" data-cat="drink">
-              <td><div class="prod-img-thumb">💧</div></td>
-              <td><strong>Mount Franklin 600ml</strong></td>
-              <td><span style="font-size:12px">Mount Franklin</span><br><span class="text-muted" style="font-size:11px">Still Water</span></td>
-              <td class="text-mono" style="font-size:11px">9300650053003</td>
-              <td><span class="pill green" style="font-size:10px">GST Free</span></td>
-              <td class="text-muted text-mono" style="font-size:12px">—</td>
-              <td class="text-mono">$0.65</td><td class="text-mono">$2.50</td>
-              <td><span style="color:var(--accent);font-weight:600">74%</span></td>
-              <td></td>
-              <td><button class="btn-icon btn-sm" onclick="event.stopPropagation()"><svg width="13" height="13" viewBox="0 0 20 20" fill="none"><path d="M4 13.5V16h2.5l7.37-7.37-2.5-2.5L4 13.5zM16.71 6.04a1 1 0 000-1.41l-1.34-1.34a1 1 0 00-1.41 0l-1.05 1.05 2.75 2.75 1.05-1.05z" fill="currentColor"/></svg></button></td>
-            </tr>
-            <tr class="clickable" data-cat="snack">
-              <td><div class="prod-img-thumb">🥔</div></td>
-              <td><strong>Smith's Original 45g</strong></td>
-              <td><span style="font-size:12px">Smith's</span><br><span class="text-muted" style="font-size:11px">Savoury Snacks</span></td>
-              <td class="text-mono" style="font-size:11px">9310015036039</td>
-              <td><span class="pill gray" style="font-size:10px">GST</span></td>
-              <td class="text-muted text-mono" style="font-size:12px">—</td>
-              <td class="text-mono">$0.75</td><td class="text-mono">$2.00</td>
-              <td><span style="color:var(--accent);font-weight:600">63%</span></td>
-              <td></td>
-              <td><button class="btn-icon btn-sm" onclick="event.stopPropagation()"><svg width="13" height="13" viewBox="0 0 20 20" fill="none"><path d="M4 13.5V16h2.5l7.37-7.37-2.5-2.5L4 13.5zM16.71 6.04a1 1 0 000-1.41l-1.34-1.34a1 1 0 00-1.41 0l-1.05 1.05 2.75 2.75 1.05-1.05z" fill="currentColor"/></svg></button></td>
-            </tr>
-            <tr class="clickable" data-cat="food" onclick="openProductModal('Sanitarium Up&Go 250ml','SKU-020','9310055010010','Sanitarium','Sanitarium Health Food Co.','Meal Replacements','food','gst-free','5','1.40','3.50','12','true')">
-              <td><div class="prod-img-thumb">🥛</div></td>
-              <td><strong>Sanitarium Up&amp;Go 250ml</strong><br><span class="text-muted" style="font-size:11px">Fresh — prekit to par</span></td>
-              <td><span style="font-size:12px">Sanitarium</span><br><span class="text-muted" style="font-size:11px">Meal Replacements</span></td>
-              <td class="text-mono" style="font-size:11px">9310055010010</td>
-              <td><span class="pill green" style="font-size:10px">GST Free</span></td>
-              <td style="font-size:12px"><span class="pill orange" style="font-size:10px">5d</span></td>
-              <td class="text-mono">$1.40</td><td class="text-mono">$3.50</td>
-              <td><span style="color:var(--warn);font-weight:600">60%</span></td>
-              <td><span class="pill blue" style="font-size:10px">🥬 Fresh</span></td>
-              <td><button class="btn-icon btn-sm" onclick="event.stopPropagation();openProductModal('Sanitarium Up&Go 250ml','SKU-020','9310055010010','Sanitarium','Sanitarium Health Food Co.','Meal Replacements','food','gst-free','5','1.40','3.50','12','true')"><svg width="13" height="13" viewBox="0 0 20 20" fill="none"><path d="M4 13.5V16h2.5l7.37-7.37-2.5-2.5L4 13.5zM16.71 6.04a1 1 0 000-1.41l-1.34-1.34a1 1 0 00-1.41 0l-1.05 1.05 2.75 2.75 1.05-1.05z" fill="currentColor"/></svg></button></td>
-            </tr>
-          </tbody>
-        </table>
+
+      <!-- Summary bar -->
+      <div style="display:flex;gap:0;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0">
+        <div style="flex:1;padding:10px 20px;border-right:1px solid var(--border);text-align:center">
+          <div style="font-family:'DM Mono',monospace;font-size:18px;font-weight:700;color:var(--accent)" id="prod-stat-total">—</div>
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-top:1px">Products</div>
+        </div>
+        <div style="flex:1;padding:10px 20px;border-right:1px solid var(--border);text-align:center">
+          <div style="font-family:'DM Mono',monospace;font-size:18px;font-weight:700;color:var(--info)" id="prod-stat-drinks">—</div>
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-top:1px">Drinks</div>
+        </div>
+        <div style="flex:1;padding:10px 20px;border-right:1px solid var(--border);text-align:center">
+          <div style="font-family:'DM Mono',monospace;font-size:18px;font-weight:700;color:var(--warn)" id="prod-stat-snacks">—</div>
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-top:1px">Snacks</div>
+        </div>
+        <div style="flex:1;padding:10px 20px;border-right:1px solid var(--border);text-align:center">
+          <div style="font-family:'DM Mono',monospace;font-size:18px;font-weight:700;color:#a78bfa" id="prod-stat-food">—</div>
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-top:1px">Food</div>
+        </div>
+        <div style="flex:1;padding:10px 20px;text-align:center">
+          <div style="font-family:'DM Mono',monospace;font-size:18px;font-weight:700;color:var(--accent)" id="prod-stat-gst-free">—</div>
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-top:1px">GST Free</div>
+        </div>
+      </div>
+
+      <!-- Table -->
+      <div style="flex:1;overflow-y:auto">
+        <div class="table-wrap" style="margin:0">
+          <table>
+            <thead>
+              <tr>
+                <th>Product</th>
+                <th>Barcode</th>
+                <th>Brand</th>
+                <th>Family</th>
+                <th>RRP</th>
+                <th>Cost</th>
+                <th>Margin</th>
+                <th>GST</th>
+                <th>Flags</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="products-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Product modal -->
+      <div class="modal-overlay" id="prod-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:center;justify-content:center">
+        <div class="modal" style="width:560px">
+          <div class="modal-hd">
+            <div class="modal-title" id="prod-modal-title">Add product</div>
+            <button class="modal-close" onclick="closeProdModal()">✕</button>
+          </div>
+          <div class="modal-body" style="display:flex;flex-direction:column;gap:12px">
+            <div class="form-group" style="grid-column:1/-1">
+              <div class="form-label">Product name</div>
+              <input class="form-input" id="prod-m-name" placeholder="e.g. Coca Cola Classic 375ml">
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <div class="form-label">Barcode</div>
+                <input class="form-input" id="prod-m-barcode" placeholder="EAN/UPC" style="font-family:'DM Mono',monospace">
+              </div>
+              <div class="form-group">
+                <div class="form-label">Brand</div>
+                <input class="form-input" id="prod-m-brand" placeholder="e.g. Coca-Cola">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <div class="form-label">Manufacturer</div>
+                <input class="form-input" id="prod-m-manufacturer" placeholder="e.g. The Coca-Cola Company">
+              </div>
+              <div class="form-group">
+                <div class="form-label">Family</div>
+                <input class="form-input" id="prod-m-family" placeholder="e.g. Drinks">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <div class="form-label">Type</div>
+                <select class="form-select" id="prod-m-cat">
+                  <option value="drink">Drink</option>
+                  <option value="snack">Snack</option>
+                  <option value="food">Food</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <div class="form-label">RRP ($)</div>
+                <input class="form-input" id="prod-m-rrp" type="number" step="0.10" placeholder="3.50">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <div class="form-label">Cost ($)</div>
+                <input class="form-input" id="prod-m-cost" type="number" step="0.01" placeholder="1.20">
+              </div>
+              <div class="form-group">
+                <div class="form-label">Min pick threshold (%)</div>
+                <input class="form-input" id="prod-m-minpick" type="number" min="0" max="100" placeholder="0 = disabled">
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r-sm)">
+                <span style="font-size:13px">GST Free</span>
+                <div class="toggle-wrap" onclick="document.getElementById('prod-m-gstfree').classList.toggle('on')">
+                  <div class="toggle-track" id="prod-m-gstfree"><div class="toggle-knob"></div></div>
+                </div>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r-sm)">
+                <span style="font-size:13px">Override par — always pick to par regardless of SOH</span>
+                <div class="toggle-wrap" onclick="document.getElementById('prod-m-overridepar').classList.toggle('on')">
+                  <div class="toggle-track" id="prod-m-overridepar"><div class="toggle-knob"></div></div>
+                </div>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r-sm)">
+                <span style="font-size:13px">Fresh / prekit — current stock auto-recorded as waste</span>
+                <div class="toggle-wrap" onclick="document.getElementById('prod-m-prekit').classList.toggle('on')">
+                  <div class="toggle-track" id="prod-m-prekit"><div class="toggle-knob"></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="modal-ft">
+            <button class="btn btn-danger btn-sm" id="prod-delete-btn" style="margin-right:auto;display:none" onclick="deleteProduct()">Delete</button>
+            <button class="btn btn-secondary" onclick="closeProdModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="saveProductModal()">Save product</button>
+          </div>
+        </div>
       </div>
     </div>
-
     <!-- ══ ROUTING ══ -->
     <div class="page" id="page-routing" style="padding:0">
       <div style="display:grid;grid-template-columns:260px 1fr 360px;gap:0;height:calc(100vh - 60px);height:calc(100dvh - 60px);border-top:1px solid var(--border)">
@@ -1980,6 +2059,47 @@ tr.clickable:hover td{background:var(--bg)}
               <span style="font-size:12px;color:var(--muted)">flag as investigate</span>
             </div>
             <div style="font-size:11px;color:var(--muted);margin-top:6px">Cash variances above this amount are flagged for investigation</div>
+          </div>
+
+          <!-- Margin thresholds -->
+          <div class="card" style="grid-column:1/-1">
+            <div style="font-weight:700;font-size:13px;margin-bottom:4px">📊 Margin thresholds</div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:16px">Controls how margin % is colour coded across products, planograms and reports</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px">
+
+              <div style="background:var(--bg);border:1px solid rgba(74,222,128,.3);border-radius:var(--r-sm);padding:14px">
+                <div class="form-label" style="margin-bottom:4px;color:var(--accent)">🟢 Green — healthy margin</div>
+                <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Margin at or above this % shows green</div>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <input class="form-input" type="number" id="margin-green" min="0" max="100" value="60" style="width:80px;font-family:'DM Mono',monospace;font-size:15px;font-weight:700;text-align:center" onchange="saveMarginThresholds()">
+                  <span style="font-size:16px;color:var(--muted)">%</span>
+                </div>
+              </div>
+
+              <div style="background:var(--bg);border:1px solid rgba(217,119,6,.3);border-radius:var(--r-sm);padding:14px">
+                <div class="form-label" style="margin-bottom:4px;color:var(--warn)">🟡 Amber — watch margin</div>
+                <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Margin at or above this % (but below green) shows amber</div>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <input class="form-input" type="number" id="margin-amber" min="0" max="100" value="50" style="width:80px;font-family:'DM Mono',monospace;font-size:15px;font-weight:700;text-align:center" onchange="saveMarginThresholds()">
+                  <span style="font-size:16px;color:var(--muted)">%</span>
+                </div>
+              </div>
+
+              <div style="background:var(--bg);border:1px solid rgba(220,38,38,.3);border-radius:var(--r-sm);padding:14px">
+                <div class="form-label" style="margin-bottom:4px;color:var(--danger)">🔴 Red — low margin</div>
+                <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Margin below amber threshold shows red</div>
+                <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm)">
+                  <span style="font-family:'DM Mono',monospace;font-size:15px;font-weight:700;color:var(--danger)" id="margin-red-display">&lt; 50%</span>
+                </div>
+              </div>
+
+            </div>
+            <div style="font-size:11px;color:var(--muted);margin-top:12px;padding:10px;background:var(--bg);border-radius:var(--r-sm)">
+              Preview: 
+              <span style="font-family:'DM Mono',monospace;font-weight:700" id="margin-preview-green"></span>
+              <span style="font-family:'DM Mono',monospace;font-weight:700;margin-left:12px" id="margin-preview-amber"></span>
+              <span style="font-family:'DM Mono',monospace;font-weight:700;margin-left:12px" id="margin-preview-red"></span>
+            </div>
           </div>
 
           <!-- Driver app controls -->
@@ -3261,6 +3381,7 @@ function navTo(page, el) {
   if (page === 'routing')         initRoutingPage();
   if (page === 'locations')       initLocationsPage();
   if (page === 'customers')       initCustomersPage();
+  if (page === 'products')        initProductsPage();
   if (page === 'planograms')      { initPogMachineList(); showPlanogram(currentPogMachine); }
   if (page === 'dashboard')       { refreshPortalSync(); refreshDashboard(); }
   if (page === 'lan')             initLanPage();
@@ -6053,6 +6174,8 @@ let OPERATIONAL_SETTINGS = {
   varianceThreshold:  5,
   photoFrequency:     1,
   auditFrequency:     5,
+  marginGreen:        60,
+  marginAmber:        50,
   // Routing intelligence
   fillTime:           15,   // minutes per machine
   maxRestockDays:     42,   // days before overdue
@@ -6160,6 +6283,8 @@ function applyOperationalSettingsToUI() {
   const etEl = document.getElementById('empty-threshold');
   if (etEl) { etEl.value = et; const d=document.getElementById('empty-threshold-val'); if(d) d.textContent=et; }
   setSoldOutMode(OPERATIONAL_SETTINGS.soldOutMode || 'product');
+  // Margin thresholds
+  applyMarginThresholdsToUI();
   // Photo/audit frequency buttons
   const photoFreq = OPERATIONAL_SETTINGS.photoFrequency ?? 1;
   const auditFreq = OPERATIONAL_SETTINGS.auditFrequency ?? 5;
@@ -6218,6 +6343,67 @@ function setSoldOutMode(mode) {
   saveOperationalSettings();
 }
 
+// ── Margin threshold helpers ──
+function getMarginThresholds() {
+  return {
+    green: OPERATIONAL_SETTINGS.marginGreen ?? 60,
+    amber: OPERATIONAL_SETTINGS.marginAmber ?? 50,
+  };
+}
+
+function marginColor(pct) {
+  const { green, amber } = getMarginThresholds();
+  if (pct >= green) return 'var(--accent)';
+  if (pct >= amber) return 'var(--warn)';
+  return 'var(--danger)';
+}
+
+function saveMarginThresholds() {
+  const green = parseInt(document.getElementById('margin-green')?.value) || 60;
+  const amber = parseInt(document.getElementById('margin-amber')?.value) || 50;
+
+  // Enforce amber < green
+  const safeAmber = Math.min(amber, green - 1);
+  const amberEl = document.getElementById('margin-amber');
+  if (amberEl && amber >= green) {
+    amberEl.value = safeAmber;
+    showToast('Amber must be below green threshold');
+  }
+
+  OPERATIONAL_SETTINGS.marginGreen = green;
+  OPERATIONAL_SETTINGS.marginAmber = safeAmber;
+
+  updateMarginPreview();
+  saveOperationalSettings();
+  // Re-render products page if open
+  if (document.getElementById('page-products')?.classList.contains('active')) {
+    renderProductsPage();
+  }
+}
+
+function updateMarginPreview() {
+  const { green, amber } = getMarginThresholds();
+  const redEl   = document.getElementById('margin-red-display');
+  const prevGreen = document.getElementById('margin-preview-green');
+  const prevAmber = document.getElementById('margin-preview-amber');
+  const prevRed   = document.getElementById('margin-preview-red');
+
+  if (redEl)     redEl.textContent   = '< ' + amber + '%';
+  if (prevGreen) { prevGreen.textContent = '≥ ' + green + '%  healthy'; prevGreen.style.color = 'var(--accent)'; }
+  if (prevAmber) { prevAmber.textContent = amber + '–' + (green-1) + '%  watch'; prevAmber.style.color = 'var(--warn)'; }
+  if (prevRed)   { prevRed.textContent   = '< ' + amber + '%  low'; prevRed.style.color = 'var(--danger)'; }
+}
+
+function applyMarginThresholdsToUI() {
+  const green = OPERATIONAL_SETTINGS.marginGreen ?? 60;
+  const amber = OPERATIONAL_SETTINGS.marginAmber ?? 50;
+  const greenEl = document.getElementById('margin-green');
+  const amberEl = document.getElementById('margin-amber');
+  if (greenEl) greenEl.value = green;
+  if (amberEl) amberEl.value = amber;
+  updateMarginPreview();
+}
+
 function setPortalPhotoFreq(val, btn) {
   document.querySelectorAll('#photo-freq-btns .freq-portal-btn').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
@@ -6261,6 +6447,10 @@ function saveOperationalSettings() {
   if (photoFreqEl) OPERATIONAL_SETTINGS.photoFrequency = parseInt(photoFreqEl.value) || 1;
   const auditFreqEl = document.getElementById('audit-frequency');
   if (auditFreqEl) OPERATIONAL_SETTINGS.auditFrequency = parseInt(auditFreqEl.value) || 5;
+  const marginGreenEl = document.getElementById('margin-green');
+  if (marginGreenEl) OPERATIONAL_SETTINGS.marginGreen = parseInt(marginGreenEl.value) || 60;
+  const marginAmberEl = document.getElementById('margin-amber');
+  if (marginAmberEl) OPERATIONAL_SETTINGS.marginAmber = parseInt(marginAmberEl.value) || 50;
   localStorage.setItem('vynd_operational_settings', JSON.stringify(OPERATIONAL_SETTINGS));
   // Sync to Firebase so driver app can read it
   if (fbReady && fbDb) {
@@ -6938,15 +7128,314 @@ function downloadFile(filename, content, type) {
 // Firebase is source of truth for saved products
 
 const PRODUCTS = {
-  'Coca-Cola 375ml':        { sku:'SKU-001', barcode:'9300675000015', brand:'Coca-Cola', cost:1.20, rrp:3.50, cat:'drink', minPickEnabled:true, minPickPct:30, overridePar:false },
-  'Red Bull 250ml':         { sku:'SKU-002', barcode:'9002490100070', brand:'Red Bull',  cost:1.85, rrp:4.50, cat:'drink', minPickEnabled:false, overridePar:false },
-  'Mount Franklin 600ml':   { sku:'SKU-003', barcode:'9300650053003', brand:'Mount Franklin', cost:0.65, rrp:2.50, cat:'drink', minPickEnabled:false, overridePar:false },
-  "Smith's Original 45g":   { sku:'SKU-004', barcode:'9310015036039', brand:"Smith's",   cost:0.75, rrp:2.00, cat:'snack', minPickEnabled:false, overridePar:false },
-  'Pepsi Max 375ml':        { sku:'SKU-005', barcode:'9300650045428', brand:'Pepsi',     cost:1.10, rrp:3.50, cat:'drink', minPickEnabled:false, overridePar:false },
-  'Twix 58g':               { sku:'SKU-006', barcode:'9300617024001', brand:'Mars',      cost:0.85, rrp:2.50, cat:'snack', minPickEnabled:false, overridePar:false },
-  'Snickers 50g':           { sku:'SKU-007', barcode:'9300617024018', brand:'Mars',      cost:0.80, rrp:2.50, cat:'snack', minPickEnabled:false, overridePar:false },
-  'V Energy 250ml':         { sku:'SKU-008', barcode:'9421903000027', brand:'Frucor',    cost:1.60, rrp:4.50, cat:'drink', minPickEnabled:false, overridePar:false },
-  'Sanitarium Up&Go 250ml': { sku:'SKU-020', barcode:'9310055010010', brand:'Sanitarium', cost:1.40, rrp:3.50, cat:'food', minPickEnabled:false, overridePar:true, lifespan:5 },
+  'Musashi Muscle Recovery Protein Shake Chocolate 375ml': { 'barcode':'9400581045611', 'manufacturer':'Musashi', 'brand':'Musashi', 'family':'Drinks', 'cat':'drink', 'rrp':6.0, 'cost':2.84, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Musashi High Protein Shake Vanilla 375ml': { 'barcode':'9400581045628', 'manufacturer':'Musashi', 'brand':'Musashi', 'family':'Drinks', 'cat':'drink', 'rrp':6.0, 'cost':2.84, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Stanwells Pineapple 600ml': { 'barcode':'9316765600050', 'manufacturer':'Stanwells', 'brand':'Stanwells', 'family':'Drinks', 'cat':'drink', 'rrp':4.0, 'cost':0.76, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Passiona 600ml': { 'barcode':'9315596200248', 'manufacturer':'Asahi Beverages', 'brand':'Schweppes', 'family':'Drinks', 'cat':'drink', 'rrp':4.8, 'cost':1.92, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Arnotts Shapes Barbeque 70g': { 'barcode':'9310072024172', 'manufacturer':'Arnott\'s Biscuits Limited', 'brand':'Shapes', 'family':'Chips', 'cat':'snack', 'rrp':3.0, 'cost':1.35, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Fantastic Noodles Bowl Beef 85g': { 'barcode':'9310155711302', 'brand':'Fantastic Noodles', 'family':'Candy', 'cat':'snack', 'rrp':1.75, 'cost':1.5, 'gstFree':true, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Shop Special $1': { 'barcode':'90013669', 'brand':'', 'family':'Drinks', 'cat':'drink', 'rrp':2.0, 'cost':0.5, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Pringles Sour Cream & Onion 53g': { 'barcode':'8886467103438', 'manufacturer':'Pringles, LLC', 'brand':'Pringles', 'family':'Chips', 'cat':'snack', 'rrp':2.8, 'cost':1.82, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Wrigleys Extra Peppermint 27g': { 'barcode':'93613910', 'manufacturer':'Wrigley', 'brand':'Extra', 'family':'Gum and Mint', 'cat':'snack', 'rrp':3.2, 'cost':1.39, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Kamikaze Hawaiian Splice 500ml': { 'barcode':'9343518008511', 'brand':'', 'family':'Drinks', 'cat':'drink', 'rrp':7.0, 'cost':2.66, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Grain Waves Sour Cream & Chives 40g': { 'barcode':'9310015232589', 'manufacturer':'The Smith\'s Snackfood Company', 'brand':'Grainwaves', 'family':'Chips', 'cat':'snack', 'rrp':3.2, 'cost':1.04, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Swizzels Giant Fizzers 45g': { 'barcode':'5010478789654', 'brand':'', 'family':'Candy', 'cat':'snack', 'rrp':1.5, 'cost':0.52, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Kettle Natural Sea Salt 45g': { 'barcode':'9310988012041', 'manufacturer':'Snack Brands Australia', 'brand':'Kettle Chips', 'family':'Chips', 'cat':'snack', 'rrp':3.2, 'cost':1.12, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'CCA Shop Special Flavours $2': { 'barcode':'90014505', 'manufacturer':'Coca-Cola', 'brand':'Coca-Cola', 'family':'Drinks', 'cat':'drink', 'rrp':4.8, 'cost':1.0, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'CCA Shop Special Powerade $2': { 'barcode':'90014482', 'manufacturer':'Coca-Cola', 'brand':'Coca-Cola', 'family':'Drinks', 'cat':'drink', 'rrp':4.8, 'cost':1.82, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Sams Good Belly Lunch 375ml': { 'barcode':'9345344000202', 'manufacturer':'Sams', 'brand':'Sams', 'family':'Drinks', 'cat':'drink', 'rrp':3.2, 'cost':2.18, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Bundaberg Creaming Soda 375ml': { 'barcode':'9311493002541', 'manufacturer':'Bundaberg', 'brand':'Bundaberg', 'family':'Drinks', 'cat':'drink', 'rrp':3.0, 'cost':1.38, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Stanwells Red Creaming Soda 600ml': { 'barcode':'9316765600029', 'manufacturer':'Stanwells', 'brand':'Stanwells', 'family':'Drinks', 'cat':'drink', 'rrp':4.0, 'cost':0.76, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Piranha Soy Crisps Honey and Dijon Mustard 100g': { 'barcode':'9311796531014', 'manufacturer':'Piranha', 'brand':'Piranha', 'family':'Salty Snacks', 'cat':'snack', 'rrp':4.5, 'cost':1.94, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Piranha Soy Crisps Original 100g': { 'barcode':'9311796531007', 'manufacturer':'Piranha', 'brand':'Piranha', 'family':'Salty Snacks', 'cat':'snack', 'rrp':4.5, 'cost':1.94, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Piranha Snaps Balsamic Salt & Vinegar 45g': { 'barcode':'9311796581132', 'manufacturer':'Piranha', 'brand':'Piranha', 'family':'Salty Snacks', 'cat':'snack', 'rrp':3.2, 'cost':1.26, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Coca Cola Zero Sugar 600ml': { 'barcode':'9300675079464', 'manufacturer':'The Coca-Cola Company', 'brand':'Coca-Cola', 'family':'Drinks', 'cat':'drink', 'rrp':4.8, 'cost':2.42, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Coca Cola Diet 375ml': { 'barcode':'9300675011419', 'manufacturer':'The Coca-Cola Company', 'brand':'Coca-Cola', 'family':'Drinks', 'cat':'drink', 'rrp':3.0, 'cost':1.01, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Sunkist Zero Sugar 375ml': { 'barcode':'9315596007458', 'manufacturer':'Asahi Beverages', 'brand':'Schweppes', 'family':'Drinks', 'cat':'drink', 'rrp':3.0, 'cost':0.86, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Nippys Iced Strawberry Milk 500ml': { 'barcode':'9311336030298', 'manufacturer':'Nippy\'s', 'brand':'Nippy\'s', 'family':'Drinks', 'cat':'drink', 'rrp':4.0, 'cost':2.54, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Spring Valley Apple Juice 350ml': { 'barcode':'9310640350047', 'manufacturer':'Asahi Beverages', 'brand':'Schweppes', 'family':'Drinks', 'cat':'drink', 'rrp':3.2, 'cost':1.57, 'gstFree':true, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Piranha Vege Crackers Barbeque 45g': { 'barcode':'9311796581163', 'manufacturer':'Piranha', 'brand':'Piranha', 'family':'Salty Snacks', 'cat':'snack', 'rrp':3.2, 'cost':1.26, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Triple Dippers 42.5g': { 'barcode':'5024222011403', 'brand':'', 'family':'Candy', 'cat':'snack', 'rrp':1.2, 'cost':0.46, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'CCA Shop Special Energy $2': { 'barcode':'90014499', 'manufacturer':'Coca-Cola', 'brand':'Coca-Cola', 'family':'Drinks', 'cat':'drink', 'rrp':4.8, 'cost':1.0, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Big Lolly Choc Mixed Buds': { 'barcode':'9310974014622', 'manufacturer':'CTC', 'brand':'Jolly Lolly', 'family':'Candy', 'cat':'snack', 'rrp':4.5, 'cost':1.62, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Arnotts Shapes Pizza 70g': { 'barcode':'9310072024394', 'manufacturer':'Arnott\'s Biscuits Limited', 'brand':'Shapes', 'family':'Chips', 'cat':'snack', 'rrp':3.0, 'cost':1.35, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Piranha Flame Thrower Mild Chilli Lime 80g': { 'barcode':'9311796600000', 'manufacturer':'Piranha', 'brand':'Piranha', 'family':'Salty Snacks', 'cat':'snack', 'rrp':3.8, 'cost':1.93, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Pepsi Max Vanilla 600ml': { 'barcode':'9313820000985', 'manufacturer':'Asahi Beverages', 'brand':'Schweppes', 'family':'Drinks', 'cat':'drink', 'rrp':4.8, 'cost':1.92, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Piranha Soy Crisp Chilli Cream Cheese 100g': { 'barcode':'9311796830100', 'manufacturer':'Piranha', 'brand':'Piranha', 'family':'Salty Snacks', 'cat':'snack', 'rrp':4.5, 'cost':1.94, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Fantastic Noodles Bowl Chicken 85g': { 'barcode':'9310155721301', 'brand':'Fantastic Noodles', 'family':'Candy', 'cat':'snack', 'rrp':1.75, 'cost':1.5, 'gstFree':true, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Panadol Rapid 16 Caplets': { 'barcode':'9300673891471', 'manufacturer':'GlaxoSmithKline', 'brand':'Panadol', 'family':'Pharmaceutical', 'cat':'other', 'rrp':8.0, 'cost':4.54, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Red Bull Tropical Edition 250ml': { 'barcode':'90415845', 'manufacturer':'Red Bull', 'brand':'Red Bull', 'family':'Drinks', 'cat':'drink', 'rrp':4.0, 'cost':2.05, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Turkish Delight 55g': { 'barcode':'9300617301530', 'manufacturer':'Mondelez', 'brand':'Cadbury', 'family':'Chocolate', 'cat':'snack', 'rrp':3.5, 'cost':1.36, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'John West Lunch Kit Tuna with Thousand Island Dressing 108g': { 'barcode':'9300462345413', 'manufacturer':'John West', 'brand':'John West', 'family':'Candy', 'cat':'snack', 'rrp':5.5, 'cost':2.32, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Cadbury Picnic 46g': { 'barcode':'9300617408642', 'manufacturer':'Mondelez', 'brand':'Cadbury', 'family':'Chocolate', 'cat':'snack', 'rrp':3.5, 'cost':1.36, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Eclipse Mint Peppermint 40g': { 'barcode':'93553452', 'manufacturer':'Wrigley', 'brand':'Eclipse', 'family':'Gum and Mint', 'cat':'snack', 'rrp':3.5, 'cost':2.15, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Doritos Cheese Supreme 45g': { 'barcode':'9310015233869', 'manufacturer':'The Smith\'s Snackfood Company', 'brand':'Doritos', 'family':'Chips', 'cat':'snack', 'rrp':3.2, 'cost':0.79, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Red Rock Deli Honey Soy Chicken 45g': { 'barcode':'9310015233692', 'manufacturer':'The Red Rock Deli Chip Co.', 'brand':'Red Rock Deli', 'family':'Chips', 'cat':'snack', 'rrp':3.2, 'cost':1.05, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'V Energy Original Green 250ml': { 'barcode':'94150957', 'manufacturer':'Frucor', 'brand':'V Energy', 'family':'Drinks', 'cat':'drink', 'rrp':4.0, 'cost':1.64, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Samboy Atomic Tomato 45g': { 'barcode':'9310988010047', 'manufacturer':'Snack Brands Australia', 'brand':'Samboy', 'family':'Chips', 'cat':'snack', 'rrp':3.2, 'cost':0.98, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Europe Nougat Honey Log 40g': { 'barcode':'9300617408963', 'manufacturer':'Mondelez', 'brand':'Cadbury', 'family':'Chocolate', 'cat':'snack', 'rrp':3.5, 'cost':1.36, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Red Bull Original 250ml': { 'barcode':'90435324', 'manufacturer':'Red Bull', 'brand':'Red Bull', 'family':'Drinks', 'cat':'drink', 'rrp':4.0, 'cost':2.05, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'SPC Aussie Diced Two Fruits 120g': { 'barcode':'90013744', 'brand':'SPC', 'family':'Candy', 'cat':'snack', 'rrp':2.5, 'cost':1.29, 'gstFree':true, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'BIC Lighters Assorted': { 'barcode':'070330600065', 'manufacturer':'Bic', 'brand':'Bic', 'family':'Tobacco', 'cat':'other', 'rrp':2.6, 'cost':0.73, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'V Energy Blue 500ml': { 'barcode':'9415767624207', 'manufacturer':'Frucor', 'brand':'V Energy', 'family':'Drinks', 'cat':'drink', 'rrp':5.5, 'cost':2.58, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Maggi Noodles Beef Cup': { 'barcode':'9556001171290', 'manufacturer':'Nestle', 'brand':'MAGGI', 'family':'Candy', 'cat':'snack', 'rrp':3.0, 'cost':1.75, 'gstFree':true, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Maggi Noodles Chicken Cup 60g': { 'barcode':'9556001171337', 'manufacturer':'Nestle', 'brand':'MAGGI', 'family':'Candy', 'cat':'snack', 'rrp':3.0, 'cost':1.75, 'gstFree':true, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Nippys Iced Strawberry 250ml': { 'barcode':'9311336030120', 'manufacturer':'Nippy\'s', 'brand':'Nippy\'s', 'family':'Drinks', 'cat':'drink', 'rrp':3.2, 'cost':1.31, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Twix 50g': { 'barcode':'9300682051385', 'manufacturer':'Mars', 'brand':'Twix', 'family':'Chocolate', 'cat':'snack', 'rrp':3.5, 'cost':1.36, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Mentos Fruit Roll 37.5G': { 'barcode':'073390000165', 'manufacturer':'Mentos', 'brand':'Mentos', 'family':'Gum and Mint', 'cat':'snack', 'rrp':2.6, 'cost':0.83, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Thins Salt & Vinegar 45g': { 'barcode':'9310988009881', 'manufacturer':'Snack Brands Australia', 'brand':'Thins', 'family':'Chips', 'cat':'snack', 'rrp':3.2, 'cost':0.98, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Colgate Total': { 'barcode':'9300632008988', 'manufacturer':'Colgate-Palmolive', 'brand':'Colgate', 'family':'Personal Care', 'cat':'other', 'rrp':4.0, 'cost':1.78, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Red Bull Red Edition (Watermelon) 250ml': { 'barcode':'90435850', 'manufacturer':'Red Bull', 'brand':'Red Bull', 'family':'Drinks', 'cat':'drink', 'rrp':4.0, 'cost':2.05, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Bundaberg Ginger Beer 375ml': { 'barcode':'93238946', 'manufacturer':'Bundaberg', 'brand':'Bundaberg', 'family':'Drinks', 'cat':'drink', 'rrp':3.0, 'cost':1.38, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Safety Glasses': { 'barcode':'9318801066561', 'brand':'', 'family':'Candy', 'cat':'snack', 'rrp':5.0, 'cost':1.85, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Red Bull Sugar Free 473ml': { 'barcode':'9002490229955', 'manufacturer':'Red Bull', 'brand':'Red Bull', 'family':'Drinks', 'cat':'drink', 'rrp':5.5, 'cost':3.19, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Nobbys Salted Beer Nuts 50g': { 'barcode':'9310015310218', 'manufacturer':'The Smith\'s Snackfood Company', 'brand':'Nobbys', 'family':'Salty Snacks', 'cat':'snack', 'rrp':3.0, 'cost':1.04, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Piranha Popcorn Sweet & Salty 25g': { 'barcode':'9311796587813', 'manufacturer':'Piranha', 'brand':'Piranha', 'family':'Chips', 'cat':'snack', 'rrp':2.6, 'cost':0.97, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Piranha Popcorn Sea Salt 25g': { 'barcode':'9311796587882', 'manufacturer':'Piranha', 'brand':'Piranha', 'family':'Chips', 'cat':'snack', 'rrp':2.6, 'cost':0.97, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Piranha Popcorn Chicken 25g': { 'barcode':'9311796587868', 'manufacturer':'Piranha', 'brand':'Piranha', 'family':'Chips', 'cat':'snack', 'rrp':2.6, 'cost':0.97, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'JC\'s Quality Foods Healthy Mix 35g': { 'barcode':'9329000014062', 'manufacturer':'J.C.\'s Quality Foods', 'brand':'JC\'s', 'family':'Candy', 'cat':'snack', 'rrp':3.5, 'cost':1.1, 'gstFree':true, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Piranha Snaps Light & Tangy Salsa 25g': { 'barcode':'9311796581217', 'manufacturer':'Piranha', 'brand':'Piranha', 'family':'Salty Snacks', 'cat':'snack', 'rrp':2.6, 'cost':0.87, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Hersheys Cookies n Cream 40g': { 'barcode':'6942836702526', 'manufacturer':'Hershey\'s', 'brand':'Hershey\'s', 'family':'Chocolate', 'cat':'snack', 'rrp':3.5, 'cost':1.51, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Monster Zero Sugar Ultra': { 'barcode':'9342866000871', 'manufacturer':'The Coca-Cola Company', 'brand':'Monster', 'family':'Drinks', 'cat':'drink', 'rrp':5.5, 'cost':2.05, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Harvest Snaps Original Salted 65g': { 'barcode':'9351585000994', 'manufacturer':'Calbee North America', 'brand':'Harvest Snaps', 'family':'Salty Snacks', 'cat':'snack', 'rrp':5.5, 'cost':2.13, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Gatorade Fast Twitch Cool Blue 350ml': { 'barcode':'9310640001260', 'manufacturer':'Asahi Beverages', 'brand':'Gatorade', 'family':'Drinks', 'cat':'drink', 'rrp':5.0, 'cost':2.06, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Gatorade Fast Twitch Strawberry Lemonade 350ml': { 'barcode':'9310640001277', 'manufacturer':'Asahi Beverages', 'brand':'Gatorade', 'family':'Drinks', 'cat':'drink', 'rrp':5.0, 'cost':2.06, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Carmans Protein Bar Oat Slice Golden Oat Coconut 70g': { 'barcode':'9319133333802', 'manufacturer':'Carman\'s Fine Foods', 'brand':'Carman\'s', 'family':'Cookies', 'cat':'snack', 'rrp':4.0, 'cost':1.97, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Carmans Choc Brownie Oat Slice 70g': { 'barcode':'9319133333871', 'manufacturer':'Carman\'s Fine Foods', 'brand':'Carman\'s', 'family':'Cookies', 'cat':'snack', 'rrp':4.0, 'cost':1.97, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Butter-Menthol Throat Lozenges Original 40g': { 'barcode':'93625678', 'manufacturer':'Nestle', 'brand':'Butter-Menthol', 'family':'Candy', 'cat':'snack', 'rrp':3.0, 'cost':1.36, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Nippys Iced Coffee Double Espresso 500ml': { 'barcode':'9311336030267', 'manufacturer':'Nippy\'s', 'brand':'Nippy\'s', 'family':'Drinks', 'cat':'drink', 'rrp':4.0, 'cost':2.54, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Continental Snack Pot Cheese and Bacon Pasta 70g': { 'barcode':'9300830059188', 'manufacturer':'Continental', 'brand':'Continental', 'family':'Candy', 'cat':'snack', 'rrp':3.8, 'cost':2.09, 'gstFree':true, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Lifesavers Musk 34g': { 'barcode':'9310881914947', 'manufacturer':'Darrell Lea', 'brand':'Lifesavers', 'family':'Candy', 'cat':'snack', 'rrp':2.2, 'cost':0.77, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Primo Stackers Danish Salami 45g': { 'barcode':'9311594019837', 'manufacturer':'Primo Australia', 'brand':'Stackers', 'family':'Cold Foods', 'cat':'food', 'rrp':5.5, 'cost':2.56, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false, 'prekit':true },
+  'Primo Stackers Leg Ham 50g': { 'barcode':'9311594019820', 'manufacturer':'Primo Australia', 'brand':'Stackers', 'family':'Cold Foods', 'cat':'food', 'rrp':5.5, 'cost':2.56, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false, 'prekit':true },
+  'Tasty Toobs 35g': { 'barcode':'9310015251757', 'manufacturer':'The Smith\'s Snackfood Company', 'brand':'Smith\'s', 'family':'Chips', 'cat':'snack', 'rrp':3.2, 'cost':0.95, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Oak Strawberry 500ml': { 'barcode':'9310036061922', 'manufacturer':'Lactalis Aust', 'brand':'Oak Milk', 'family':'Drinks', 'cat':'drink', 'rrp':4.5, 'cost':2.53, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Samboy BBQ 45g': { 'barcode':'9310988009867', 'manufacturer':'Snack Brands Australia', 'brand':'Samboy', 'family':'Chips', 'cat':'snack', 'rrp':3.2, 'cost':0.98, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Stanwells Luscious Lime 600ml': { 'barcode':'9316765600043', 'manufacturer':'Stanwells', 'brand':'Stanwells', 'family':'Drinks', 'cat':'drink', 'rrp':4.0, 'cost':0.76, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Allens Minties 150g': { 'barcode':'9300605012554', 'manufacturer':'Nestle', 'brand':'Nestle', 'family':'Candy', 'cat':'snack', 'rrp':4.8, 'cost':2.14, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Spring Valley Apple Juice 300ml': { 'barcode':'9300757000300', 'manufacturer':'Asahi Beverages', 'brand':'Schweppes', 'family':'Drinks', 'cat':'drink', 'rrp':3.5, 'cost':1.53, 'gstFree':true, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Schweppes Traditional Raspberry 600ml': { 'barcode':'9315596200651', 'manufacturer':'Asahi Beverages', 'brand':'Schweppes', 'family':'Drinks', 'cat':'drink', 'rrp':4.8, 'cost':1.92, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'JC\'s Quality Foods Energy Mix 35g': { 'barcode':'9329000014055', 'manufacturer':'J.C.\'s Quality Foods', 'brand':'JC\'s', 'family':'Candy', 'cat':'snack', 'rrp':3.5, 'cost':1.1, 'gstFree':true, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Fizzers Strawberry 11.6g': { 'barcode':'6001120608743', 'brand':'', 'family':'Candy', 'cat':'snack', 'rrp':1.0, 'cost':0.22, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Bundaberg Lemon Lime & Bitters 375ml': { 'barcode':'9311493002336', 'manufacturer':'Bundaberg', 'brand':'Bundaberg', 'family':'Drinks', 'cat':'drink', 'rrp':3.0, 'cost':1.38, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Continental Cup A Soup Chicken Noodle 40g': { 'barcode':'9300667004276', 'manufacturer':'Continental', 'brand':'Continental', 'family':'Candy', 'cat':'snack', 'rrp':4.0, 'cost':2.39, 'gstFree':true, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Scorched Peanut Bites 140g': { 'barcode':'9314419027406', 'brand':'', 'family':'Chocolate', 'cat':'snack', 'rrp':4.0, 'cost':1.75, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Fantasy Belts Joo Joo 160g': { 'barcode':'9310974002506', 'brand':'', 'family':'Candy', 'cat':'snack', 'rrp':3.8, 'cost':1.18, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Sour Worms Joo Joo 150g': { 'barcode':'9310974005736', 'brand':'', 'family':'Candy', 'cat':'snack', 'rrp':3.8, 'cost':1.18, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Strawberry Clouds Joo Joos 150g': { 'barcode':'9310974005705', 'brand':'', 'family':'Candy', 'cat':'snack', 'rrp':3.8, 'cost':1.18, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Esonic 5000MAH Powerbank': { 'barcode':'9348769001717', 'brand':'', 'family':'Electronics', 'cat':'other', 'rrp':18.5, 'cost':9.3, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Esonic 3 In 1 USB Cable': { 'barcode':'9348769000628', 'brand':'', 'family':'Electronics', 'cat':'other', 'rrp':17.5, 'cost':6.71, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'JC Jackaroo Mix 35g': { 'barcode':'9329000014079', 'manufacturer':'J.C.\'s Quality Foods', 'brand':'JC\'s', 'family':'Candy', 'cat':'snack', 'rrp':3.0, 'cost':1.31, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'JC Original Delicious Energy Mix 100g': { 'barcode':'9329000006869', 'manufacturer':'J.C.\'s Quality Foods', 'brand':'JC\'s', 'family':'Candy', 'cat':'snack', 'rrp':5.5, 'cost':2.92, 'gstFree':true, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Tek Toothbrush Medium': { 'barcode':'9300607291766', 'manufacturer':'Johnson & Johnson', 'brand':'Johnson & Johnson', 'family':'Candy', 'cat':'snack', 'rrp':3.0, 'cost':1.56, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Kamikaze Orange Mango 500ml': { 'barcode':'9343518008504', 'brand':'', 'family':'Drinks', 'cat':'drink', 'rrp':7.0, 'cost':2.66, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Kamikaze Blue Raspberry 500ml': { 'barcode':'9343518008627', 'brand':'', 'family':'Drinks', 'cat':'drink', 'rrp':7.0, 'cost':2.66, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Kellogs Corn Flakes Bowl 30g': { 'barcode':'9310055011137', 'manufacturer':'Kellogg\'s', 'brand':'Kellogg\'s', 'family':'Candy', 'cat':'snack', 'rrp':3.0, 'cost':2.03, 'gstFree':true, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Sunbeam Sultanas 40g': { 'barcode':'93212137', 'manufacturer':'Sunbeam Foods', 'brand':'Sunbeam Foods', 'family':'Candy', 'cat':'snack', 'rrp':2.0, 'cost':0.55, 'gstFree':true, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Munch Pistachio & Cranberry 60g': { 'barcode':'9335675000859', 'brand':'', 'family':'Candy', 'cat':'snack', 'rrp':5.5, 'cost':2.22, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Anticol Original 10 Lozenges': { 'barcode':'93625234', 'manufacturer':'Nestle', 'brand':'Anticol', 'family':'Candy', 'cat':'snack', 'rrp':3.0, 'cost':1.36, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Milo Snack Bar 21g': { 'barcode':'9300605024427', 'manufacturer':'Nestle', 'brand':'Nestle', 'family':'Chocolate', 'cat':'snack', 'rrp':3.5, 'cost':0.7, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Crankt Protein Bar Choc Mud Cake 60g': { 'barcode':'9315090213003', 'manufacturer':'DNA Brands', 'brand':'Crankt', 'family':'Candy', 'cat':'snack', 'rrp':5.0, 'cost':2.45, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Quick-Eze Chewy Peppermint 8TAB': { 'barcode':'93625197', 'manufacturer':'Nestle', 'brand':'Quick-Eze', 'family':'Candy', 'cat':'snack', 'rrp':3.2, 'cost':1.76, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Maggi 2 Minute Noodles Chicken 72g': { 'barcode':'90013645', 'manufacturer':'Nestle', 'brand':'MAGGI', 'family':'Candy', 'cat':'snack', 'rrp':2.0, 'cost':0.8, 'gstFree':true, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Mentos Mint Roll 37.5g': { 'barcode':'73390000110', 'manufacturer':'Mentos', 'brand':'Mentos', 'family':'Gum and Mint', 'cat':'snack', 'rrp':2.6, 'cost':0.83, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Musashi High Protein Cookies & Cream 90g': { 'barcode':'9300605098909', 'manufacturer':'Musashi', 'brand':'Musashi', 'family':'Chocolate', 'cat':'snack', 'rrp':5.5, 'cost':3.58, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'CCA Shop Special Water $1': { 'barcode':'90014512', 'manufacturer':'Coca-Cola', 'brand':'Coca-Cola', 'family':'Drinks', 'cat':'drink', 'rrp':3.0, 'cost':1.0, 'gstFree':true, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Lemonade 600ml': { 'barcode':'9315596200231', 'manufacturer':'Asahi Beverages', 'brand':'Schweppes', 'family':'Drinks', 'cat':'drink', 'rrp':4.8, 'cost':1.92, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Piranha Soy Crisps Sweet Chilli Lime 100g': { 'barcode':'9311796531021', 'manufacturer':'Piranha', 'brand':'Piranha', 'family':'Salty Snacks', 'cat':'snack', 'rrp':4.5, 'cost':1.94, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Piranha Vege Crackers Sweet Chilli Lime 45g': { 'barcode':'9311796581118', 'manufacturer':'Piranha', 'brand':'Piranha', 'family':'Salty Snacks', 'cat':'snack', 'rrp':3.2, 'cost':1.26, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Piranha Popcorn Butterscotch 25g': { 'barcode':'9311796587875', 'manufacturer':'Piranha', 'brand':'Piranha', 'family':'Chips', 'cat':'snack', 'rrp':2.6, 'cost':0.97, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Samboy Chicken 45g': { 'barcode':'9310988010054', 'manufacturer':'Snack Brands Australia', 'brand':'Samboy', 'family':'Chips', 'cat':'snack', 'rrp':3.2, 'cost':0.98, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Lynx Africa 32g': { 'barcode':'93364836', 'manufacturer':'Unilever', 'brand':'Lynx', 'family':'Personal Care', 'cat':'other', 'rrp':4.0, 'cost':2.7, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Freekee Brain Licker 60ml': { 'barcode':'8437001799084', 'brand':'', 'family':'Candy', 'cat':'snack', 'rrp':3.0, 'cost':1.11, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Bhuja Cracker Mix 150g': { 'barcode':'9316401202471', 'brand':'', 'family':'Salty Snacks', 'cat':'snack', 'rrp':7.0, 'cost':2.64, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Harvest Snaps Pea Crisps Salt & Vinegar 65g': { 'barcode':'9351585001007', 'manufacturer':'Calbee North America', 'brand':'Harvest Snaps', 'family':'Salty Snacks', 'cat':'snack', 'rrp':5.5, 'cost':2.13, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Munchme Cashew Sesame 120g': { 'barcode':'9335675001214', 'brand':'', 'family':'Candy', 'cat':'snack', 'rrp':7.5, 'cost':4.02, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'uByKotex Tampons Regular 16pack': { 'barcode':'9310088003413', 'manufacturer':'Kimberly-Clark', 'brand':'Kotex', 'family':'Personal Care', 'cat':'other', 'rrp':7.4, 'cost':4.29, 'gstFree':true, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Gatorade Fast Twitch Grape 350ml': { 'barcode':'9310640001253', 'manufacturer':'Asahi Beverages', 'brand':'Gatorade', 'family':'Drinks', 'cat':'drink', 'rrp':5.0, 'cost':2.06, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Skittles Fruit Tube': { 'barcode':'9300682065191', 'brand':'Skittles', 'family':'Candy', 'cat':'snack', 'rrp':3.0, 'cost':1.36, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Indomie Mi Goreng Ramen - Sabor Original': { 'barcode':'089686180657', 'manufacturer':'Indomie Mi Goreng', 'brand':'Indomie Mi Goreng Ramen', 'family':'Candy', 'cat':'snack', 'rrp':3.0, 'cost':1.52, 'gstFree':true, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Kreenuts Salted Caramel 37g': { 'barcode':'9351738011440', 'brand':'', 'family':'Chocolate', 'cat':'snack', 'rrp':3.5, 'cost':1.33, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Primo Stackers Salami 50g': { 'barcode':'9311594019813', 'manufacturer':'Primo Australia', 'brand':'Stackers', 'family':'Cold Foods', 'cat':'food', 'rrp':5.5, 'cost':2.56, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false, 'prekit':true },
+  'Primo Stackers Trio Aussie BBQ 50g': { 'barcode':'9311594015693', 'manufacturer':'Primo Australia', 'brand':'Stackers', 'family':'Cold Foods', 'cat':'food', 'rrp':5.5, 'cost':2.52, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false, 'prekit':true },
+  'C&S Still Mineral Water 500ml': { 'barcode':'9369998043859', 'manufacturer':'C&S', 'brand':'C&S', 'family':'Drinks', 'cat':'drink', 'rrp':5.5, 'cost':1.23, 'gstFree':true, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'C&S Still Mineral Water 600ml': { 'barcode':'9359400000044', 'manufacturer':'C&S', 'brand':'C&S', 'family':'Drinks', 'cat':'drink', 'rrp':8.0, 'cost':2.1, 'gstFree':true, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Kreenuts Crunchy 39 g': { 'barcode':'9351738010085', 'brand':'', 'family':'Chocolate', 'cat':'snack', 'rrp':3.5, 'cost':1.33, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Go Natural Blueberry Almond 40 g': { 'barcode':'9310846501359', 'manufacturer':'Go Natural', 'brand':'Go Natural', 'family':'Candy', 'cat':'snack', 'rrp':3.5, 'cost':1.6, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Go Natural Cranberry Almond 40 g': { 'barcode':'9310846501366', 'manufacturer':'Go Natural', 'brand':'Go Natural', 'family':'Candy', 'cat':'snack', 'rrp':3.5, 'cost':1.6, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Juice Bomb Blueberry 250 ml': { 'barcode':'9341325000858', 'brand':'Juice Bomb', 'family':'Drinks', 'cat':'drink', 'rrp':3.0, 'cost':1.04, 'gstFree':true, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Juice Bomb Grape 250 ml': { 'barcode':'9341325000810', 'brand':'Juice Bomb', 'family':'Drinks', 'cat':'drink', 'rrp':3.0, 'cost':1.04, 'gstFree':true, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Juice Bomb Watermelon 250 ml': { 'barcode':'9341325000803', 'brand':'Juice Bomb', 'family':'Drinks', 'cat':'drink', 'rrp':3.0, 'cost':1.04, 'gstFree':true, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Kamikaze Rainbow Gummy 500 ml': { 'barcode':'9343518008528', 'brand':'Kamikaze', 'family':'Drinks', 'cat':'drink', 'rrp':7.0, 'cost':2.66, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Lifesavers Fruit Pastilles 34 g': { 'barcode':'9310881914923', 'manufacturer':'Darrell Lea', 'brand':'Lifesavers', 'family':'Candy', 'cat':'snack', 'rrp':2.2, 'cost':0.77, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Travel Essentials Pack 90 g': { 'barcode':'9300632070985', 'brand':'', 'family':'Personal Care', 'cat':'other', 'rrp':9.0, 'cost':5.1, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Pure Vitality Shaving Set': { 'barcode':'90019258', 'brand':'Pure', 'family':'Personal Care', 'cat':'other', 'rrp':4.5, 'cost':0.7, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Arnott\'s Shapes Chicken Crimpy & Tasty Cheese 32 g': { 'barcode':'9311594541062', 'manufacturer':'Primo Australia', 'brand':'Stackers', 'family':'Cold Foods', 'cat':'food', 'rrp':5.0, 'cost':1.9, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false, 'prekit':true },
+  'Maltesers Teasers Bag 85g': { 'barcode':'9300682065832', 'manufacturer':'Mars', 'brand':'Maltesers', 'family':'Chocolate', 'cat':'snack', 'rrp':5.5, 'cost':2.26, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'M&M Chocolate 100g': { 'barcode':'9300682065795', 'manufacturer':'Mars', 'brand':'M&M\'s', 'family':'Chocolate', 'cat':'snack', 'rrp':5.5, 'cost':2.26, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'M&M Peanut 90g': { 'barcode':'9300682065818', 'manufacturer':'Mars', 'brand':'M&M\'s', 'family':'Chocolate', 'cat':'snack', 'rrp':5.5, 'cost':2.26, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Primo Stackers Chicken Breast 45g': { 'barcode':'9311594019844', 'manufacturer':'Primo Australia', 'brand':'Stackers', 'family':'Cold Foods', 'cat':'food', 'rrp':5.5, 'cost':2.56, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false, 'prekit':true },
+  'Red Bull Blue Edition (Blueberry) 250ml': { 'barcode':'90474330', 'manufacturer':'Red Bull', 'brand':'Red Bull', 'family':'Drinks', 'cat':'drink', 'rrp':4.0, 'cost':2.05, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'BSC Protein Bar Choc Fudge 92g': { 'barcode':'9330171025351', 'manufacturer':'Body Science', 'brand':'Body Science', 'family':'Chocolate', 'cat':'snack', 'rrp':5.5, 'cost':3.03, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'BSC Protein Bar Cookies & Cream  92g': { 'barcode':'9330171025368', 'manufacturer':'Body Science', 'brand':'Body Science', 'family':'Chocolate', 'cat':'snack', 'rrp':5.5, 'cost':3.03, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'BSC Protein Bar Salted Caramel 92g': { 'barcode':'9330171025375', 'manufacturer':'Body Science', 'brand':'Body Science', 'family':'Chocolate', 'cat':'snack', 'rrp':5.5, 'cost':3.03, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Solo Energy 250ml': { 'barcode':'9315596009469', 'manufacturer':'Asahi Beverages', 'brand':'Schweppes', 'family':'Drinks', 'cat':'drink', 'rrp':4.0, 'cost':1.6, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Oxyshred Passionfruit 355ml': { 'barcode':'850029937265', 'manufacturer':'Asahi Beverages', 'brand':'Oxyshred Ultra Energy', 'family':'Drinks', 'cat':'drink', 'rrp':6.5, 'cost':2.36, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Kettle Jap Fried Chicken 45g': { 'barcode':'9310988022439', 'manufacturer':'Snack Brands Australia', 'brand':'Kettle Chips', 'family':'Chips', 'cat':'snack', 'rrp':3.2, 'cost':1.12, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Kettle Sour Cream Chives 45g': { 'barcode':'9310988022446', 'manufacturer':'Snack Brands Australia', 'brand':'Kettle Chips', 'family':'Chips', 'cat':'snack', 'rrp':3.2, 'cost':1.12, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Potato Bake 200g': { 'barcode':'9311861000797', 'manufacturer':'Allied Chef`s', 'brand':'Allied Chef`s', 'family':'Frozen Foods', 'cat':'food', 'rrp':3.5, 'cost':2.28, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false, 'prekit':true },
+  'Beef Lasagne 220g': { 'barcode':'9310761716784', 'manufacturer':'Enrico`s', 'brand':'Enrico`s', 'family':'Frozen Foods', 'cat':'food', 'rrp':3.5, 'cost':2.12, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false, 'prekit':true },
+  'Hakka Fried Rice 200g': { 'barcode':'9313353021402', 'manufacturer':'Hakka', 'brand':'Hakka', 'family':'Frozen Foods', 'cat':'food', 'rrp':3.5, 'cost':2.86, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false, 'prekit':true },
+  '28G Grainwaves Sour Cream': { 'barcode':'9310015235788', 'manufacturer':'The Smith\'s Snackfood Company', 'brand':'The Smith\'s Snackfood Company', 'family':'Chips', 'cat':'snack', 'rrp':2.0, 'cost':0.56, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  '28g Red Rock Honey Soy': { 'barcode':'9310015228353', 'manufacturer':'The Smith\'s Snackfood Company', 'brand':'The Smith\'s Snackfood Company', 'family':'Chips', 'cat':'snack', 'rrp':2.0, 'cost':0.56, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  '28g Red Rock Sea Salt': { 'barcode':'9310015228360', 'manufacturer':'The Smith\'s Snackfood Company', 'brand':'The Smith\'s Snackfood Company', 'family':'Chips', 'cat':'snack', 'rrp':2.0, 'cost':0.56, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  '28g Red Rock Sweet Chilli': { 'barcode':'9310015236372', 'manufacturer':'The Smith\'s Snackfood Company', 'brand':'The Smith\'s Snackfood Company', 'family':'Chips', 'cat':'snack', 'rrp':2.0, 'cost':0.56, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  '27g Smiths Salt & Vinegar': { 'barcode':'9310015230813', 'manufacturer':'The Smith\'s Snackfood Company', 'brand':'The Smith\'s Snackfood Company', 'family':'Chips', 'cat':'snack', 'rrp':2.0, 'cost':0.56, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  '27g Smiths Original': { 'barcode':'9310015230790', 'manufacturer':'The Smith\'s Snackfood Company', 'brand':'The Smith\'s Snackfood Company', 'family':'Chips', 'cat':'snack', 'rrp':2.0, 'cost':0.56, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  '20g JJ Chicken Snacks': { 'barcode':'9557226022220', 'manufacturer':'All-Fect', 'brand':'All-Fect', 'family':'Chips', 'cat':'snack', 'rrp':2.0, 'cost':0.55, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  '250ml Chill J Blueberry': { 'barcode':'9341325000667', 'manufacturer':'Dlicious Drinks', 'brand':'Dlicious Drinks', 'family':'Drinks', 'cat':'drink', 'rrp':2.4, 'cost':1.01, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  '250ml Chill J Apple Cola': { 'barcode':'9341325000711', 'manufacturer':'Dlicious Drinks', 'brand':'Dlicious Drinks', 'family':'Drinks', 'cat':'drink', 'rrp':2.4, 'cost':1.01, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  '250ml Chill J Raspberry': { 'barcode':'9341325000681', 'manufacturer':'Dlicious Drinks', 'brand':'Dlicious Drinks', 'family':'Drinks', 'cat':'drink', 'rrp':2.4, 'cost':1.01, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  '250ml Nippys Chocolate': { 'barcode':'9311336030113', 'manufacturer':'Nippy\'s', 'brand':'Nippy\'s', 'family':'Drinks', 'cat':'drink', 'rrp':3.2, 'cost':1.31, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Mt Franklin Water 600ml': { 'barcode':'9300624005377', 'manufacturer':'Coca-Cola', 'brand':'Coca-Cola', 'family':'Drinks', 'cat':'drink', 'rrp':3.5, 'cost':0.87, 'gstFree':true, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Primo Stackers Spicy Chorizo 50g': { 'barcode':'9311594019806', 'manufacturer':'Primo Australia', 'brand':'Stackers', 'family':'Cold Foods', 'cat':'food', 'rrp':5.5, 'cost':2.56, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false, 'prekit':true },
+  'Stayfree All Night Pads': { 'barcode':'9300607550559', 'manufacturer':'Unilever', 'brand':'Stayfree', 'family':'Personal Care', 'cat':'other', 'rrp':8.5, 'cost':5.58, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Monster Energy Green': { 'barcode':'070847813903', 'manufacturer':'Monster', 'brand':'Monster', 'family':'Drinks', 'cat':'drink', 'rrp':5.5, 'cost':2.05, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Monster Mango Loco': { 'barcode':'9342866000635', 'manufacturer':'The Coca-Cola Company', 'brand':'Monster', 'family':'Drinks', 'cat':'drink', 'rrp':5.5, 'cost':2.05, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Powerade Mountain Blast  600 ml': { 'barcode':'9300624008354', 'manufacturer':'The Coca-Cola Company', 'brand':'Powerade', 'family':'Drinks', 'cat':'drink', 'rrp':5.5, 'cost':2.4, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Sprite Bottle 600ml': { 'barcode':'9300675009867', 'manufacturer':'The Coca-Cola Company', 'brand':'Coca-Cola', 'family':'Drinks', 'cat':'drink', 'rrp':4.8, 'cost':2.42, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Fanta Orange 600ml': { 'barcode':'9300675009843', 'manufacturer':'The Coca-Cola Company', 'brand':'Coca-Cola', 'family':'Drinks', 'cat':'drink', 'rrp':4.8, 'cost':2.42, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Mother Energy Drink 500ml': { 'barcode':'1220000060005', 'manufacturer':'The Coca-Cola Company', 'brand':'Mother', 'family':'Drinks', 'cat':'drink', 'rrp':5.5, 'cost':2.05, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Chip Special': { 'barcode':'90020117', 'manufacturer':'Other', 'brand':'Other', 'family':'Chips', 'cat':'snack', 'rrp':2.0, 'cost':0.5, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Solo Zero Sugar 600ml': { 'barcode':'9315596007434', 'manufacturer':'Schweppes', 'brand':'Schweppes', 'family':'Drinks', 'cat':'drink', 'rrp':4.8, 'cost':1.82, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Infused Blood Orange & Mango 375ml': { 'barcode':'9315596007984', 'manufacturer':'Schweppes', 'brand':'Schweppes', 'family':'Drinks', 'cat':'drink', 'rrp':3.5, 'cost':0.86, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Infused Lemon & Lime 375ml': { 'barcode':'9315596008530', 'manufacturer':'Schweppes', 'brand':'Schweppes', 'family':'Drinks', 'cat':'drink', 'rrp':3.5, 'cost':0.86, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Infused Passionfruit & P/apple 375ml': { 'barcode':'9315596008554', 'manufacturer':'Schweppes', 'brand':'Schweppes', 'family':'Drinks', 'cat':'drink', 'rrp':3.5, 'cost':0.86, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Infused Raspberry & Blueberry 375ml': { 'barcode':'9315596008578', 'manufacturer':'Schweppes', 'brand':'Schweppes', 'family':'Drinks', 'cat':'drink', 'rrp':3.5, 'cost':0.86, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Up & Go Energize Chocolate 500ml': { 'barcode':'9300652806045', 'manufacturer':'Sanitarium', 'brand':'Sanitarium', 'family':'Drinks', 'cat':'drink', 'rrp':5.0, 'cost':3.5, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Up & Go Energize Vanilla 500ml': { 'barcode':'9300652806069', 'manufacturer':'Sanitarium', 'brand':'Sanitarium', 'family':'Drinks', 'cat':'drink', 'rrp':5.0, 'cost':3.5, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Mainland Lunch Kit Beetroot 110g': { 'barcode':'90020322', 'manufacturer':'Mainland', 'brand':'Mainland', 'family':'Cold Foods', 'cat':'food', 'rrp':6.5, 'cost':3.8, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false, 'prekit':true },
+  'Infused Strawberry & Watermelon 375ml': { 'barcode':'9315596008851', 'manufacturer':'Schweppes', 'brand':'Schweppes', 'family':'Drinks', 'cat':'drink', 'rrp':3.5, 'cost':0.86, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Red Bull Sugar Free 250ml': { 'barcode':'90162800', 'manufacturer':'Red Bull', 'brand':'Red Bull', 'family':'Drinks', 'cat':'drink', 'rrp':4.0, 'cost':2.05, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Mainland Lunch Kit Caramelised Onion 110g': { 'barcode':'90020193', 'manufacturer':'Mainland', 'brand':'Mainland', 'family':'Cold Foods', 'cat':'food', 'rrp':6.5, 'cost':3.8, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false, 'prekit':true },
+  'Solo Energy Zero Sugar 250ml': { 'barcode':'9315596009568', 'manufacturer':'Asahi Beverages', 'brand':'Schweppes', 'family':'Drinks', 'cat':'drink', 'rrp':4.0, 'cost':1.6, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Solo Energy 500ml': { 'barcode':'9315596009452', 'manufacturer':'Schweppes', 'brand':'Schweppes', 'family':'Cold Drinks', 'cat':'drink', 'rrp':5.5, 'cost':2.02, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Kinder Bueno 43g': { 'barcode':'80052760', 'manufacturer':'Ferrero', 'brand':'Ferrero', 'family':'Chocolate', 'cat':'snack', 'rrp':1.47, 'cost':3.5, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Thins Chicken 45g': { 'barcode':'9310988009898', 'manufacturer':'Snack Brands Australia', 'brand':'Thins', 'family':'Chips', 'cat':'snack', 'rrp':3.2, 'cost':0.98, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Thins Original 45g': { 'barcode':'9310988009874', 'manufacturer':'Snack Brands Australia', 'brand':'Thins', 'family':'Chips', 'cat':'snack', 'rrp':3.2, 'cost':0.98, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Thins Light and Tangy 45g': { 'barcode':'9310988009904', 'manufacturer':'Snack Brands Australia', 'brand':'Thins', 'family':'Chips', 'cat':'snack', 'rrp':3.2, 'cost':0.98, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Thins Cheese & Onions 45g': { 'barcode':'9310988015325', 'manufacturer':'Snack Brands Australia', 'brand':'Thins', 'family':'Chips', 'cat':'snack', 'rrp':3.2, 'cost':0.98, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Twisties Cheese 45g': { 'barcode':'9310015233890', 'manufacturer':'The Smith\'s Snackfood Company', 'brand':'Twisties', 'family':'Chips', 'cat':'snack', 'rrp':3.2, 'cost':0.95, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Cadbury Giant Caramello Koala 35g': { 'barcode':'9300617044901', 'manufacturer':'Mondelez', 'brand':'Cadbury', 'family':'Chocolate', 'cat':'snack', 'rrp':2.2, 'cost':1.28, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Lifesavers Fruit Tingles 34g': { 'barcode':'9310881914916', 'manufacturer':'Darrell Lea', 'brand':'Lifesavers', 'family':'Candy', 'cat':'snack', 'rrp':2.2, 'cost':0.77, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Kit Kat 4 Finger 42g': { 'barcode':'9300605155459', 'manufacturer':'Nestle', 'brand':'Kit Kat', 'family':'Chocolate', 'cat':'snack', 'rrp':3.5, 'cost':1.35, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Crunch 45g': { 'barcode':'9300684108018', 'manufacturer':'Nestle', 'brand':'Nestle', 'family':'Chocolate', 'cat':'snack', 'rrp':3.5, 'cost':1.35, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Jolly Lolly Party Mix 100g': { 'barcode':'9310974009925', 'manufacturer':'CTC', 'brand':'Jolly Lolly', 'family':'Candy', 'cat':'snack', 'rrp':2.5, 'cost':0.81, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Allens Snakes Alive 200g': { 'barcode':'9300605042391', 'manufacturer':'Nestle', 'brand':'Nestle', 'family':'Candy', 'cat':'snack', 'rrp':4.8, 'cost':2.14, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Arnotts Wagon Wheels Original 48g': { 'barcode':'9310072020945', 'manufacturer':'Arnott\'s Biscuits Limited', 'brand':'Arnott\'s Biscuits', 'family':'Chocolate', 'cat':'snack', 'rrp':2.6, 'cost':1.18, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Coca Cola Classic 375ml': { 'barcode':'9300675001410', 'manufacturer':'The Coca-Cola Company', 'brand':'Coca-Cola', 'family':'Drinks', 'cat':'drink', 'rrp':3.0, 'cost':1.01, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Passiona 375ml': { 'barcode':'9315596002781', 'manufacturer':'Asahi Beverages', 'brand':'Schweppes', 'family':'Drinks', 'cat':'drink', 'rrp':3.0, 'cost':0.86, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Red Bull Original 473ml': { 'barcode':'9002490243319', 'manufacturer':'Red Bull', 'brand':'Red Bull', 'family':'Drinks', 'cat':'drink', 'rrp':5.5, 'cost':3.19, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'V Energy Original Green 500ml': { 'barcode':'9415767677203', 'manufacturer':'Frucor', 'brand':'V Energy', 'family':'Drinks', 'cat':'drink', 'rrp':5.5, 'cost':2.58, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Mountain Dew 375ml': { 'barcode':'9313820001746', 'manufacturer':'Asahi Beverages', 'brand':'Schweppes', 'family':'Drinks', 'cat':'drink', 'rrp':3.0, 'cost':0.75, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Sunkist 375ml': { 'barcode':'9315596002743', 'manufacturer':'Asahi Beverages', 'brand':'Schweppes', 'family':'Drinks', 'cat':'drink', 'rrp':3.0, 'cost':0.75, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Lemonade 375ml': { 'barcode':'9315596002750', 'manufacturer':'Asahi Beverages', 'brand':'Schweppes', 'family':'Drinks', 'cat':'drink', 'rrp':3.0, 'cost':0.75, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Pepsi Max 375ml': { 'barcode':'9313820016108', 'manufacturer':'Asahi Beverages', 'brand':'Schweppes', 'family':'Drinks', 'cat':'drink', 'rrp':3.0, 'cost':0.75, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Gatorade Fierce Blue Bolt 600ml': { 'barcode':'9310640620027', 'manufacturer':'Asahi Beverages', 'brand':'Schweppes', 'family':'Drinks', 'cat':'drink', 'rrp':4.8, 'cost':2.11, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Kettle Chilli 45g': { 'barcode':'9310988013802', 'manufacturer':'Snack Brands Australia', 'brand':'Kettle Chips', 'family':'Chips', 'cat':'snack', 'rrp':3.2, 'cost':1.12, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Kettle Honey Soy Chicken 45g': { 'barcode':'9310988014045', 'manufacturer':'Snack Brands Australia', 'brand':'Kettle Chips', 'family':'Chips', 'cat':'snack', 'rrp':3.2, 'cost':1.12, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Kettle Sea Salt & Vinegar 45g': { 'barcode':'9310988012058', 'manufacturer':'Snack Brands Australia', 'brand':'Kettle Chips', 'family':'Chips', 'cat':'snack', 'rrp':3.2, 'cost':1.12, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Kettle Sweet Chilli and Sour Cream 45g': { 'barcode':'9310988016025', 'manufacturer':'Snack Brands Australia', 'brand':'Kettle Chips', 'family':'Chips', 'cat':'snack', 'rrp':3.2, 'cost':1.12, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Smiths Crinkle Cut Chicken 45g': { 'barcode':'9310015233562', 'manufacturer':'The Smith\'s Snackfood Company', 'brand':'Smith\'s', 'family':'Chips', 'cat':'snack', 'rrp':3.2, 'cost':0.95, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Smiths Crinkle Cut Salt & Vinegar 45g': { 'barcode':'9310015233555', 'manufacturer':'The Smith\'s Snackfood Company', 'brand':'Smith\'s', 'family':'Chips', 'cat':'snack', 'rrp':3.2, 'cost':0.95, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Smiths Crinkle Cut Original 45g': { 'barcode':'9310015233548', 'manufacturer':'The Smith\'s Snackfood Company', 'brand':'Smith\'s', 'family':'Chips', 'cat':'snack', 'rrp':3.2, 'cost':0.95, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Smiths Crinkle Cut Cheese & Onion 45g': { 'barcode':'9310015233579', 'manufacturer':'The Smith\'s Snackfood Company', 'brand':'Smith\'s', 'family':'Chips', 'cat':'snack', 'rrp':3.2, 'cost':0.95, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Smiths Crinkle Cut BBQ 45g': { 'barcode':'9310015233586', 'manufacturer':'The Smith\'s Snackfood Company', 'brand':'Smith\'s', 'family':'Chips', 'cat':'snack', 'rrp':3.2, 'cost':0.95, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'CCs Tasty Cheese 45g': { 'barcode':'9310988011846', 'manufacturer':'Snack Brands Australia', 'brand':'Corn Chips', 'family':'Chips', 'cat':'snack', 'rrp':3.2, 'cost':0.98, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Twisties Chicken 45g': { 'barcode':'9310015233906', 'manufacturer':'The Smith\'s Snackfood Company', 'brand':'Twisties', 'family':'Chips', 'cat':'snack', 'rrp':3.2, 'cost':0.95, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Cheezels 45g': { 'barcode':'9310988010030', 'manufacturer':'Snack Brands Australia', 'brand':'Cheezels', 'family':'Chips', 'cat':'snack', 'rrp':3.2, 'cost':0.98, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Burger Rings 45g': { 'barcode':'9310015233951', 'manufacturer':'The Smith\'s Snackfood Company', 'brand':'Burger Rings', 'family':'Chips', 'cat':'snack', 'rrp':3.2, 'cost':0.95, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Huff & Puff Pork Crackle Original 25g': { 'barcode':'9310793000103', 'manufacturer':'Huff and Puff', 'brand':'Pork Crackle', 'family':'Chips', 'cat':'snack', 'rrp':3.2, 'cost':0.93, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Huff & Puff Pork Crackle American BBQ 25g': { 'barcode':'9310793000141', 'manufacturer':'Huff and Puff', 'brand':'Pork Crackle', 'family':'Chips', 'cat':'snack', 'rrp':3.2, 'cost':0.93, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Cadbury Caramello 46g': { 'barcode':'9300617301424', 'manufacturer':'Mondelez', 'brand':'Cadbury', 'family':'Chocolate', 'cat':'snack', 'rrp':3.5, 'cost':1.36, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'M&M Peanut 46g Mars': { 'barcode':'93682671', 'manufacturer':'Mars', 'brand':'M&M\'s', 'family':'Chocolate', 'cat':'snack', 'rrp':3.5, 'cost':1.36, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Cadbury Dairy Milk 45g': { 'barcode':'9300617042310', 'manufacturer':'Mondelez', 'brand':'Cadbury', 'family':'Chocolate', 'cat':'snack', 'rrp':3.5, 'cost':1.36, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Mars Bar 47g': { 'barcode':'9300682059015', 'manufacturer':'Mars', 'brand':'Mars', 'family':'Chocolate', 'cat':'snack', 'rrp':3.5, 'cost':1.36, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Snickers 44g': { 'barcode':'9300682060929', 'manufacturer':'Mars', 'brand':'Snickers', 'family':'Chocolate', 'cat':'snack', 'rrp':3.5, 'cost':1.36, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Aero Peppermint 40g': { 'barcode':'9300605065024', 'manufacturer':'Nestle', 'brand':'Aero', 'family':'Chocolate', 'cat':'snack', 'rrp':3.5, 'cost':1.35, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Milky Bar 44g': { 'barcode':'9300605157743', 'manufacturer':'Nestle', 'brand':'Nestle', 'family':'Chocolate', 'cat':'snack', 'rrp':3.5, 'cost':1.35, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Wrigleys Extra Spearmint 27g': { 'barcode':'93613903', 'manufacturer':'Wrigley', 'brand':'Extra', 'family':'Gum and Mint', 'cat':'snack', 'rrp':3.2, 'cost':1.39, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Allens Party Mix 190g': { 'barcode':'9300605042360', 'manufacturer':'Nestle', 'brand':'Nestle', 'family':'Candy', 'cat':'snack', 'rrp':4.8, 'cost':2.14, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Nobbys Salted Peanuts 50g': { 'barcode':'9310015310010', 'manufacturer':'The Smith\'s Snackfood Company', 'brand':'Nobbys', 'family':'Salty Snacks', 'cat':'snack', 'rrp':3.0, 'cost':1.05, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Nobbys Beef Jerky Original 25g': { 'barcode':'9310015227196', 'manufacturer':'The Smith\'s Snackfood Company', 'brand':'Nobbys', 'family':'Chips', 'cat':'snack', 'rrp':5.0, 'cost':2.18, 'gstFree':true, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Nobbys Salted Cashews 50g': { 'barcode':'9310015311512', 'manufacturer':'The Smith\'s Snackfood Company', 'brand':'Nobbys', 'family':'Salty Snacks', 'cat':'snack', 'rrp':5.0, 'cost':2.12, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'M&M Milk Chocolate 49g': { 'barcode':'93682664', 'manufacturer':'Mars', 'brand':'M&M\'s', 'family':'Chocolate', 'cat':'snack', 'rrp':3.5, 'cost':1.36, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Everlasting Gobstopper 50g': { 'barcode':'079200230401', 'brand':'Wonka', 'family':'Candy', 'cat':'snack', 'rrp':3.0, 'cost':1.64, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Gatorade Fierce Grape 600ml': { 'barcode':'9310640620119', 'manufacturer':'Asahi Beverages', 'brand':'Schweppes', 'family':'Drinks', 'cat':'drink', 'rrp':4.8, 'cost':2.11, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Coca Cola Classic 600ml': { 'barcode':'9300675009829', 'manufacturer':'The Coca-Cola Company', 'brand':'Coca-Cola', 'family':'Drinks', 'cat':'drink', 'rrp':4.8, 'cost':2.42, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Coca Cola Zero Sugar 375ml': { 'barcode':'9300675079655', 'manufacturer':'The Coca-Cola Company', 'brand':'Coca-Cola', 'family':'Drinks', 'cat':'drink', 'rrp':3.0, 'cost':1.01, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Piranha Snack Mix Cashew, Multigrain & Soy 80g': { 'barcode':'9311796548012', 'manufacturer':'Piranha', 'brand':'Piranha', 'family':'Salty Snacks', 'cat':'snack', 'rrp':3.8, 'cost':1.93, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Mrs Higgins Chunky Chocolate Chip Cookie 100g': { 'barcode':'9418377000386', 'manufacturer':'Mrs. Higgins', 'brand':'Mrs. Higgins', 'family':'Cookies', 'cat':'snack', 'rrp':3.9, 'cost':1.73, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Scorched Peanut Bar 45g': { 'barcode':'9314419027345', 'brand':'', 'family':'Chocolate', 'cat':'snack', 'rrp':3.5, 'cost':0.82, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Oak Milk Chocolate 500ml': { 'barcode':'9310036061106', 'manufacturer':'Lactalis Aust', 'brand':'Oak Milk', 'family':'Drinks', 'cat':'drink', 'rrp':4.5, 'cost':2.53, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Spring Valley Orange Juice 300ml': { 'barcode':'9300757000294', 'manufacturer':'Asahi Beverages', 'brand':'Schweppes', 'family':'Drinks', 'cat':'drink', 'rrp':3.5, 'cost':1.53, 'gstFree':true, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Oak Iced Coffee 500ml': { 'barcode':'9310036061748', 'manufacturer':'Lactalis Aust', 'brand':'Oak Milk', 'family':'Drinks', 'cat':'drink', 'rrp':4.5, 'cost':2.53, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Solo Zero Sugar 375ml': { 'barcode':'9315596006963', 'manufacturer':'Asahi Beverages', 'brand':'Schweppes', 'family':'Drinks', 'cat':'drink', 'rrp':3.0, 'cost':0.86, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Red Bull Original 355ml': { 'barcode':'9002490242923', 'manufacturer':'Red Bull', 'brand':'Red Bull', 'family':'Drinks', 'cat':'drink', 'rrp':4.5, 'cost':2.51, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Rices Splashe Cola 600ml': { 'barcode':'9329458000044', 'brand':'', 'family':'Drinks', 'cat':'drink', 'rrp':4.0, 'cost':1.56, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Stanwells Portello 600ml': { 'barcode':'9316765600036', 'manufacturer':'Stanwells', 'brand':'Stanwells', 'family':'Drinks', 'cat':'drink', 'rrp':4.0, 'cost':0.76, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Coolridge Water 600ml': { 'barcode':'9315596302102', 'manufacturer':'Asahi Beverages', 'brand':'Schweppes', 'family':'Drinks', 'cat':'drink', 'rrp':3.5, 'cost':0.73, 'gstFree':true, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Solo 375ml': { 'barcode':'9315596002767', 'manufacturer':'Asahi Beverages', 'brand':'Solo', 'family':'Drinks', 'cat':'drink', 'rrp':3.0, 'cost':0.75, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Lifestyle Balance Raw Nuts 60g': { 'barcode':'9414500001824', 'brand':'', 'family':'Candy', 'cat':'snack', 'rrp':3.5, 'cost':1.45, 'gstFree':true, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Sams Pineapple Vitamin 375ml': { 'barcode':'9345344000042', 'manufacturer':'Sams', 'brand':'Sams', 'family':'Drinks', 'cat':'drink', 'rrp':3.2, 'cost':2.18, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Sams Green Lunch 375ml': { 'barcode':'9345344000158', 'manufacturer':'Sams', 'brand':'Sams', 'family':'Drinks', 'cat':'drink', 'rrp':3.2, 'cost':2.18, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Sams All Day Brekky 375ml': { 'barcode':'9345344000196', 'manufacturer':'Sams', 'brand':'Sams', 'family':'Drinks', 'cat':'drink', 'rrp':3.2, 'cost':2.18, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Sams Fruit Lunch 375ml': { 'barcode':'9345344000004', 'manufacturer':'Sams', 'brand':'Sams', 'family':'Drinks', 'cat':'drink', 'rrp':3.2, 'cost':2.18, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Coolridge Sparkling Natural 500ml': { 'barcode':'9315596005157', 'manufacturer':'Asahi Beverages', 'brand':'Schweppes', 'family':'Drinks', 'cat':'drink', 'rrp':3.0, 'cost':1.43, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Coolridge Sparkling Water Lime 500ml': { 'barcode':'9315596006017', 'manufacturer':'Asahi Beverages', 'brand':'Schweppes', 'family':'Drinks', 'cat':'drink', 'rrp':2.0, 'cost':1.43, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Lipton Iced Tea Peach 500ml': { 'barcode':'9310021039035', 'manufacturer':'Asahi Beverages', 'brand':'Lipton', 'family':'Drinks', 'cat':'drink', 'rrp':4.6, 'cost':1.62, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Lipton Iced Tea Mango 500ml': { 'barcode':'9310021039073', 'manufacturer':'Asahi Beverages', 'brand':'Lipton', 'family':'Drinks', 'cat':'drink', 'rrp':4.6, 'cost':1.62, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Pepsi Max 600ml': { 'barcode':'9313820000862', 'manufacturer':'Asahi Beverages', 'brand':'Schweppes', 'family':'Drinks', 'cat':'drink', 'rrp':4.8, 'cost':1.92, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Gatorade Lemon Lime 600ml': { 'barcode':'9310640620034', 'manufacturer':'Asahi Beverages', 'brand':'Schweppes', 'family':'Drinks', 'cat':'drink', 'rrp':4.8, 'cost':2.11, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Gatorade Orange Ice 600ml': { 'barcode':'9310640620010', 'manufacturer':'Asahi Beverages', 'brand':'Schweppes', 'family':'Drinks', 'cat':'drink', 'rrp':4.8, 'cost':2.11, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Gatorade Tropical 600ml': { 'barcode':'9310640620058', 'manufacturer':'Asahi Beverages', 'brand':'Schweppes', 'family':'Drinks', 'cat':'drink', 'rrp':4.8, 'cost':2.11, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Nippys Iced Chocolate Milk 500ml': { 'barcode':'9311336030243', 'manufacturer':'Nippy\'s', 'brand':'Nippy\'s', 'family':'Drinks', 'cat':'drink', 'rrp':4.0, 'cost':2.54, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Nippys Iced Coffee 500ml': { 'barcode':'9311336030250', 'manufacturer':'Nippy\'s', 'brand':'Nippy\'s', 'family':'Drinks', 'cat':'drink', 'rrp':4.0, 'cost':2.54, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Bundaberg Traditional Lemonade 375ml': { 'barcode':'9311493002282', 'manufacturer':'Bundaberg', 'brand':'Bundaberg', 'family':'Drinks', 'cat':'drink', 'rrp':3.0, 'cost':1.38, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Stanwells Club Nectar 600ml': { 'barcode':'9316765600098', 'manufacturer':'Stanwells', 'brand':'Stanwells', 'family':'Drinks', 'cat':'drink', 'rrp':4.0, 'cost':0.76, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Solo Lemon 600ml': { 'barcode':'9315596200217', 'manufacturer':'Asahi Beverages', 'brand':'Schweppes', 'family':'Drinks', 'cat':'drink', 'rrp':4.8, 'cost':1.92, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Mountain Dew 600ml': { 'barcode':'9313820004389', 'manufacturer':'Asahi Beverages', 'brand':'Schweppes', 'family':'Drinks', 'cat':'drink', 'rrp':4.8, 'cost':1.92, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Sunkist 600ml': { 'barcode':'9315596200200', 'manufacturer':'Asahi Beverages', 'brand':'Schweppes', 'family':'Drinks', 'cat':'drink', 'rrp':4.8, 'cost':1.92, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Pepsi Cola 600ml': { 'barcode':'9313820004037', 'manufacturer':'Asahi Beverages', 'brand':'Schweppes', 'family':'Drinks', 'cat':'drink', 'rrp':4.15, 'cost':1.92, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Kamikaze Creaming Soda 500ml': { 'barcode':'9343518008535', 'brand':'', 'family':'Drinks', 'cat':'drink', 'rrp':7.0, 'cost':2.66, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Allens Frogs Alive 190g': { 'barcode':'9300605042421', 'manufacturer':'Nestle', 'brand':'Nestle', 'family':'Candy', 'cat':'snack', 'rrp':4.8, 'cost':2.14, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Piranha Snaps Smokehouse BBQ 25g': { 'barcode':'9311796581200', 'manufacturer':'Piranha', 'brand':'Piranha', 'family':'Salty Snacks', 'cat':'snack', 'rrp':2.6, 'cost':0.87, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Arnotts Shapes Cheese and Bacon 70g': { 'barcode':'9310072024387', 'manufacturer':'Arnott\'s Biscuits Limited', 'brand':'Shapes', 'family':'Chips', 'cat':'snack', 'rrp':3.0, 'cost':1.35, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Mrs Higgins Choc Fudge Brownie 80g': { 'barcode':'9418377000867', 'manufacturer':'Mrs. Higgins', 'brand':'Mrs. Higgins', 'family':'Cookies', 'cat':'snack', 'rrp':3.9, 'cost':1.55, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'John West Lunch Kit Tuna Sweetcorn in Mayo 108g': { 'barcode':'9300462345437', 'manufacturer':'John West', 'brand':'John West', 'family':'Candy', 'cat':'snack', 'rrp':5.5, 'cost':2.32, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Bounce Coconut Macadamia Protein Ball 40g': { 'barcode':'9335805000384', 'manufacturer':'Bounce Foods', 'brand':'Bounce', 'family':'Cookies', 'cat':'snack', 'rrp':3.5, 'cost':1.88, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Nurofen 12 Tablets': { 'barcode':'93711562', 'brand':'Nurofen', 'family':'Pharmaceutical', 'cat':'other', 'rrp':5.2, 'cost':4.22, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Cadbury Cherry Ripe 44g': { 'barcode':'9300617301363', 'manufacturer':'Mondelez', 'brand':'Cadbury', 'family':'Chocolate', 'cat':'snack', 'rrp':3.5, 'cost':1.36, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Go Natural Nut Delight Bar 40g': { 'barcode':'93260800', 'manufacturer':'Go Natural', 'brand':'Go Natural', 'family':'Candy', 'cat':'snack', 'rrp':3.0, 'cost':1.64, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Pringles Original 53g': { 'barcode':'8886467103414', 'manufacturer':'Pringles, LLC', 'brand':'Pringles', 'family':'Chips', 'cat':'snack', 'rrp':2.8, 'cost':1.82, 'minPickEnabled':true, 'minPickPct':30, 'overridePar':false },
+  'Stevenson Village Sausage Roll 180g': { 'barcode':'9329891000137', 'manufacturer':'Stevenson\'s Village', 'brand':'Pie and Sausage Roll', 'family':'Frozen Foods', 'cat':'food', 'rrp':5.5, 'cost':1.68, 'overridePar':false, 'prekit':true },
+  'Stevenson Village Curry Steak Pie 200g': { 'barcode':'9329891000168', 'manufacturer':'Stevenson\'s Village', 'brand':'Pie and Sausage Roll', 'family':'Frozen Foods', 'cat':'food', 'rrp':7.5, 'cost':2.78, 'overridePar':false, 'prekit':true },
+  'Stevenson Village Pepper Steak Pie 200g': { 'barcode':'9329891000564', 'manufacturer':'Stevenson\'s Village', 'brand':'Pie and Sausage Roll', 'family':'Frozen Foods', 'cat':'food', 'rrp':7.5, 'cost':3.26, 'overridePar':false, 'prekit':true },
+  'Stevenson Village Cheese & Bacon Pie 200g': { 'barcode':'9329891000144', 'manufacturer':'Stevenson\'s Village', 'brand':'Pie and Sausage Roll', 'family':'Frozen Foods', 'cat':'food', 'rrp':7.5, 'cost':3.26, 'overridePar':false, 'prekit':true },
+  'Stevenson Village Pies Beef Steak 200g': { 'barcode':'9329891000120', 'manufacturer':'Stevenson\'s Village', 'brand':'Pie and Sausage Roll', 'family':'Frozen Foods', 'cat':'food', 'rrp':7.5, 'cost':2.68, 'overridePar':false, 'prekit':true },
+  'Ingham Pizza Roundas 130g': { 'barcode':'9310582094108', 'brand':'', 'family':'Frozen Foods', 'cat':'food', 'rrp':4.5, 'cost':1.62, 'overridePar':false, 'prekit':true },
+  'Mainland Cheese & Crackers Tasty 50g': { 'barcode':'9310052310387', 'brand':'Mainland', 'family':'Cold Foods', 'cat':'food', 'rrp':5.0, 'cost':1.88, 'overridePar':false, 'prekit':true },
+  'Muscle Chef Creamy Beef Tortellini': { 'barcode':'9353333006418', 'manufacturer':'My Muscle Chef', 'brand':'My Muscle Chef', 'family':'Cold Foods', 'cat':'food', 'rrp':13.0, 'cost':8.27, 'overridePar':false, 'prekit':true },
+  'Everest Rockstar Rock Salt Caramel 120ml': { 'barcode':'9310117009454', 'manufacturer':'Everest', 'brand':'Everest', 'family':'Frozen Foods', 'cat':'food', 'rrp':3.0, 'cost':1.14, 'overridePar':false, 'prekit':true },
+  'Everest Choc-a-lot 120ml': { 'barcode':'9310117009461', 'manufacturer':'Everest', 'brand':'Everest', 'family':'Frozen Foods', 'cat':'food', 'rrp':3.0, 'cost':1.07, 'overridePar':false, 'prekit':true },
+  'Ozbake BBQ Chicken Pizza Slab 160 g': { 'barcode':'797776529643', 'manufacturer':'Easy Meals', 'brand':'Ozbake', 'family':'Frozen Foods', 'cat':'food', 'rrp':4.6, 'cost':2.45, 'overridePar':false, 'prekit':true },
+  'Ozbake Cheese Pizza Slab 160 g': { 'barcode':'90016646', 'manufacturer':'Easy Meals', 'brand':'Ozbake', 'family':'Frozen Foods', 'cat':'food', 'rrp':4.6, 'cost':2.45, 'overridePar':false, 'prekit':true },
+  'Ozbake Hawaiian Pizza Slab 160 g': { 'barcode':'797776529636', 'manufacturer':'Easy Meals', 'brand':'Ozbake', 'family':'Frozen Foods', 'cat':'food', 'rrp':4.6, 'cost':2.45, 'overridePar':false, 'prekit':true },
+  'Ozbake Meat & Cheese Pizza Slab 160 g': { 'barcode':'797776529605', 'manufacturer':'Easy Meals', 'brand':'Ozbake', 'family':'Frozen Foods', 'cat':'food', 'rrp':4.6, 'cost':2.45, 'overridePar':false, 'prekit':true },
+  'Muscle Chef Meal': { 'barcode':'90019609', 'manufacturer':'My Muscle Chef', 'brand':'My Muscle Chef', 'family':'Frozen Foods', 'cat':'food', 'rrp':13.0, 'cost':8.27, 'overridePar':false, 'prekit':true },
+  'Ozbake Variety 160g': { 'barcode':'90019623', 'manufacturer':'Easy Meals', 'brand':'Oz Bake', 'family':'Frozen Foods', 'cat':'food', 'rrp':4.6, 'cost':2.45, 'overridePar':false, 'prekit':true },
+  'Ham & Cheese Roll 75g': { 'barcode':'9340214009514', 'manufacturer':'Good Tucker Bakery', 'brand':'Good Tucker Bakery', 'family':'Cold Foods', 'cat':'food', 'rrp':4.0, 'cost':1.12, 'gstFree':true, 'overridePar':false, 'prekit':true },
+  'Pizza Scroll 95g': { 'barcode':'90020131', 'manufacturer':'Good Tucker Bakery', 'brand':'Good Tucker Bakery', 'family':'Cold Foods', 'cat':'food', 'rrp':4.5, 'cost':1.96, 'overridePar':false, 'prekit':true },
 };
 
 function getProductBarcode(productName) {
@@ -9509,6 +9998,194 @@ function exportReportCSV() {
   showToast('Report exported ✓');
 }
 
+// ══════════════════════════════════════
+// PRODUCTS PAGE MODULE
+// ══════════════════════════════════════
+
+let prodFilter = 'all';
+let editingProductName = null;
+
+function setProdFilter(f, btn) {
+  prodFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('on'));
+  if (btn) btn.classList.add('on');
+  renderProductsPage();
+}
+
+function initProductsPage() {
+  loadProductsFromFirebase();
+  renderProductsPage();
+}
+
+function renderProductsPage() {
+  const search = (document.getElementById('prod-search')?.value || '').toLowerCase();
+  const tbody  = document.getElementById('products-tbody');
+  if (!tbody) return;
+
+  const setEl = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  const vals  = Object.values(PRODUCTS);
+  setEl('prod-stat-total',    vals.length);
+  setEl('prod-stat-drinks',   vals.filter(p => p.cat === 'drink').length);
+  setEl('prod-stat-snacks',   vals.filter(p => p.cat === 'snack').length);
+  setEl('prod-stat-food',     vals.filter(p => p.cat === 'food').length);
+  setEl('prod-stat-gst-free', vals.filter(p => p.gstFree).length);
+
+  let entries = Object.entries(PRODUCTS).filter(([name, p]) => {
+    if (prodFilter !== 'all' && p.cat !== prodFilter) return false;
+    if (search && !name.toLowerCase().includes(search) &&
+        !(p.barcode || '').includes(search) &&
+        !(p.brand   || '').toLowerCase().includes(search) &&
+        !(p.family  || '').toLowerCase().includes(search)) return false;
+    return true;
+  }).sort((a, b) => a[0].localeCompare(b[0]));
+
+  const catColor = { drink:'var(--info)', snack:'var(--warn)', food:'#a78bfa', other:'var(--muted)' };
+
+  tbody.innerHTML = entries.map(([name, p]) => {
+    const rrp    = p.rrp  || 0;
+    const cost   = p.cost || 0;
+    const margin = rrp > 0 ? Math.round(((rrp - cost) / rrp) * 100) : 0;
+    const col    = catColor[p.cat] || 'var(--muted)';
+
+    const flags = [];
+    if (p.gstFree)        flags.push('<span class="pill green" style="font-size:10px">GST Free</span>');
+    if (p.minPickEnabled) flags.push('<span class="pill blue"  style="font-size:10px">Min pick ' + (p.minPickPct||0) + '%</span>');
+    if (p.overridePar)    flags.push('<span class="pill orange" style="font-size:10px">Override par</span>');
+    if (p.prekit)         flags.push('<span class="pill orange" style="font-size:10px">🥬 Fresh</span>');
+
+    // Escape name for onclick attribute
+    const nameEsc = name.replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');
+
+    return `<tr class="clickable" onclick="openProductModal('${nameEsc}')">
+      <td style="font-weight:600;max-width:260px">
+        <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${name.replace(/"/g,'&quot;')}">${name}</div>
+      </td>
+      <td class="text-mono" style="font-size:11px;color:var(--muted)">${p.barcode || '—'}</td>
+      <td style="font-size:12px">${p.brand || '—'}</td>
+      <td><span class="pill" style="font-size:10px;background:${col}15;color:${col};border:1px solid ${col}30">${p.family || p.cat || '—'}</span></td>
+      <td class="text-mono">$${rrp.toFixed(2)}</td>
+      <td class="text-mono" style="color:var(--muted)">$${cost.toFixed(2)}</td>
+      <td class="text-mono" style="color:${marginColor(margin)};font-weight:600">${margin}%</td>
+      <td>${p.gstFree ? '<span class="pill green" style="font-size:10px">Free</span>' : '<span class="pill gray" style="font-size:10px">GST</span>'}</td>
+      <td style="display:flex;gap:4px;flex-wrap:wrap">${flags.join('') || '<span style="color:var(--muted);font-size:11px">—</span>'}</td>
+      <td><button class="btn-icon btn-sm" onclick="event.stopPropagation();openProductModal('${nameEsc}')">
+        <svg width="13" height="13" viewBox="0 0 20 20" fill="none"><path d="M4 13.5V16h2.5l7.37-7.37-2.5-2.5L4 13.5zM16.71 6.04a1 1 0 000-1.41l-1.34-1.34a1 1 0 00-1.41 0l-1.05 1.05 2.75 2.75 1.05-1.05z" fill="currentColor"/></svg>
+      </button></td>
+    </tr>`;
+  }).join('');
+
+  if (!entries.length) {
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:32px;color:var(--muted)">No products found</td></tr>';
+  }
+}
+
+function openProductModal(name) {
+  editingProductName = name || null;
+  const modal  = document.getElementById('prod-modal');
+  const title  = document.getElementById('prod-modal-title');
+  const delBtn = document.getElementById('prod-delete-btn');
+  if (!modal) return;
+
+  if (name && PRODUCTS[name]) {
+    const p = PRODUCTS[name];
+    title.textContent = 'Edit product';
+    delBtn.style.display = '';
+    document.getElementById('prod-m-name').value         = name;
+    document.getElementById('prod-m-barcode').value      = p.barcode      || '';
+    document.getElementById('prod-m-brand').value        = p.brand        || '';
+    document.getElementById('prod-m-manufacturer').value = p.manufacturer || '';
+    document.getElementById('prod-m-family').value       = p.family       || '';
+    document.getElementById('prod-m-cat').value          = p.cat          || 'drink';
+    document.getElementById('prod-m-rrp').value          = p.rrp          || '';
+    document.getElementById('prod-m-cost').value         = p.cost         || '';
+    document.getElementById('prod-m-minpick').value      = p.minPickEnabled ? (p.minPickPct || 30) : '';
+    document.getElementById('prod-m-gstfree').classList.toggle('on',    !!p.gstFree);
+    document.getElementById('prod-m-overridepar').classList.toggle('on', !!p.overridePar);
+    document.getElementById('prod-m-prekit').classList.toggle('on',      !!p.prekit);
+  } else {
+    title.textContent = 'Add product';
+    delBtn.style.display = 'none';
+    ['prod-m-name','prod-m-barcode','prod-m-brand','prod-m-manufacturer','prod-m-family','prod-m-rrp','prod-m-cost','prod-m-minpick']
+      .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    document.getElementById('prod-m-cat').value = 'drink';
+    ['prod-m-gstfree','prod-m-overridepar','prod-m-prekit'].forEach(id => {
+      document.getElementById(id)?.classList.remove('on');
+    });
+  }
+  modal.style.display = 'flex';
+}
+
+function closeProdModal() {
+  const modal = document.getElementById('prod-modal');
+  if (modal) modal.style.display = 'none';
+  editingProductName = null;
+}
+
+function saveProductModal() {
+  const name = document.getElementById('prod-m-name')?.value.trim();
+  if (!name) { showToast('Product name is required'); return; }
+
+  const minPickPct = parseInt(document.getElementById('prod-m-minpick')?.value) || 0;
+  const p = {
+    barcode:       document.getElementById('prod-m-barcode')?.value.trim()      || undefined,
+    brand:         document.getElementById('prod-m-brand')?.value.trim()        || undefined,
+    manufacturer:  document.getElementById('prod-m-manufacturer')?.value.trim() || undefined,
+    family:        document.getElementById('prod-m-family')?.value.trim()       || undefined,
+    cat:           document.getElementById('prod-m-cat')?.value                 || 'drink',
+    rrp:           parseFloat(document.getElementById('prod-m-rrp')?.value)     || 0,
+    cost:          parseFloat(document.getElementById('prod-m-cost')?.value)    || 0,
+    gstFree:       document.getElementById('prod-m-gstfree')?.classList.contains('on')     || undefined,
+    minPickEnabled:minPickPct > 0                                                            || undefined,
+    minPickPct:    minPickPct > 0 ? minPickPct : undefined,
+    overridePar:   document.getElementById('prod-m-overridepar')?.classList.contains('on') || false,
+    prekit:        document.getElementById('prod-m-prekit')?.classList.contains('on')       || undefined,
+  };
+  // Clean undefined
+  Object.keys(p).forEach(k => p[k] === undefined && delete p[k]);
+
+  // If name changed, remove old entry
+  if (editingProductName && editingProductName !== name) delete PRODUCTS[editingProductName];
+
+  saveProductToRegistry(name, p);
+  closeProdModal();
+  renderProductsPage();
+  showToast(editingProductName ? 'Product updated ✓' : 'Product added ✓');
+}
+
+function deleteProduct() {
+  if (!editingProductName) return;
+  if (!confirm('Delete "' + editingProductName + '"? This cannot be undone.')) return;
+  delete PRODUCTS[editingProductName];
+  if (fbReady && fbDb) {
+    fbDb.ref('vynd/products/' + editingProductName.replace(/[.#$[\]]/g,'_')).remove();
+  }
+  closeProdModal();
+  renderProductsPage();
+  showToast('Product deleted');
+}
+
+function exportProductsCSV() {
+  const headers = ['Product Name','Barcode','Brand','Manufacturer','Family','Category','RRP','Cost','GST Free','Min Pick Enabled','Min Pick %','Override Par','Prekit (Fresh)'];
+  const rows = Object.entries(PRODUCTS).sort((a,b)=>a[0].localeCompare(b[0])).map(([name,p]) => [
+    '"' + name.replace(/"/g,'""') + '"',
+    p.barcode    || '',
+    '"' + (p.brand||'').replace(/"/g,'""') + '"',
+    '"' + (p.manufacturer||'').replace(/"/g,'""') + '"',
+    p.family     || '',
+    p.cat        || '',
+    p.rrp        || 0,
+    p.cost       || 0,
+    p.gstFree        ? 'Yes' : 'No',
+    p.minPickEnabled ? 'Yes' : 'No',
+    p.minPickPct || 0,
+    p.overridePar    ? 'Yes' : 'No',
+    p.prekit         ? 'Yes' : 'No',
+  ].join(','));
+  const csv = [headers.join(','), ...rows].join('\n');
+  downloadFile('vynd-products-' + new Date().toISOString().split('T')[0] + '.csv', csv, 'text/csv');
+  showToast('Exported ' + Object.keys(PRODUCTS).length + ' products ✓');
+}
+
 function buildChart() {
   const data = [14200,16800,15400,17900,16100,18420,15800,18420];
   const labels = ['Feb 10','Feb 17','Feb 24','Mar 3','Mar 10','Mar 17','Mar 24','Apr 1'];
@@ -10163,7 +10840,8 @@ loadProductsFromFirebase();
 loadPickingIdMap();
 loadDynamicParSettings();
 scheduleDynamicParNightly();
-setTimeout(refreshDashboard, 500); // load dashboard after other init completes
+setTimeout(refreshDashboard, 500);
+updateMarginPreview(); // load dashboard after other init completes
 
 // ══════════════════════════════════════
 // ROUTE MAP + OPTIMISATION

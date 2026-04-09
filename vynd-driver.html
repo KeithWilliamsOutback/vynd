@@ -986,13 +986,87 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
 // DATA
 // ══════════════════════════════════════
 const ALL_PRODUCTS = [
-  'Coca-Cola 375ml','Pepsi Max 375ml','Sprite 375ml','Mount Franklin Water 600ml',
-  'Red Bull 250ml','V Energy 250ml','Gatorade Blue 600ml','Monster Energy 500ml',
-  'Powerade Berry Ice 600ml','Lipton Iced Tea 500ml',
-  "Smith's Original 45g","Smith's BBQ 45g",'Twix 58g','Snickers 50g',
-  'Kit Kat 45g','Milo Bar 45g','Tim Tam Original 200g',
-  'Sanitarium Up&Go 250ml','Vita-Weat Crackers 100g','Fantastic Noodles 85g'
+  '20g JJ Chicken Snacks','250ml Chill J Apple Cola','250ml Chill J Blueberry','250ml Chill J Raspberry',
+  '250ml Nippys Chocolate','27g Smiths Original','27g Smiths Salt & Vinegar','28G Grainwaves Sour Cream',
+  '28g Red Rock Honey Soy','28g Red Rock Sea Salt','28g Red Rock Sweet Chilli','Aero Peppermint 40g',
+  'Allens Frogs Alive 190g','Allens Minties 150g','Allens Party Mix 190g','Allens Snakes Alive 200g',
+  'Anticol Original 10 Lozenges','Arnott\'s Shapes Chicken Crimpy & Tasty Cheese 32 g','Arnotts Shapes Barbeque 70g','Arnotts Shapes Cheese and Bacon 70g',
+  'Arnotts Shapes Pizza 70g','Arnotts Wagon Wheels Original 48g','BIC Lighters Assorted','BSC Protein Bar Choc Fudge 92g',
+  'BSC Protein Bar Cookies & Cream  92g','BSC Protein Bar Salted Caramel 92g','Beef Lasagne 220g','Bhuja Cracker Mix 150g',
+  'Big Lolly Choc Mixed Buds','Bounce Coconut Macadamia Protein Ball 40g','Bundaberg Creaming Soda 375ml','Bundaberg Ginger Beer 375ml',
+  'Bundaberg Lemon Lime & Bitters 375ml','Bundaberg Traditional Lemonade 375ml','Burger Rings 45g','Butter-Menthol Throat Lozenges Original 40g',
+  'C&S Still Mineral Water 500ml','C&S Still Mineral Water 600ml','CCA Shop Special Energy $2','CCA Shop Special Flavours $2',
+  'CCA Shop Special Powerade $2','CCA Shop Special Water $1','CCs Tasty Cheese 45g','Cadbury Caramello 46g',
+  'Cadbury Cherry Ripe 44g','Cadbury Dairy Milk 45g','Cadbury Giant Caramello Koala 35g','Cadbury Picnic 46g',
+  'Carmans Choc Brownie Oat Slice 70g','Carmans Protein Bar Oat Slice Golden Oat Coconut 70g','Cheezels 45g','Chip Special',
+  'Coca Cola Classic 375ml','Coca Cola Classic 600ml','Coca Cola Diet 375ml','Coca Cola Zero Sugar 375ml',
+  'Coca Cola Zero Sugar 600ml','Colgate Total','Continental Cup A Soup Chicken Noodle 40g','Continental Snack Pot Cheese and Bacon Pasta 70g',
+  'Coolridge Sparkling Natural 500ml','Coolridge Sparkling Water Lime 500ml','Coolridge Water 600ml','Crankt Protein Bar Choc Mud Cake 60g',
+  'Crunch 45g','Doritos Cheese Supreme 45g','Eclipse Mint Peppermint 40g','Esonic 3 In 1 USB Cable',
+  'Esonic 5000MAH Powerbank','Europe Nougat Honey Log 40g','Everest Choc-a-lot 120ml','Everest Rockstar Rock Salt Caramel 120ml',
+  'Everlasting Gobstopper 50g','Fanta Orange 600ml','Fantastic Noodles Bowl Beef 85g','Fantastic Noodles Bowl Chicken 85g',
+  'Fantasy Belts Joo Joo 160g','Fizzers Strawberry 11.6g','Freekee Brain Licker 60ml','Gatorade Fast Twitch Cool Blue 350ml',
+  'Gatorade Fast Twitch Grape 350ml','Gatorade Fast Twitch Strawberry Lemonade 350ml','Gatorade Fierce Blue Bolt 600ml','Gatorade Fierce Grape 600ml',
+  'Gatorade Lemon Lime 600ml','Gatorade Orange Ice 600ml','Gatorade Tropical 600ml','Go Natural Blueberry Almond 40 g',
+  'Go Natural Cranberry Almond 40 g','Go Natural Nut Delight Bar 40g','Grain Waves Sour Cream & Chives 40g','Hakka Fried Rice 200g',
+  'Ham & Cheese Roll 75g','Harvest Snaps Original Salted 65g','Harvest Snaps Pea Crisps Salt & Vinegar 65g','Hersheys Cookies n Cream 40g',
+  'Huff & Puff Pork Crackle American BBQ 25g','Huff & Puff Pork Crackle Original 25g','Indomie Mi Goreng Ramen - Sabor Original','Infused Blood Orange & Mango 375ml',
+  'Infused Lemon & Lime 375ml','Infused Passionfruit & P/apple 375ml','Infused Raspberry & Blueberry 375ml','Infused Strawberry & Watermelon 375ml',
+  'Ingham Pizza Roundas 130g','JC Jackaroo Mix 35g','JC Original Delicious Energy Mix 100g','JC\'s Quality Foods Energy Mix 35g',
+  'JC\'s Quality Foods Healthy Mix 35g','John West Lunch Kit Tuna Sweetcorn in Mayo 108g','John West Lunch Kit Tuna with Thousand Island Dressing 108g','Jolly Lolly Party Mix 100g',
+  'Juice Bomb Blueberry 250 ml','Juice Bomb Grape 250 ml','Juice Bomb Watermelon 250 ml','Kamikaze Blue Raspberry 500ml',
+  'Kamikaze Creaming Soda 500ml','Kamikaze Hawaiian Splice 500ml','Kamikaze Orange Mango 500ml','Kamikaze Rainbow Gummy 500 ml',
+  'Kellogs Corn Flakes Bowl 30g','Kettle Chilli 45g','Kettle Honey Soy Chicken 45g','Kettle Jap Fried Chicken 45g',
+  'Kettle Natural Sea Salt 45g','Kettle Sea Salt & Vinegar 45g','Kettle Sour Cream Chives 45g','Kettle Sweet Chilli and Sour Cream 45g',
+  'Kinder Bueno 43g','Kit Kat 4 Finger 42g','Kreenuts Crunchy 39 g','Kreenuts Salted Caramel 37g',
+  'Lemonade 375ml','Lemonade 600ml','Lifesavers Fruit Pastilles 34 g','Lifesavers Fruit Tingles 34g',
+  'Lifesavers Musk 34g','Lifestyle Balance Raw Nuts 60g','Lipton Iced Tea Mango 500ml','Lipton Iced Tea Peach 500ml',
+  'Lynx Africa 32g','M&M Chocolate 100g','M&M Milk Chocolate 49g','M&M Peanut 46g Mars',
+  'M&M Peanut 90g','Maggi 2 Minute Noodles Chicken 72g','Maggi Noodles Beef Cup','Maggi Noodles Chicken Cup 60g',
+  'Mainland Cheese & Crackers Tasty 50g','Mainland Lunch Kit Beetroot 110g','Mainland Lunch Kit Caramelised Onion 110g','Maltesers Teasers Bag 85g',
+  'Mars Bar 47g','Mentos Fruit Roll 37.5G','Mentos Mint Roll 37.5g','Milky Bar 44g',
+  'Milo Snack Bar 21g','Monster Energy Green','Monster Mango Loco','Monster Zero Sugar Ultra',
+  'Mother Energy Drink 500ml','Mountain Dew 375ml','Mountain Dew 600ml','Mrs Higgins Choc Fudge Brownie 80g',
+  'Mrs Higgins Chunky Chocolate Chip Cookie 100g','Mt Franklin Water 600ml','Munch Pistachio & Cranberry 60g','Munchme Cashew Sesame 120g',
+  'Musashi High Protein Cookies & Cream 90g','Musashi High Protein Shake Vanilla 375ml','Musashi Muscle Recovery Protein Shake Chocolate 375ml','Muscle Chef Creamy Beef Tortellini',
+  'Muscle Chef Meal','Nippys Iced Chocolate Milk 500ml','Nippys Iced Coffee 500ml','Nippys Iced Coffee Double Espresso 500ml',
+  'Nippys Iced Strawberry 250ml','Nippys Iced Strawberry Milk 500ml','Nobbys Beef Jerky Original 25g','Nobbys Salted Beer Nuts 50g',
+  'Nobbys Salted Cashews 50g','Nobbys Salted Peanuts 50g','Nurofen 12 Tablets','Oak Iced Coffee 500ml',
+  'Oak Milk Chocolate 500ml','Oak Strawberry 500ml','Oxyshred Passionfruit 355ml','Ozbake BBQ Chicken Pizza Slab 160 g',
+  'Ozbake Cheese Pizza Slab 160 g','Ozbake Hawaiian Pizza Slab 160 g','Ozbake Meat & Cheese Pizza Slab 160 g','Ozbake Variety 160g',
+  'Panadol Rapid 16 Caplets','Passiona 375ml','Passiona 600ml','Pepsi Cola 600ml',
+  'Pepsi Max 375ml','Pepsi Max 600ml','Pepsi Max Vanilla 600ml','Piranha Flame Thrower Mild Chilli Lime 80g',
+  'Piranha Popcorn Butterscotch 25g','Piranha Popcorn Chicken 25g','Piranha Popcorn Sea Salt 25g','Piranha Popcorn Sweet & Salty 25g',
+  'Piranha Snack Mix Cashew, Multigrain & Soy 80g','Piranha Snaps Balsamic Salt & Vinegar 45g','Piranha Snaps Light & Tangy Salsa 25g','Piranha Snaps Smokehouse BBQ 25g',
+  'Piranha Soy Crisp Chilli Cream Cheese 100g','Piranha Soy Crisps Honey and Dijon Mustard 100g','Piranha Soy Crisps Original 100g','Piranha Soy Crisps Sweet Chilli Lime 100g',
+  'Piranha Vege Crackers Barbeque 45g','Piranha Vege Crackers Sweet Chilli Lime 45g','Pizza Scroll 95g','Potato Bake 200g',
+  'Powerade Mountain Blast  600 ml','Primo Stackers Chicken Breast 45g','Primo Stackers Danish Salami 45g','Primo Stackers Leg Ham 50g',
+  'Primo Stackers Salami 50g','Primo Stackers Spicy Chorizo 50g','Primo Stackers Trio Aussie BBQ 50g','Pringles Original 53g',
+  'Pringles Sour Cream & Onion 53g','Pure Vitality Shaving Set','Quick-Eze Chewy Peppermint 8TAB','Red Bull Blue Edition (Blueberry) 250ml',
+  'Red Bull Original 250ml','Red Bull Original 355ml','Red Bull Original 473ml','Red Bull Red Edition (Watermelon) 250ml',
+  'Red Bull Sugar Free 250ml','Red Bull Sugar Free 473ml','Red Bull Tropical Edition 250ml','Red Rock Deli Honey Soy Chicken 45g',
+  'Rices Splashe Cola 600ml','SPC Aussie Diced Two Fruits 120g','Safety Glasses','Samboy Atomic Tomato 45g',
+  'Samboy BBQ 45g','Samboy Chicken 45g','Sams All Day Brekky 375ml','Sams Fruit Lunch 375ml',
+  'Sams Good Belly Lunch 375ml','Sams Green Lunch 375ml','Sams Pineapple Vitamin 375ml','Schweppes Traditional Raspberry 600ml',
+  'Scorched Peanut Bar 45g','Scorched Peanut Bites 140g','Shop Special $1','Skittles Fruit Tube',
+  'Smiths Crinkle Cut BBQ 45g','Smiths Crinkle Cut Cheese & Onion 45g','Smiths Crinkle Cut Chicken 45g','Smiths Crinkle Cut Original 45g',
+  'Smiths Crinkle Cut Salt & Vinegar 45g','Snickers 44g','Solo 375ml','Solo Energy 250ml',
+  'Solo Energy 500ml','Solo Energy Zero Sugar 250ml','Solo Lemon 600ml','Solo Zero Sugar 375ml',
+  'Solo Zero Sugar 600ml','Sour Worms Joo Joo 150g','Spring Valley Apple Juice 300ml','Spring Valley Apple Juice 350ml',
+  'Spring Valley Orange Juice 300ml','Sprite Bottle 600ml','Stanwells Club Nectar 600ml','Stanwells Luscious Lime 600ml',
+  'Stanwells Pineapple 600ml','Stanwells Portello 600ml','Stanwells Red Creaming Soda 600ml','Stayfree All Night Pads',
+  'Stevenson Village Cheese & Bacon Pie 200g','Stevenson Village Curry Steak Pie 200g','Stevenson Village Pepper Steak Pie 200g','Stevenson Village Pies Beef Steak 200g',
+  'Stevenson Village Sausage Roll 180g','Strawberry Clouds Joo Joos 150g','Sunbeam Sultanas 40g','Sunkist 375ml',
+  'Sunkist 600ml','Sunkist Zero Sugar 375ml','Swizzels Giant Fizzers 45g','Tasty Toobs 35g',
+  'Tek Toothbrush Medium','Thins Cheese & Onions 45g','Thins Chicken 45g','Thins Light and Tangy 45g',
+  'Thins Original 45g','Thins Salt & Vinegar 45g','Travel Essentials Pack 90 g','Triple Dippers 42.5g',
+  'Turkish Delight 55g','Twisties Cheese 45g','Twisties Chicken 45g','Twix 50g',
+  'Up & Go Energize Chocolate 500ml','Up & Go Energize Vanilla 500ml','V Energy Blue 500ml','V Energy Original Green 250ml',
+  'V Energy Original Green 500ml','Wrigleys Extra Peppermint 27g','Wrigleys Extra Spearmint 27g','uByKotex Tampons Regular 16pack'
 ];
+
+// Mutable — gets updated when Firebase products sync
+let PRODUCT_DATA = {}; // name → { barcode, rrp, cost, brand, family, cat, gstFree, ... }
 
 const STOPS = {
   'M-001':{ id:'M-001', customer:'Westfield Office', locationName:'Westfield Office Tower', addr:'Level 3 breakroom', cash:'$112.60', cashType:'cash', status:'done', fault:false, lastService:'Today', fillCount:4, hasPriceChange:false,
@@ -4055,6 +4129,7 @@ function applyDriverFbConfig() {
     showToast('☁ Firebase connected ✓');
     loadDriverProfileFromFirebase();
     loadGlobalOpSettings();
+    loadProductsFromFirebase();
     // Close config panel
     const panel = document.getElementById('fb-config-panel');
     const toggle = document.getElementById('fb-config-toggle');
@@ -4090,6 +4165,8 @@ function initFirebase() {
     loadDriverProfileFromFirebase();
     // Load global operational settings (photo/audit freq etc)
     loadGlobalOpSettings();
+    // Sync product catalogue from Firebase
+    loadProductsFromFirebase();
   } catch(e) {
     console.warn('Firebase init failed, using localStorage fallback:', e.message);
   }
@@ -4182,6 +4259,32 @@ function syncToPortal() {
     showToast('↑ Synced to portal ✓');
   } catch(e) {
     showToast('Sync failed — ' + e.message);
+  }
+}
+
+// ── Load products from Firebase and merge into ALL_PRODUCTS ──
+async function loadProductsFromFirebase() {
+  if (!fbDb) return;
+  try {
+    const snap = await fbDb.ref('vynd/products').once('value');
+    const data = snap.val();
+    if (!data) return;
+
+    // Merge Firebase products into ALL_PRODUCTS (add any new names, update existing)
+    const firebaseNames = Object.values(data).map(p => p.name || '').filter(Boolean);
+    // Also use keys as names if name field missing
+    Object.entries(data).forEach(([key, p]) => {
+      const name = p.name || key.replace(/_/g, ' ');
+      if (name && !ALL_PRODUCTS.includes(name)) {
+        ALL_PRODUCTS.push(name);
+      }
+      // Store product data for barcode lookups etc
+      PRODUCT_DATA[name] = p;
+    });
+    ALL_PRODUCTS.sort();
+    console.log('Products synced from Firebase:', ALL_PRODUCTS.length);
+  } catch(e) {
+    console.warn('Product sync failed:', e.message);
   }
 }
 

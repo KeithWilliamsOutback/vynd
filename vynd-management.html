@@ -1038,6 +1038,7 @@ tr.clickable:hover td{background:var(--bg)}
         <button class="filter-btn"   onclick="setProdFilter('other',this)">Other</button>
         <div style="margin-left:auto;display:flex;gap:8px">
           <button class="btn btn-secondary btn-sm" onclick="exportProductsCSV()">⬇ Export CSV</button>
+          <button class="btn btn-secondary btn-sm" onclick="pushAllProductsToFirebase()" title="Push all products to Firebase so driver app can sync">☁ Sync to Firebase</button>
           <button class="btn btn-primary btn-sm"   onclick="openProductModal()">+ Add product</button>
         </div>
       </div>
@@ -7448,9 +7449,10 @@ function getProductData(productName) {
 
 function saveProductToRegistry(name, data) {
   PRODUCTS[name] = { ...PRODUCTS[name], ...data };
-  // Persist to Firebase
+  // Persist to Firebase — include name field so driver app can reconstruct product name from key
   if (fbReady && fbDb) {
-    fbDb.ref('vynd/products/' + name.replace(/[.#$\[\]]/g,'_')).set(PRODUCTS[name]);
+    const fbKey = name.replace(/[.#$[\]]/g, '_');
+    fbDb.ref('vynd/products/' + fbKey).set({ ...PRODUCTS[name], name });
   }
 }
 
@@ -7458,13 +7460,32 @@ function loadProductsFromFirebase() {
   if (!fbReady || !fbDb) return;
   fbDb.ref('vynd/products').once('value').then(snap => {
     const data = snap.val();
-    if (!data) return;
-    Object.entries(data).forEach(([key, val]) => {
-      const name = val.name || key.replace(/_/g,' ');
-      PRODUCTS[name] = { ...PRODUCTS[name], ...val };
-    });
-    console.log('Products loaded from Firebase:', Object.keys(PRODUCTS).length);
+    if (data) {
+      Object.entries(data).forEach(([key, val]) => {
+        const name = val.name || key.replace(/_/g, ' ');
+        PRODUCTS[name] = { ...PRODUCTS[name], ...val };
+      });
+      console.log('Products loaded from Firebase:', Object.keys(PRODUCTS).length);
+    } else {
+      // No products in Firebase yet — push all now so driver app can sync
+      pushAllProductsToFirebase();
+    }
   });
+}
+
+function pushAllProductsToFirebase() {
+  if (!fbReady || !fbDb) return;
+  const updates = {};
+  Object.entries(PRODUCTS).forEach(([name, p]) => {
+    const fbKey = name.replace(/[.#$[\]]/g, '_');
+    updates['vynd/products/' + fbKey] = { ...p, name };
+  });
+  fbDb.ref().update(updates)
+    .then(() => {
+      console.log('All products pushed to Firebase:', Object.keys(PRODUCTS).length);
+      showToast('📦 ' + Object.keys(PRODUCTS).length + ' products synced to Firebase ✓');
+    })
+    .catch(e => console.warn('Product push failed:', e.message));
 }
 
 // ══════════════════════════════════════

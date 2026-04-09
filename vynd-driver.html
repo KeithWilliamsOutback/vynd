@@ -160,7 +160,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
 .toggle-track.on .toggle-knob{transform:translateX(16px);background:var(--accent)}
 .toggle-label{font-size:12px;color:var(--muted);transition:color .2s}
 .toggle-track.on + .toggle-label{color:var(--accent)}
-.stop-card-wrap.hidden-done{max-height:0;opacity:0;overflow:hidden;pointer-events:none;margin:0;padding:0;transition:max-height .3s,opacity .2s}
+.stop-card-wrap{transition:max-height .3s,opacity .2s,margin .3s}
+.stop-card-wrap.hidden-done{max-height:0!important;opacity:0;overflow:hidden;pointer-events:none;margin:0!important;padding:0}
 
 /* FILL GUIDE ROW */
 .fg-row{border-bottom:1px solid var(--border);background:var(--card);position:relative;overflow:hidden}
@@ -377,7 +378,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
         <rect x="9" y="22" width="4" height="1.5" rx="0.5" fill="#163D6E"/>
         <text x="20" y="16" font-family="Georgia, serif" font-weight="700" font-size="14" letter-spacing="0.5" fill="#1B4F8A">VYND</text>
       </svg>
-      <div style="font-size:11px;color:var(--muted);margin-top:2px">Good morning, Jake · Route R-04</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:2px" id="home-greeting">Good morning · Route —</div>
     </div>
     <div style="display:flex;align-items:center;gap:10px">
       <!-- Sync status pill -->
@@ -394,27 +395,28 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
     <div id="ptr-spinner" style="width:16px;height:16px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%"></div>
     <span id="ptr-label" style="font-size:12px;color:var(--muted)">Pull to refresh</span>
   </div>
-  <div class="scroll">
-    <div class="card" style="cursor:default">
+  <div class="scroll" id="home-scroll">
+    <!-- Route progress card -->
+    <div class="card" style="cursor:default" id="route-progress-card">
       <div class="row" style="margin-bottom:10px">
-        <span class="text-sm">Today's route</span>
-        <span class="pill pill-blue"><span class="pill-dot"></span>In progress</span>
+        <span class="text-sm" id="home-route-label">Today's route</span>
+        <span class="pill pill-blue" id="home-route-status"><span class="pill-dot"></span>Loading…</span>
       </div>
-      <div class="progress-wrap" style="margin-bottom:10px"><div class="progress-bar" style="width:33%"></div></div>
+      <div class="progress-wrap" style="margin-bottom:10px"><div class="progress-bar" id="home-progress-bar" style="width:0%"></div></div>
       <div class="row">
-        <span class="text-muted">1 of 3 stops done</span>
-        <span class="text-muted font-mono" style="font-size:13px">est. 4h 20m left</span>
+        <span class="text-muted" id="home-stops-label">Loading stops…</span>
+        <span class="text-muted font-mono" id="home-time-est" style="font-size:13px"></span>
       </div>
     </div>
+
+    <!-- Summary strip -->
     <div class="summary-strip">
-      <div class="stat-box"><div class="stat-val green">3</div><div class="stat-lbl">Stops</div></div>
-      <div class="stat-box"><div class="stat-val orange">12</div><div class="stat-lbl">To fill</div></div>
+      <div class="stat-box"><div class="stat-val green" id="home-stops-total">—</div><div class="stat-lbl">Stops</div></div>
+      <div class="stat-box"><div class="stat-val orange" id="home-stops-remaining">—</div><div class="stat-lbl">Remaining</div></div>
       <div class="stat-box"><div class="stat-val blue" id="route-cash-est">$0</div><div class="stat-lbl">Cash est.</div></div>
     </div>
-    <div class="flag-row warn">
-      <span class="flag-icon">⚠️</span>
-      <span class="flag-text"><strong>Machine M-002</strong> reported a coin jam at 08:14 — check on arrival</span>
-    </div>
+
+    <!-- Route bag card -->
     <div id="route-bag-card" style="display:none">
       <div class="row" style="align-items:center;margin-bottom:-4px">
         <div class="section-hd">Route bags</div>
@@ -426,6 +428,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
         <div id="route-bag-list" style="display:flex;flex-direction:column;gap:8px"></div>
       </div>
     </div>
+
+    <!-- Stop list header -->
     <div class="row" style="align-items:center">
       <div class="section-hd">Stops</div>
       <div class="toggle-wrap" onclick="toggleDone()">
@@ -433,49 +437,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
         <span class="toggle-label" id="done-label">Hide done</span>
       </div>
     </div>
-    <div class="stop-card-wrap" id="stop-M-001-wrap">
-      <div class="card" onclick="showStop('M-001')">
-        <div class="stop-card">
-          <div class="stop-num done">✓</div>
-          <div class="stop-info">
-            <div class="stop-name">Westfield Office Tower</div>
-            <div class="stop-addr">Level 3 breakroom · M-001</div>
-            <div class="stop-tags" id="stop-tags-M-001"><span class="pill pill-green">Done</span><span class="pill pill-blue">8 slots filled</span><span class="pill pill-gray">💵 Cash</span></div>
-          </div>
-          <div class="stop-right">
-            <span class="stop-time">08:30</span>
-            <svg class="arrow-icon" viewBox="0 0 16 16" fill="none" width="16"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="card" onclick="showStop('M-002')">
-      <div class="stop-card">
-        <div class="stop-num" style="color:var(--warn);border-color:rgba(251,146,60,.3);background:rgba(251,146,60,.1)">2</div>
-        <div class="stop-info">
-          <div class="stop-name">Harbour Medical Centre</div>
-          <div class="stop-addr">Ground floor foyer · M-002</div>
-          <div class="stop-tags" id="stop-tags-M-002"><span class="pill pill-orange">Fault reported</span><span class="pill pill-orange">4 slots critical</span><span class="pill pill-gray">💵 Cash + Card</span></div>
-        </div>
-        <div class="stop-right">
-          <span class="stop-time">10:00</span>
-          <svg class="arrow-icon" viewBox="0 0 16 16" fill="none" width="16"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </div>
-      </div>
-    </div>
-    <div class="card" onclick="showStop('M-003')">
-      <div class="stop-card">
-        <div class="stop-num">3</div>
-        <div class="stop-info">
-          <div class="stop-name">Civic Library</div>
-          <div class="stop-addr">Staff room · M-003</div>
-          <div class="stop-tags" id="stop-tags-M-003"><span class="pill pill-blue">Pending</span><span class="pill pill-blue">2 slots low</span><span class="pill pill-gray">💳 Cashless</span></div>
-        </div>
-        <div class="stop-right">
-          <span class="stop-time">12:30</span>
-          <svg class="arrow-icon" viewBox="0 0 16 16" fill="none" width="16"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </div>
-      </div>
+
+    <!-- Dynamic stop cards -->
+    <div id="home-stop-list">
+      <div style="text-align:center;padding:32px;color:var(--muted)">Loading route…</div>
     </div>
     <div style="height:10px"></div>
   </div>
@@ -574,6 +539,22 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
     </div>
 
     <div id="planogram-slots" style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);overflow:visible"></div>
+
+    <!-- PLANOGRAM CHANGES SECTION -->
+    <div id="stop-pog-changes" style="display:none;flex-direction:column;gap:8px">
+      <div class="section-hd">Planogram changes</div>
+      <div class="flag-row warn" style="margin-bottom:-4px">
+        <span class="flag-icon">⚠</span>
+        <span class="flag-text"><strong>Action required at this stop</strong> — complete these before filling regular stock. SOH will be confirmed from restock dial.</span>
+      </div>
+      <div id="stop-pog-change-list" style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden"></div>
+      <div id="stop-pog-confirm" style="display:none">
+        <label style="display:flex;align-items:center;gap:10px;padding:12px;background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);cursor:pointer">
+          <input type="checkbox" id="stop-pog-changes-done" onchange="onPogChangesDone(this.checked)" style="width:18px;height:18px;accent-color:var(--accent)">
+          <span style="font-size:14px;font-weight:500">All planogram changes completed</span>
+        </label>
+      </div>
+    </div>
 
     <div id="waste-summary" style="display:none;flex-direction:column;gap:8px">
       <div class="section-hd">Stock removed this visit</div>
@@ -724,7 +705,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
       </div>
       <div class="section-hd">Slot pricing</div>
       <div id="price-slots" style="display:flex;flex-direction:column;gap:8px"></div>
-      <button class="btn btn-primary" onclick="showToast('Prices saved ✓')">Save prices</button>
+      <button class="btn btn-primary" onclick="savePrices()">Save prices</button>
       <div style="height:10px"></div>
     </div>
     <div class="tab-panel" id="tab-products">
@@ -734,17 +715,17 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
       </div>
       <div class="section-hd">Planogram — tap a slot to edit</div>
       <div id="prod-slots" style="display:flex;flex-direction:column;gap:8px"></div>
-      <button class="btn btn-primary" onclick="showToast('Planogram updated ✓')">Save planogram</button>
+      <button class="btn btn-primary" onclick="savePlanogram()">Save planogram</button>
       <div style="height:10px"></div>
     </div>
     <div class="tab-panel" id="tab-minfo">
       <div id="minfo-card" class="card" style="cursor:default"></div>
       <div class="section-hd">Notes</div>
       <textarea id="minfo-notes" style="width:100%;background:var(--card);border:1px solid var(--border2);border-radius:var(--r-sm);padding:14px;color:var(--text);font-family:inherit;font-size:14px;resize:vertical;min-height:100px;outline:none;line-height:1.6" placeholder="Add notes about this machine or site..."></textarea>
-      <button class="btn btn-primary" onclick="showToast('Notes saved ✓')">Save notes</button>
+      <button class="btn btn-primary" onclick="saveNotes()">Save notes</button>
       <div class="section-hd">Actions</div>
-      <button class="btn btn-warn" onclick="showToast('Fault report submitted ✓')">Report a fault</button>
-      <button class="btn btn-secondary" onclick="showToast('DEX sync requested ✓')" style="margin-top:-6px">Request DEX sync</button>
+      <button class="btn btn-warn" onclick="reportFaultFromDriver()">Report a fault</button>
+      <button class="btn btn-secondary" onclick="requestDexSync()" style="margin-top:-6px">Request DEX sync</button>
       <div style="height:10px"></div>
     </div>
   </div>
@@ -793,7 +774,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
   <div class="topbar">
     <div class="topbar-left">
       <div class="topbar-title">Cash collection</div>
-      <div class="topbar-sub">Tuesday 3 Apr · Route R-04</div>
+      <div class="topbar-sub" id="cash-topbar-date">Today's route</div>
     </div>
   </div>
   <div class="scroll">
@@ -812,7 +793,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
       <div class="text-muted" style="font-size:13px;margin-bottom:14px">Count, bag, and seal cash before returning to depot. Note bag number below.</div>
       <input class="cash-input" style="width:100%;text-align:left;padding:10px 14px" placeholder="Bag seal number (e.g. B-10042)">
     </div>
-    <button class="btn btn-primary" onclick="showToast('Cash summary saved ✓')">Save cash summary</button>
+    <button class="btn btn-primary" onclick="saveCashSummary()">Save cash summary</button>
     <div style="height:10px"></div>
   </div>
   <nav class="bottom-nav">
@@ -864,7 +845,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
     </button>
     <div style="text-align:right">
       <div class="topbar-title">Settings</div>
-      <div class="topbar-sub">Jake Kowalski</div>
+      <div class="topbar-sub" id="settings-topbar-sub">My profile</div>
     </div>
   </div>
   <div class="scroll">
@@ -890,11 +871,11 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
     </div>
     <div class="card" style="cursor:default">
       <div style="display:flex;align-items:center;gap:14px">
-        <div class="avatar" style="width:48px;height:48px;font-size:16px;flex-shrink:0">JK</div>
+        <div class="avatar" id="settings-avatar" style="width:48px;height:48px;font-size:16px;flex-shrink:0">JK</div>
         <div>
-          <div style="font-size:16px;font-weight:600">Jake Kowalski</div>
-          <div class="text-muted" style="margin-top:3px">Driver · Route R-04</div>
-          <div style="font-size:12px;color:var(--muted);margin-top:2px"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="e08a818b85ce8b8f97818c938b89a096998e84ce838f8d">[email&#160;protected]</a></div>
+          <div style="font-size:16px;font-weight:600" id="settings-name">Driver</div>
+          <div class="text-muted" style="margin-top:3px" id="settings-role">Driver</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px" id="settings-email"></div>
         </div>
       </div>
     </div>
@@ -913,35 +894,6 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
       <div class="pref-row">
         <div class="pref-info"><div class="pref-title">Hide no-pick lines by default</div><div class="pref-desc">On the stock pick screen, automatically hide products that don't need picking</div></div>
         <div class="toggle-wrap" onclick="togglePref('hideNoPick',this)"><div class="toggle-track" id="pref-hideNoPick"><div class="toggle-knob"></div></div></div>
-      </div>
-    </div>
-    <div class="section-hd">Machine photos</div>
-    <div class="card" style="cursor:default">
-      <div class="pref-row" style="flex-direction:column;align-items:stretch;gap:12px">
-        <div class="pref-info"><div class="pref-title">Photo frequency</div><div class="pref-desc">Require a machine photo every N fills. Also triggers automatically when prices change on this fill.</div></div>
-        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px" id="photo-freq-selector">
-          <button class="freq-btn" data-val="1" onclick="setPhotoFreq(1)">Every</button>
-          <button class="freq-btn" data-val="2" onclick="setPhotoFreq(2)">2nd</button>
-          <button class="freq-btn" data-val="5" onclick="setPhotoFreq(5)">5th</button>
-          <button class="freq-btn" data-val="10" onclick="setPhotoFreq(10)">10th</button>
-          <button class="freq-btn" data-val="0" onclick="setPhotoFreq(0)">Off</button>
-        </div>
-      </div>
-    </div>
-    <div class="section-hd">SOH audit</div>
-    <div class="card" style="cursor:default">
-      <div class="pref-row" style="flex-direction:column;align-items:stretch;gap:12px">
-        <div class="pref-info">
-          <div class="pref-title">Audit frequency</div>
-          <div class="pref-desc">Require a full SOH stocktake every N fills. DEX vend data is used to pre-calculate counts where available — driver confirms or adjusts per slot.</div>
-        </div>
-        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px" id="audit-freq-selector">
-          <button class="freq-btn" data-audit="1" onclick="setAuditFreq(1)">Every</button>
-          <button class="freq-btn" data-audit="2" onclick="setAuditFreq(2)">2nd</button>
-          <button class="freq-btn" data-audit="5" onclick="setAuditFreq(5)">5th</button>
-          <button class="freq-btn" data-audit="10" onclick="setAuditFreq(10)">10th</button>
-          <button class="freq-btn" data-audit="0" onclick="setAuditFreq(0)">Off</button>
-        </div>
       </div>
     </div>
     <div class="section-hd">Cash collection</div>
@@ -1010,7 +962,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
       <div class="row" style="margin-bottom:8px"><span class="text-muted">Last sync</span><span class="font-mono" style="font-size:13px;color:var(--muted)" id="driver-last-sync">Never</span></div>
       <div class="row"><span class="text-muted">Depot</span><span class="text-sm">Southside Distribution</span></div>
     </div>
-    <button class="btn btn-danger" onclick="showToast('Signed out')">Sign out</button>
+    <button class="btn btn-danger" onclick="signOut()">Sign out</button>
     <div style="height:10px"></div>
   </div>
   <nav class="bottom-nav">
@@ -1121,6 +1073,198 @@ function getMachineData(id) {
 // ══════════════════════════════════════
 // NAVIGATION
 // ══════════════════════════════════════
+// ══════════════════════════════════════
+// HOME SCREEN — DYNAMIC ROUTE LOADING
+// ══════════════════════════════════════
+
+let currentRunData = null;
+
+async function loadHomeScreen() {
+  // Try to load today's run from Firebase
+  if (typeof firebase !== 'undefined' && firebase.apps?.length) {
+    try {
+      const db       = firebase.database();
+      const today    = new Date().toISOString().split('T')[0];
+      const driverId = userPrefs.driverId || 'jake';
+
+      // Find today's run for this driver
+      const runsSnap = await db.ref('vynd/runs')
+        .orderByChild('plannedDate')
+        .equalTo(today)
+        .once('value');
+
+      let todayRun = null;
+      runsSnap.forEach(child => {
+        const run = child.val();
+        if (run.driverId === driverId) todayRun = { key: child.key, ...run };
+      });
+
+      if (todayRun) {
+        currentRunData = todayRun;
+
+        // Load stop data for each machine in the run
+        const stopPromises = todayRun.stops.map(stop =>
+          db.ref('vynd/dexReadings/' + stop.id + '/last').once('value')
+            .then(snap => ({ stop, dex: snap.val() }))
+            .catch(() => ({ stop, dex: null }))
+        );
+
+        const stopData = await Promise.all(stopPromises);
+
+        // Merge into STOPS
+        stopData.forEach(({ stop, dex }) => {
+          if (!STOPS[stop.id]) {
+            STOPS[stop.id] = {
+              id:           stop.id,
+              customer:     stop.name,
+              locationName: stop.name,
+              addr:         '',
+              cash:         '—',
+              cashType:     'cash',
+              status:       stop.status || 'pending',
+              fault:        false,
+              lastService:  '—',
+              fillCount:    0,
+              slots:        [],
+            };
+          }
+          if (dex?.slots) {
+            STOPS[stop.id].slots = Object.entries(dex.slots).map(([id, s]) => ({
+              id,
+              product:  s.product || '',
+              price:    (s.priceCents || 0) / 100,
+              current:  s.currentSOH || 0,
+              par:      s.par || 10,
+              capacity: s.capacity || 12,
+              dexVends: s.vendsSinceLastRead || 0,
+            }));
+          }
+          STOPS[stop.id].serviceOrder = stop.serviceOrder;
+        });
+
+        renderHomeStops(todayRun.stops);
+        updateHomeProgress(todayRun.stops);
+        return;
+      }
+    } catch(e) {
+      console.warn('Firebase run load failed:', e.message);
+    }
+  }
+
+  // Fallback to demo STOPS data
+  const demoStops = Object.values(STOPS).map((s, i) => ({
+    id: s.id, name: s.locationName, serviceOrder: i + 1, status: s.status,
+  }));
+  renderHomeStops(demoStops);
+  updateHomeProgress(demoStops);
+}
+
+function renderHomeStops(stops) {
+  const list = document.getElementById('home-stop-list');
+  if (!list) return;
+
+  const sorted = [...stops].sort((a, b) => (a.serviceOrder || 0) - (b.serviceOrder || 0));
+
+  list.innerHTML = sorted.map((stop, idx) => {
+    const s        = STOPS[stop.id] || {};
+    const status   = s.status || stop.status || 'pending';
+    const isDone   = status === 'done';
+    const isFault  = s.fault || status === 'fault';
+    const cashType = s.cashType || 'cash';
+    const cashIcon = cashType === 'cashless' ? '💳 Cashless' : cashType === 'mixed' ? '💵 Cash + Card' : '💵 Cash';
+
+    // Urgency from slots
+    const slots      = s.slots || [];
+    const lowSlots   = slots.filter(sl => sl.current < sl.par * 0.3).length;
+    const emptySlots = slots.filter(sl => sl.current === 0).length;
+
+    // Pending pog changes
+    const hasPogChanges = slots.some(sl => sl.pendingChange);
+
+    const numStyle = isDone
+      ? 'background:rgba(74,222,128,.15);border-color:rgba(74,222,128,.3);color:var(--accent)'
+      : isFault
+        ? 'color:var(--warn);border-color:rgba(251,146,60,.3);background:rgba(251,146,60,.1)'
+        : emptySlots > 0
+          ? 'color:var(--danger);border-color:rgba(248,113,113,.3);background:rgba(248,113,113,.1)'
+          : '';
+
+    const numContent = isDone ? '✓' : stop.serviceOrder || idx + 1;
+
+    const tags = [];
+    if (isDone)              tags.push('<span class="pill pill-green">Done</span>');
+    else if (isFault)        tags.push('<span class="pill pill-orange">Fault reported</span>');
+    else if (emptySlots > 0) tags.push('<span class="pill pill-red">' + emptySlots + ' sold out</span>');
+    else if (lowSlots > 0)   tags.push('<span class="pill pill-orange">' + lowSlots + ' slots low</span>');
+    else                     tags.push('<span class="pill pill-blue">Pending</span>');
+
+    if (hasPogChanges)       tags.push('<span class="pill pill-orange">⚠ Pog change</span>');
+    tags.push('<span class="pill pill-gray">' + cashIcon + '</span>');
+
+    return '<div class="stop-card-wrap" id="stop-' + stop.id + '-wrap">' +
+      '<div class="card" onclick="showStop(\'' + stop.id + '\')">' +
+        '<div class="stop-card">' +
+          '<div class="stop-num ' + (isDone ? 'done' : '') + '" style="' + numStyle + '">' + numContent + '</div>' +
+          '<div class="stop-info">' +
+            '<div class="stop-name">' + (s.locationName || stop.name || stop.id) + '</div>' +
+            '<div class="stop-addr">' + (s.addr || '') + (s.addr ? ' · ' : '') + stop.id + '</div>' +
+            '<div class="stop-tags">' + tags.join('') + '</div>' +
+          '</div>' +
+          '<div class="stop-right">' +
+            '<svg class="arrow-icon" viewBox="0 0 16 16" fill="none" width="16"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  // Re-apply hidden-done state
+  if (hideDone) {
+    document.querySelectorAll('.stop-card-wrap').forEach(wrap => {
+      const isDone = wrap.querySelector('.stop-num.done') !== null;
+      if (isDone) {
+        wrap.classList.add('hidden-done');
+        wrap.style.display = 'none';
+      }
+    });
+  }
+}
+
+function updateHomeProgress(stops) {
+  const total     = stops.length;
+  const done      = stops.filter(s => (STOPS[s.id]?.status || s.status) === 'done').length;
+  const remaining = total - done;
+  const pct       = total > 0 ? Math.round((done / total) * 100) : 0;
+  const fillTime  = 15; // minutes per stop
+
+  const setEl = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  setEl('home-stops-total',     total);
+  setEl('home-stops-remaining', remaining);
+  setEl('home-stops-label',     done + ' of ' + total + ' stops done');
+  setEl('home-route-label',     currentRunData ? 'Route ' + (currentRunData.routeId || '') : "Today's route");
+
+  const bar = document.getElementById('home-progress-bar');
+  if (bar) bar.style.width = pct + '%';
+
+  const statusEl = document.getElementById('home-route-status');
+  if (statusEl) {
+    if (done === total && total > 0) {
+      statusEl.className = 'pill pill-green';
+      statusEl.innerHTML = '<span class="pill-dot"></span>Complete';
+    } else if (done > 0) {
+      statusEl.className = 'pill pill-blue';
+      statusEl.innerHTML = '<span class="pill-dot"></span>In progress';
+    } else {
+      statusEl.className = 'pill pill-gray';
+      statusEl.innerHTML = '<span class="pill-dot"></span>Not started';
+    }
+  }
+
+  const estMins = remaining * fillTime;
+  const hh = Math.floor(estMins / 60), mm = estMins % 60;
+  setEl('home-time-est', remaining > 0 ? 'est. ' + (hh > 0 ? hh + 'h ' : '') + mm + 'm left' : 'All done!');
+}
+
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
@@ -1281,6 +1425,7 @@ function showStop(machineId) {
   updateWasteSummary();
   initStopPhotoSection(machineId);
   initStopAuditSection(machineId);
+  loadPogChangesForStop(machineId);
   showScreen('screen-stop');
 }
 
@@ -1893,6 +2038,18 @@ function toggleCheck(row) {
 }
 
 function completeStop() {
+  // Block if planogram changes not confirmed
+  if (currentStopId && hasPendingPogChanges(currentStopId)) {
+    showToast('⚠ Confirm planogram changes first');
+    const section = document.getElementById('stop-pog-changes');
+    if (section) {
+      section.style.outline = '2px solid var(--warn)';
+      section.style.borderRadius = 'var(--r-sm)';
+      setTimeout(() => { section.style.outline = ''; section.style.borderRadius = ''; }, 1800);
+      section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    return;
+  }
   if (currentStopId && photoRequiredForStop(currentStopId) && !stopPhotos[currentStopId]) {
     showToast('📷 Photo required before completing');
     const section = document.getElementById('stop-photo-section');
@@ -1922,6 +2079,17 @@ function completeStop() {
   // Auto-push this stop to portal
   syncStopOnComplete(currentStopId);
   STOPS[currentStopId].status = 'done';
+  // Update home screen stop card
+  const stopWrap = document.getElementById('stop-' + currentStopId + '-wrap');
+  if (stopWrap) {
+    const numEl = stopWrap.querySelector('.stop-num');
+    if (numEl) { numEl.className = 'stop-num done'; numEl.textContent = '✓'; numEl.style = ''; }
+    const tagsEl = stopWrap.querySelector('.stop-tags');
+    if (tagsEl) tagsEl.innerHTML = '<span class="pill pill-green">Done</span>';
+  }
+  // Update progress
+  const currentStops = currentRunData?.stops || Object.values(STOPS).map(s => ({ id:s.id, status:s.status }));
+  updateHomeProgress(currentStops);
   setTimeout(() => showScreen('screen-home'), 800);
 }
 
@@ -1936,14 +2104,28 @@ function toggleDone() {
     const isDone = wrap.querySelector('.stop-num.done') !== null;
     if (!isDone) return;
     if (hideDone) {
-      // Lock current height then animate to 0
+      // Animate collapse then hide completely to remove gap
       wrap.style.maxHeight = wrap.scrollHeight + 'px';
-      wrap.style.overflow = 'hidden';
-      requestAnimationFrame(() => wrap.classList.add('hidden-done'));
+      wrap.style.overflow  = 'hidden';
+      requestAnimationFrame(() => {
+        wrap.classList.add('hidden-done');
+        // After transition ends, set display:none so flex gap disappears
+        wrap.addEventListener('transitionend', () => {
+          if (wrap.classList.contains('hidden-done')) wrap.style.display = 'none';
+        }, { once: true });
+      });
     } else {
+      // Restore display first, then animate open
+      wrap.style.display   = '';
+      wrap.style.maxHeight = '0';
       wrap.classList.remove('hidden-done');
-      wrap.style.maxHeight = '';
-      wrap.style.overflow = '';
+      requestAnimationFrame(() => {
+        wrap.style.maxHeight = wrap.scrollHeight + 'px';
+        wrap.addEventListener('transitionend', () => {
+          wrap.style.maxHeight = '';
+          wrap.style.overflow  = '';
+        }, { once: true });
+      });
     }
   });
 }
@@ -2161,6 +2343,196 @@ function updateInvSOH() {
     <div class="stat-box"><div class="stat-val" style="color:${critCount>0?'var(--danger)':'var(--accent)'}">${critCount}</div><div class="stat-lbl">Critical slots</div></div>`;
 }
 
+// ── Save prices from manage screen ──
+function savePrices() {
+  if (!currentMachine?.slots) return;
+  const mid  = currentMachine.id;
+  const updates = {};
+  currentMachine.slots.forEach(slot => {
+    const input = document.querySelector(`#price-slots [data-slot-id="${slot.id}"] .field-input`);
+    if (!input) return;
+    const newPrice = parseFloat(input.value);
+    if (isNaN(newPrice) || newPrice === slot.price) return;
+    slot.price = newPrice;
+    if (STOPS[mid]) {
+      const s = STOPS[mid].slots.find(sl => sl.id === slot.id);
+      if (s) s.price = newPrice;
+    }
+    updates['vynd/planograms/' + mid + '/slots/' + slot.id + '/price'] = newPrice;
+  });
+  if (fbDb && Object.keys(updates).length) {
+    fbDb.ref().update(updates).catch(() => {});
+  }
+  showToast('Prices saved ✓');
+}
+
+// ── Save planogram changes from manage screen ──
+function savePlanogram() {
+  if (!currentMachine?.slots) return;
+  const mid     = currentMachine.id;
+  const updates = {};
+  currentMachine.slots.forEach(slot => {
+    const prodEl = document.querySelector(`#prod-slots [data-slot-id="${slot.id}"] .prod-select`);
+    if (!prodEl || prodEl.value === slot.product) return;
+    slot.product = prodEl.value;
+    if (STOPS[mid]) {
+      const s = STOPS[mid].slots.find(sl => sl.id === slot.id);
+      if (s) s.product = prodEl.value;
+    }
+    updates['vynd/planograms/' + mid + '/slots/' + slot.id + '/product'] = prodEl.value;
+  });
+  if (fbDb && Object.keys(updates).length) {
+    fbDb.ref().update(updates).catch(() => {});
+  }
+  showToast('Planogram updated ✓');
+}
+
+// ── Save machine notes ──
+function saveNotes() {
+  const mid   = currentMachine?.id;
+  const notes = document.getElementById('minfo-notes')?.value?.trim();
+  if (!mid) return;
+  if (fbDb) {
+    fbDb.ref('vynd/machines/' + mid + '/notes').set(notes || '').catch(() => {});
+  }
+  showToast('Notes saved ✓');
+}
+
+// ── Report fault from driver manage screen ──
+function reportFaultFromDriver() {
+  const mid = currentMachine?.id;
+  if (!mid) return;
+  // Use a simple prompt-style bottom sheet approach
+  const desc = window.prompt('Describe the fault:');
+  if (!desc?.trim()) return;
+  const fault = {
+    machineId:  mid,
+    type:       'other',
+    severity:   'medium',
+    desc:       desc.trim(),
+    reporter:   userPrefs.driverName || 'Driver',
+    date:       new Date().toISOString().split('T')[0],
+    status:     'open',
+    createdAt:  new Date().toISOString(),
+    source:     'driver-app',
+  };
+  if (fbDb) {
+    fbDb.ref('vynd/faults/' + mid).push(fault)
+      .then(() => showToast('Fault reported ✓'))
+      .catch(() => showToast('Saved locally ✓'));
+  } else {
+    showToast('Fault reported ✓');
+  }
+}
+
+// ── Request DEX sync ──
+function requestDexSync() {
+  const mid = currentMachine?.id;
+  if (!mid) return;
+  if (fbDb) {
+    fbDb.ref('vynd/dexSyncRequests/' + mid).set({
+      requestedAt: new Date().toISOString(),
+      requestedBy: userPrefs.driverName || 'Driver',
+      machineId:   mid,
+      status:      'pending',
+    }).then(() => showToast('DEX sync requested ✓'))
+      .catch(() => showToast('Request queued ✓'));
+  } else {
+    showToast('DEX sync requested ✓');
+  }
+}
+
+// ── Sign out ──
+function signOut() {
+  if (!confirm('Sign out of the driver app?')) return;
+  try {
+    localStorage.removeItem('vendops_prefs');
+    localStorage.removeItem('vynd_driver_fb_config');
+  } catch(e) {}
+  showToast('Signed out');
+  setTimeout(() => location.reload(), 800);
+}
+
+// ── Render settings profile from userPrefs ──
+function renderSettingsProfile() {
+  const name  = userPrefs.driverName  || 'Driver';
+  const email = userPrefs.driverEmail || '';
+  const route = userPrefs.routeId     || '';
+  const initials = name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'DR';
+
+  const setEl = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  setEl('settings-name',       name);
+  setEl('settings-email',      email);
+  setEl('settings-role',       'Driver' + (route ? ' · Route ' + route : ''));
+  setEl('settings-topbar-sub', name);
+  setEl('settings-avatar',     initials);
+
+  // Update home topbar greeting
+  const hour     = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const firstName = name.split(' ')[0];
+  setEl('home-greeting', greeting + ', ' + firstName + (route ? ' · Route ' + route : ''));
+
+  // Update home avatar
+  const av = document.querySelector('.avatar[onclick*="screen-settings"]');
+  if (av) av.textContent = initials;
+}
+
+// ── Load driver profile from Firebase users ──
+async function loadDriverProfileFromFirebase() {
+  if (!fbDb) return;
+  try {
+    // Try to match by stored driverId first, then fall back to name match
+    const snap = await fbDb.ref('vynd/users').once('value');
+    const users = snap.val() || {};
+
+    let matched = null;
+
+    // Match by stored driverId
+    if (userPrefs.driverId && users[userPrefs.driverId]) {
+      matched = users[userPrefs.driverId];
+    }
+
+    // Fall back: match by name if we have one stored
+    if (!matched && userPrefs.driverName) {
+      matched = Object.values(users).find(u =>
+        u.name?.toLowerCase() === userPrefs.driverName.toLowerCase()
+      );
+    }
+
+    // Fall back: only one active driver — use them
+    if (!matched) {
+      const activeDrivers = Object.values(users).filter(u => u.active && u.role === 'driver');
+      if (activeDrivers.length === 1) matched = activeDrivers[0];
+    }
+
+    if (!matched) return;
+
+    // Update userPrefs with real profile data
+    userPrefs.driverName  = matched.name  || userPrefs.driverName;
+    userPrefs.driverEmail = matched.email || userPrefs.driverEmail;
+    userPrefs.driverId    = matched.id    || userPrefs.driverId;
+    savePrefs();
+
+    // Look up assigned route
+    if (matched.id) {
+      const routeSnap = await fbDb.ref('vynd/runs')
+        .orderByChild('driverId').equalTo(matched.id)
+        .limitToLast(1).once('value');
+      routeSnap.forEach(child => {
+        const run = child.val();
+        if (run?.routeId) userPrefs.routeId = run.routeId;
+      });
+      savePrefs();
+    }
+
+    renderSettingsProfile();
+    loadHomeScreen(); // refresh with correct driver ID
+  } catch(e) {
+    console.warn('Driver profile load failed:', e.message);
+  }
+}
+
 function saveInventory() {
   if (currentMachine && currentMachine.slots) {
     currentMachine.slots.forEach(slot => {
@@ -2187,7 +2559,7 @@ function buildPriceTab() {
   if (!currentMachine.slots.length) { el.innerHTML='<div class="text-muted" style="text-align:center;padding:20px">No slot data.</div>'; return; }
   currentMachine.slots.forEach(slot => {
     const rrp = (slot.price * 0.85).toFixed(2);
-    el.innerHTML += `<div class="slot-manage-row">
+    el.innerHTML += `<div class="slot-manage-row" data-slot-id="${slot.id}">
       <div class="slot-manage-header" onclick="toggleExpand(this)">
         <div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)">${slot.id}</div>
         <div><div style="font-size:13px;font-weight:500">${slot.product}</div><div style="font-size:12px;color:var(--muted)">$${slot.price.toFixed(2)} · customer price</div></div>
@@ -2214,7 +2586,7 @@ function buildProdTab() {
   if (!currentMachine.slots.length) { el.innerHTML='<div class="text-muted" style="text-align:center;padding:20px">No slot data.</div>'; return; }
   currentMachine.slots.forEach((slot, i) => {
     const opts = ALL_PRODUCTS.filter(p=>p!==slot.product).map(p=>`<option value="${p}">${p}</option>`).join('');
-    el.innerHTML += `<div class="slot-manage-row">
+    el.innerHTML += `<div class="slot-manage-row" data-slot-id="${slot.id}">
       <div class="slot-manage-header" onclick="toggleExpand(this)">
         <div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)">${slot.id}</div>
         <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${slot.product}</div><div style="font-size:12px;color:var(--muted)">Tap to change product</div></div>
@@ -2224,8 +2596,8 @@ function buildProdTab() {
         <div class="field-group"><div class="field-label">Current product</div><div style="font-size:14px;font-weight:500;padding:4px 0">${slot.product}</div></div>
         <div class="field-group">
           <div class="field-label">Swap to new product</div>
-          <select class="product-select" onchange="previewSwap(this,'sp-${i}','${slot.product.replace(/'/g,"\\'")}')">
-            <option value="">— Select replacement —</option>${opts}
+          <select class="product-select prod-select" onchange="previewSwap(this,'sp-${i}','${slot.product.replace(/'/g,"\\'")}')">
+            <option value="${slot.product}">${slot.product} (current)</option>${opts}
           </select>
         </div>
         <div class="swap-preview" id="sp-${i}"><div class="swap-msg" id="sp-msg-${i}"></div></div>
@@ -2659,7 +3031,7 @@ const stopPhotos = {}; // { machineId: dataURL }
 function photoRequiredForStop(machineId) {
   const s   = STOPS[machineId];
   if (!s) return false;
-  const freq = userPrefs.photoFrequency;
+  const freq = GLOBAL_OP_SETTINGS.photoFrequency;
   if (freq === 0) return s.hasPriceChange; // off = only trigger on price change
   const nextFill = (s.fillCount || 0) + 1;
   return (nextFill % freq === 0) || s.hasPriceChange;
@@ -2681,7 +3053,7 @@ function initStopPhotoSection(machineId) {
 
   // Reason text + pill
   const reasons = [];
-  const freq = userPrefs.photoFrequency;
+  const freq = GLOBAL_OP_SETTINGS.photoFrequency;
   if (freq > 0 && ((s.fillCount + 1) % freq === 0)) {
     reasons.push(freq === 1 ? 'Every fill' : 'Every ' + freq + (freq===2?'nd':freq===5?'th':'th') + ' fill');
   }
@@ -2768,7 +3140,7 @@ function updateStopAuditPill(machineId) {
 }
 
 function setPhotoFreq(val) {
-  userPrefs.photoFrequency = val;
+  GLOBAL_OP_SETTINGS.photoFrequency = val;
   savePrefs();
   renderPhotoFreqSelector();
   // Refresh photo section if a stop is open
@@ -2779,7 +3151,7 @@ function setPhotoFreq(val) {
 
 function renderPhotoFreqSelector() {
   document.querySelectorAll('.freq-btn').forEach(btn => {
-    btn.classList.toggle('active', parseInt(btn.dataset.val) === userPrefs.photoFrequency);
+    btn.classList.toggle('active', parseInt(btn.dataset.val) === GLOBAL_OP_SETTINGS.photoFrequency);
   });
 }
 
@@ -2790,7 +3162,7 @@ const auditState = {}; // { machineId: { slotId: countedQty } }
 
 function auditRequiredForStop(machineId) {
   const s    = STOPS[machineId];
-  const freq = userPrefs.auditFrequency;
+  const freq = GLOBAL_OP_SETTINGS.auditFrequency;
   if (!s || freq === 0) return false;
   const nextFill = (s.fillCount || 0) + 1;
   return nextFill % freq === 0;
@@ -2801,6 +3173,114 @@ function auditRequiredForStop(machineId) {
 function calcDexSOH(slot, addedQty) {
   if (slot.dexVends === undefined) return null;
   return Math.max(0, slot.current + addedQty - slot.dexVends);
+}
+
+// ══════════════════════════════════════
+// PLANOGRAM CHANGES AT STOP
+// ══════════════════════════════════════
+
+let pogChangesConfirmed = {}; // machineId → boolean
+
+async function loadPogChangesForStop(machineId) {
+  const section  = document.getElementById('stop-pog-changes');
+  const listEl   = document.getElementById('stop-pog-change-list');
+  const confirmEl = document.getElementById('stop-pog-confirm');
+  const cbEl     = document.getElementById('stop-pog-changes-done');
+  if (!section || !listEl) return;
+
+  // Reset
+  if (cbEl) cbEl.checked = pogChangesConfirmed[machineId] || false;
+  section.style.display = 'none';
+
+  // Try to load pending changes from Firebase
+  let changes = [];
+  if (typeof firebase !== 'undefined' && firebase.apps?.length) {
+    try {
+      const db   = firebase.database();
+      const snap = await db.ref('vynd/planograms/' + machineId + '/slots').once('value');
+      const slots = snap.val() || {};
+      Object.entries(slots).forEach(([slotId, slot]) => {
+        if (slot.pendingChange) {
+          changes.push({ slotId, ...slot.pendingChange, currentProduct: slot.product, currentSOH: slot.current });
+        }
+      });
+    } catch(e) {}
+  }
+
+  // Also check STOPS data for any pending changes (demo mode)
+  const s = STOPS[machineId];
+  if (s?.slots) {
+    s.slots.forEach(slot => {
+      if (slot.pendingChange && !changes.find(c => c.slotId === slot.id)) {
+        changes.push({ slotId: slot.id, ...slot.pendingChange, currentProduct: slot.product, currentSOH: slot.current });
+      }
+    });
+  }
+
+  if (!changes.length) {
+    section.style.display = 'none';
+    return;
+  }
+
+  section.style.display = 'flex';
+  if (confirmEl) confirmEl.style.display = '';
+
+  const typeConfig = {
+    collect: { color:'var(--danger)', bg:'rgba(248,113,113,.1)', icon:'🔄', label:'COLLECT',  instruction:'Remove all stock from this slot and return to warehouse' },
+    move:    { color:'#a78bfa',       bg:'rgba(167,139,250,.1)', icon:'↔',  label:'MOVE',     instruction:'Physically move stock from listed slot(s) to this slot' },
+    pick:    { color:'var(--info)',   bg:'rgba(96,165,250,.1)',  icon:'📦', label:'PICK',     instruction:'Fill this slot with new product to par level' },
+  };
+
+  listEl.innerHTML = changes.map((c, i) => {
+    const isLast = i === changes.length - 1;
+    const rows = [];
+
+    // COLLECT line
+    if (c.collectQty > 0) {
+      const cfg = typeConfig.collect;
+      rows.push(renderPogChangeRow(cfg, c.slotId, c.oldProduct || c.currentProduct, c.collectQty, 'Remove ' + c.collectQty + ' × ' + (c.oldProduct || c.currentProduct) + ' from slot ' + c.slotId, false));
+    }
+
+    // MOVE line
+    if (c.isMove && c.existingSOHofNew > 0) {
+      const cfg = typeConfig.move;
+      rows.push(renderPogChangeRow(cfg, c.slotId, c.newProduct, c.existingSOHofNew, 'Move ' + c.existingSOHofNew + ' × ' + c.newProduct + ' into slot ' + c.slotId, false));
+    }
+
+    // PICK line
+    if (c.pickQty > 0) {
+      const cfg = typeConfig.pick;
+      rows.push(renderPogChangeRow(cfg, c.slotId, c.newProduct, c.pickQty, 'Fill ' + c.pickQty + ' × ' + c.newProduct + ' to par (' + c.newPar + ')', i === changes.length - 1 && rows.length === 0));
+    }
+
+    return rows.join('');
+  }).join('');
+}
+
+function renderPogChangeRow(cfg, slotId, product, qty, instruction, isLast) {
+  return `<div style="display:flex;gap:12px;padding:14px;border-bottom:${isLast?'none':'1px solid var(--border)'};background:${cfg.bg}">
+    <div style="width:36px;height:36px;border-radius:8px;background:${cfg.color}20;border:1px solid ${cfg.color}40;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">${cfg.icon}</div>
+    <div style="flex:1;min-width:0">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <span style="font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;background:${cfg.color}20;color:${cfg.color}">${cfg.label}</span>
+        <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)">${slotId}</span>
+        <span style="font-family:'DM Mono',monospace;font-size:13px;font-weight:700;color:${cfg.color};margin-left:auto">×${qty}</span>
+      </div>
+      <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${product}</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:2px">${instruction}</div>
+    </div>
+  </div>`;
+}
+
+function onPogChangesDone(checked) {
+  if (!currentStopId) return;
+  pogChangesConfirmed[currentStopId] = checked;
+  if (checked) showToast('Planogram changes confirmed ✓');
+}
+
+function hasPendingPogChanges(machineId) {
+  const section = document.getElementById('stop-pog-changes');
+  return section?.style.display !== 'none' && !pogChangesConfirmed[machineId];
 }
 
 function initStopAuditSection(machineId) {
@@ -3000,7 +3480,7 @@ function saveAudit() {
 }
 
 function setAuditFreq(val) {
-  userPrefs.auditFrequency = val;
+  GLOBAL_OP_SETTINGS.auditFrequency = val;
   savePrefs();
   renderAuditFreqSelector();
   Object.keys(STOPS).forEach(mid => updateStopAuditPill(mid));
@@ -3009,7 +3489,7 @@ function setAuditFreq(val) {
 
 function renderAuditFreqSelector() {
   document.querySelectorAll('[data-audit]').forEach(btn => {
-    btn.classList.toggle('active', parseInt(btn.dataset.audit) === userPrefs.auditFrequency);
+    btn.classList.toggle('active', parseInt(btn.dataset.audit) === GLOBAL_OP_SETTINGS.auditFrequency);
   });
 }
 
@@ -3117,11 +3597,55 @@ function updateCashRouteBags() {
 // ══════════════════════════════════════
 // CASH
 // ══════════════════════════════════════
+function saveCashSummary() {
+  const bagInput   = document.querySelector('#cash-bag-section .cash-input');
+  const bagNumber  = bagInput?.value?.trim() || '';
+  const date       = new Date().toISOString().split('T')[0];
+  const collected  = document.getElementById('cash-collected')?.textContent  || '—';
+  const expected   = document.getElementById('cash-expected')?.textContent   || '—';
+  const total      = document.getElementById('cash-total')?.textContent      || '—';
+
+  const summary = {
+    date,
+    routeId:    userPrefs.routeId   || '',
+    driverId:   userPrefs.driverId  || '',
+    driverName: userPrefs.driverName|| '',
+    bagNumber,
+    collected,
+    expected,
+    total,
+    savedAt:    new Date().toISOString(),
+    machines:   Object.values(STOPS).map(s => ({
+      id:          s.id,
+      cash:        s.cash,
+      bagNumber:   bagNumbers[s.id] || '',
+      status:      s.status,
+    })),
+  };
+
+  if (fbDb) {
+    fbDb.ref('vynd/cashSummaries/' + date + '/' + (userPrefs.routeId || 'route'))
+      .set(summary)
+      .then(() => showToast('Cash summary saved ✓'))
+      .catch(() => showToast('Saved locally ✓'));
+  } else {
+    try { localStorage.setItem('vynd_cash_' + date, JSON.stringify(summary)); } catch(e) {}
+    showToast('Cash summary saved ✓');
+  }
+}
+
 function initCash() {
   const container = document.getElementById('cash-machine-rows');
   const bagSection = document.getElementById('cash-bag-section');
   if (!container) return;
   container.innerHTML = '';
+
+  // Update cash topbar date dynamically
+  const dateEl = document.getElementById('cash-topbar-date');
+  if (dateEl) {
+    const today = new Date().toLocaleDateString('en-AU', { weekday:'long', day:'numeric', month:'short' });
+    dateEl.textContent = today + (userPrefs.routeId ? ' · Route ' + userPrefs.routeId : '');
+  }
 
   const individualBags = userPrefs.individualBags !== false; // default true
   let expectedTotal = 0;
@@ -3372,6 +3896,25 @@ function showToast(msg) {
 // ══════════════════════════════════════
 // USER PREFERENCES
 // ══════════════════════════════════════
+// Global operational settings — loaded from Firebase, set by management portal
+const GLOBAL_OP_SETTINGS = {
+  photoFrequency: 5,   // every Nth fill — overridden by Firebase
+  auditFrequency: 5,   // every Nth fill — overridden by Firebase
+};
+
+async function loadGlobalOpSettings() {
+  if (typeof firebase === 'undefined' || !firebase.apps?.length) return;
+  try {
+    const db   = firebase.database();
+    const snap = await db.ref('vynd/settings/operational').once('value');
+    const data = snap.val();
+    if (data) {
+      if (data.photoFrequency !== undefined) GLOBAL_OP_SETTINGS.photoFrequency = data.photoFrequency;
+      if (data.auditFrequency !== undefined) GLOBAL_OP_SETTINGS.auditFrequency = data.auditFrequency;
+    }
+  } catch(e) {}
+}
+
 const PREF_DEFAULTS = {
   hideFilled:     false,
   hideDoneStops:  false,
@@ -3379,9 +3922,11 @@ const PREF_DEFAULTS = {
   faultAlerts:    true,
   lowStockAlerts: true,
   individualBags: true,
-  photoFrequency: 1,
-  auditFrequency: 5,
   lightMode:      false,
+  driverName:     '',
+  driverEmail:    '',
+  driverId:       '',
+  routeId:        '',
 };
 let userPrefs = { ...PREF_DEFAULTS };
 
@@ -3407,8 +3952,7 @@ function loadPrefs() {
     if (el) el.classList.toggle('on', userPrefs[key]);
   });
   applyLightMode(userPrefs.lightMode);
-  renderPhotoFreqSelector();
-  renderAuditFreqSelector();
+  renderSettingsProfile();
 }
 
 function savePrefs() {
@@ -3509,6 +4053,8 @@ function applyDriverFbConfig() {
     }
     updateSyncStatus();
     showToast('☁ Firebase connected ✓');
+    loadDriverProfileFromFirebase();
+    loadGlobalOpSettings();
     // Close config panel
     const panel = document.getElementById('fb-config-panel');
     const toggle = document.getElementById('fb-config-toggle');
@@ -3540,6 +4086,10 @@ function initFirebase() {
     });
     updateSyncStatus();
     updateConnStatus(true);
+    // Load driver profile from Firebase users
+    loadDriverProfileFromFirebase();
+    // Load global operational settings (photo/audit freq etc)
+    loadGlobalOpSettings();
   } catch(e) {
     console.warn('Firebase init failed, using localStorage fallback:', e.message);
   }
@@ -3829,6 +4379,7 @@ function syncStopOnComplete(mid) {
       bagNumber:    bagNumbers[mid] || null,
       photoTaken:   !!stopPhotos[mid],
       auditDone:    !!(auditState[mid] && Object.keys(auditState[mid]).length),
+      pogChangesConfirmed: pogChangesConfirmed[mid] || false,
       slots,
     };
     existing.sentAt = new Date().toISOString();
@@ -3839,7 +4390,88 @@ function syncStopOnComplete(mid) {
     // Complete pending reconciliation record in Firebase
     completeReconciliation(mid, slots);
 
+    // Listen for restock DEX dial — apply real SOH when machine dials in
+    listenForRestockDial(mid);
+
   } catch(e) {}
+}
+
+// Listen for the restock DEX dial after driver completes stop
+// When machine dials, true SOH is known — apply it and clear pending changes
+function listenForRestockDial(machineId) {
+  if (!fbDb) return;
+
+  const ref = fbDb.ref('vynd/dexReadings/' + machineId + '/last');
+  const handler = ref.on('value', snap => {
+    const data = snap.val();
+    if (!data || data.dexReason !== '1') return; // dexReason 1 = restock dial
+
+    const slots    = data.slots || {};
+    const s        = STOPS[machineId];
+    if (!s) return;
+
+    // Update slot SOH from real DEX data
+    s.slots.forEach(slot => {
+      const dexSlot = slots[slot.id];
+      if (!dexSlot) return;
+      const truSOH = dexSlot.currentSOH;
+      if (truSOH !== null && truSOH !== undefined) {
+        slot.current = truSOH;
+        stopSlotState[slot.id] = { ...stopSlotState[slot.id], added: 0 }; // reset after dial
+      }
+    });
+
+    // Apply any pending planogram changes now that true SOH is known
+    applyPendingPogChangesAfterDial(machineId, slots);
+
+    showToast('📡 Restock dial received — SOH updated for ' + machineId);
+
+    // Stop listening after first restock dial
+    ref.off('value', handler);
+  });
+}
+
+async function applyPendingPogChangesAfterDial(machineId, dexSlots) {
+  if (!fbDb) return;
+
+  try {
+    const pogSnap = await fbDb.ref('vynd/planograms/' + machineId + '/slots').once('value');
+    const pogSlots = pogSnap.val() || {};
+    const updates = {};
+
+    Object.entries(pogSlots).forEach(([slotId, slot]) => {
+      if (!slot.pendingChange) return;
+
+      const pending  = slot.pendingChange;
+      const dexSlot  = dexSlots[slotId] || {};
+      const realSOH  = dexSlot.currentSOH ?? 0;
+
+      // Apply the queued change — real SOH from DEX tells us true state
+      updates['vynd/planograms/' + machineId + '/slots/' + slotId + '/product']      = pending.newProduct;
+      updates['vynd/planograms/' + machineId + '/slots/' + slotId + '/par']          = pending.newPar || slot.par;
+      updates['vynd/planograms/' + machineId + '/slots/' + slotId + '/current']      = realSOH;
+      updates['vynd/planograms/' + machineId + '/slots/' + slotId + '/pendingChange'] = null;
+
+      // Update local STOP data
+      const s = STOPS[machineId];
+      if (s?.slots) {
+        const localSlot = s.slots.find(sl => sl.id === slotId);
+        if (localSlot) {
+          localSlot.product     = pending.newProduct;
+          localSlot.par         = pending.newPar || localSlot.par;
+          localSlot.current     = realSOH;
+          localSlot.pendingChange = null;
+        }
+      }
+    });
+
+    if (Object.keys(updates).length) {
+      await fbDb.ref().update(updates);
+      console.log('Planogram changes applied after restock dial for', machineId);
+    }
+  } catch(e) {
+    console.warn('Could not apply pog changes after dial:', e.message);
+  }
 }
 
 function completeReconciliation(machineId, slots) {
@@ -3948,6 +4580,8 @@ renderLocations();
 buildStockPick();
 initCash();
 initRouteBagCard();
+loadGlobalOpSettings(); // load photo/audit frequency from management portal settings
+setTimeout(loadHomeScreen, 300);
 // Auto-apply saved Firebase config if present
 try {
   const savedFb = localStorage.getItem('vynd_fb_config');

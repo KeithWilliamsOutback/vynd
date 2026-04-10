@@ -2549,6 +2549,8 @@ tr.clickable:hover td{background:var(--bg)}
       <div class="mdetail-tab active" onclick="switchMTab('overview',this)">Overview</div>
       <div class="mdetail-tab" onclick="switchMTab('history',this)">Service history</div>
       <div class="mdetail-tab" onclick="switchMTab('faults',this)">Fault log</div>
+      <div class="mdetail-tab" onclick="switchMTab('events',this)">Events & alerts</div>
+      <div class="mdetail-tab" onclick="switchMTab('cash',this)">Cash & cashless</div>
       <div class="mdetail-tab" onclick="switchMTab('stock',this)">Stock snapshot</div>
       <div class="mdetail-tab" onclick="switchMTab('audit',this)">Audit log</div>
       <div class="mdetail-tab" onclick="switchMTab('settings',this)">Settings</div>
@@ -2643,6 +2645,70 @@ tr.clickable:hover td{background:var(--bg)}
           <button class="btn btn-secondary" onclick="closeFaultModal()">Cancel</button>
           <button class="btn btn-primary" onclick="saveFault()">Log fault</button>
         </div>
+      </div>
+    </div>
+
+    <!-- EVENTS & ALERTS -->
+    <div class="mdetail-tab-pane" id="mtab-events">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <div class="text-muted" style="font-size:13px" id="md-events-summary">Loading…</div>
+        <button class="btn btn-secondary btn-sm" onclick="renderMachineEvents()">↻ Refresh</button>
+      </div>
+      <!-- Machine state banner — shown when active critical events -->
+      <div id="md-events-banner" style="display:none;margin-bottom:12px"></div>
+      <!-- Event filter -->
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
+        <button class="filter-btn on" onclick="setEventFilter('all',this)" style="font-size:11px">All</button>
+        <button class="filter-btn" onclick="setEventFilter('critical',this)" style="font-size:11px">🔴 Critical</button>
+        <button class="filter-btn" onclick="setEventFilter('temperature',this)" style="font-size:11px">🌡 Temperature</button>
+        <button class="filter-btn" onclick="setEventFilter('door',this)" style="font-size:11px">🚪 Door</button>
+        <button class="filter-btn" onclick="setEventFilter('cash',this)" style="font-size:11px">💵 Cash</button>
+        <button class="filter-btn" onclick="setEventFilter('cashless',this)" style="font-size:11px">💳 Cashless</button>
+        <button class="filter-btn" onclick="setEventFilter('security',this)" style="font-size:11px">🔒 Security</button>
+        <button class="filter-btn" onclick="setEventFilter('power',this)" style="font-size:11px">⚡ Power</button>
+      </div>
+      <div id="md-events-list"></div>
+    </div>
+
+    <!-- CASH & CASHLESS -->
+    <div class="mdetail-tab-pane" id="mtab-cash">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <div style="font-size:13px;font-weight:600">Payment breakdown — last DEX read</div>
+        <button class="btn btn-secondary btn-sm" onclick="renderMachineCash()">↻ Refresh</button>
+      </div>
+
+      <!-- Payment split -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px" id="md-payment-split">
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center">
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Cash sales</div>
+          <div style="font-family:'DM Mono',monospace;font-size:20px;font-weight:700;color:var(--accent)" id="md-cash-sales">—</div>
+        </div>
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center">
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Cashless 1</div>
+          <div style="font-family:'DM Mono',monospace;font-size:20px;font-weight:700;color:var(--info)" id="md-cashless1-sales">—</div>
+        </div>
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center">
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Cashless 2</div>
+          <div style="font-family:'DM Mono',monospace;font-size:20px;font-weight:700;color:#a78bfa" id="md-cashless2-sales">—</div>
+        </div>
+      </div>
+
+      <!-- Cash detail -->
+      <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Cash detail (since last reset)</div>
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:14px">
+        <div id="md-cash-detail" style="display:flex;flex-direction:column"></div>
+      </div>
+
+      <!-- Cashless detail -->
+      <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Cashless detail (since last reset)</div>
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:14px">
+        <div id="md-cashless-detail" style="display:flex;flex-direction:column"></div>
+      </div>
+
+      <!-- Mixed payments -->
+      <div id="md-mixed-payments" style="display:none">
+        <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Mixed payments (cash + cashless)</div>
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px" id="md-mixed-detail"></div>
       </div>
     </div>
 
@@ -9305,6 +9371,9 @@ async function refreshDashboard() {
     }).join('');
   }
 
+  // Load global alerts for dashboard
+  loadGlobalAlerts();
+
   // Background Firebase urgency refresh
   if (fbReady && fbDb) {
     Promise.all(allMachineIds.map(mid => calcMachineUrgency(mid).catch(() => null)))
@@ -10207,6 +10276,205 @@ function exportProductsCSV() {
   showToast('Exported ' + Object.keys(PRODUCTS).length + ' products ✓');
 }
 
+// ══════════════════════════════════════
+// EVENTS & ALERTS TAB
+// ══════════════════════════════════════
+
+let eventFilter = 'all';
+
+function setEventFilter(f, btn) {
+  eventFilter = f;
+  document.querySelectorAll('#mtab-events .filter-btn').forEach(b => b.classList.remove('on'));
+  if (btn) btn.classList.add('on');
+  renderMachineEvents();
+}
+
+const SEV_COLOR = { critical:'var(--danger)', warn:'var(--warn)', info:'var(--muted)' };
+const SEV_BG    = { critical:'rgba(220,38,38,.08)', warn:'rgba(217,119,6,.06)', info:'rgba(255,255,255,.02)' };
+const SEV_ICON  = { critical:'🔴', warn:'🟡', info:'⚪' };
+
+async function renderMachineEvents() {
+  const mid       = document.getElementById('md-id')?.textContent?.trim();
+  const listEl    = document.getElementById('md-events-list');
+  const summaryEl = document.getElementById('md-events-summary');
+  const bannerEl  = document.getElementById('md-events-banner');
+  if (!listEl || !mid) return;
+
+  listEl.innerHTML = '<div style="color:var(--muted);padding:12px">Loading events…</div>';
+
+  if (!fbReady || !fbDb) {
+    listEl.innerHTML = '<div style="color:var(--muted);padding:12px">Connect to Firebase to view events</div>';
+    return;
+  }
+
+  const stateSnap = await fbDb.ref('vynd/machineState/' + mid).once('value');
+  const state     = stateSnap.val();
+  if (state && bannerEl) {
+    const banners = [];
+    if (state.foodSafetyViolation)
+      banners.push('<div style="background:rgba(220,38,38,.12);border:1.5px solid var(--danger);border-radius:8px;padding:12px 16px;display:flex;gap:10px;align-items:center;margin-bottom:8px"><span style="font-size:20px">🚨</span><div><div style="font-weight:700;color:var(--danger);font-size:13px">FOOD SAFETY VIOLATION — Health rule violated</div><div style="font-size:12px;color:var(--muted);margin-top:2px">Machine may not serve food. Do not fill until temperature is confirmed safe.</div></div></div>');
+    if (state.doorOpen)
+      banners.push('<div style="background:rgba(217,119,6,.1);border:1px solid var(--warn);border-radius:8px;padding:10px 14px;display:flex;gap:8px;align-items:center;margin-bottom:8px"><span style="font-size:16px">🚪</span><div style="font-size:13px">Door currently <strong>open</strong>' + (state.doorOpenDurationMins ? ' — ' + state.doorOpenDurationMins + ' min' : '') + '</div></div>');
+    if (state.criticalEventCount > 0 && !state.foodSafetyViolation)
+      banners.push('<div style="background:rgba(220,38,38,.08);border:1px solid var(--danger);border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:8px">🔴 <strong>' + state.criticalEventCount + ' critical event' + (state.criticalEventCount>1?'s':'') + '</strong> — ' + (state.criticalSummary||'') + '</div>');
+    bannerEl.innerHTML = banners.join('');
+    bannerEl.style.display = banners.length ? '' : 'none';
+  }
+
+  try {
+    const snap   = await fbDb.ref('vynd/events/' + mid).orderByChild('timestamp').limitToLast(200).once('value');
+    const events = [];
+    snap.forEach(child => events.push({ key: child.key, ...child.val() }));
+    events.reverse();
+
+    const filtered = events.filter(e => {
+      if (eventFilter === 'all')      return true;
+      if (eventFilter === 'critical') return e.severity === 'critical';
+      return e.category === eventFilter;
+    });
+
+    if (summaryEl) summaryEl.textContent = events.length + ' events · ' +
+      events.filter(e=>e.severity==='critical').length + ' critical · ' +
+      events.filter(e=>e.active).length + ' active';
+
+    if (!filtered.length) {
+      listEl.innerHTML = '<div style="color:var(--muted);text-align:center;padding:32px">No events found</div>';
+      return;
+    }
+
+    listEl.innerHTML = filtered.map(e => {
+      const col  = SEV_COLOR[e.severity] || 'var(--muted)';
+      const bg   = SEV_BG[e.severity]    || 'transparent';
+      const icon = SEV_ICON[e.severity]  || '⚪';
+      const ts   = e.timestamp ? new Date(e.timestamp).toLocaleString('en-AU') : '—';
+      const activeBadge = e.active
+        ? '<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:rgba(220,38,38,.15);color:var(--danger);font-weight:700;margin-left:6px">ACTIVE</span>'
+        : '';
+      return '<div style="background:' + bg + ';border:1px solid var(--border);border-left:4px solid ' + col + ';border-radius:8px;padding:12px;margin-bottom:8px">' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">' +
+          '<span style="font-size:14px">' + icon + '</span>' +
+          '<span style="font-family:\'DM Mono\',monospace;font-size:11px;color:var(--muted)">' + (e.code||'—') + '</span>' +
+          '<span style="font-size:13px;font-weight:700;flex:1">' + (e.label||e.code) + '</span>' +
+          activeBadge +
+          '<span class="pill ' + (e.severity==='critical'?'red':e.severity==='warn'?'orange':'gray') + '" style="font-size:10px">' + e.severity + '</span>' +
+        '</div>' +
+        '<div style="display:flex;gap:12px;font-size:11px;color:var(--muted)">' +
+          '<span>📅 ' + ts + '</span>' +
+          (e.durationMins ? '<span>⏱ ' + e.durationMins + ' min</span>' : '') +
+          (e.countSinceReset ? '<span>× ' + e.countSinceReset + ' since reset</span>' : '') +
+          '<span style="text-transform:capitalize">' + (e.category||'—') + '</span>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  } catch(err) {
+    listEl.innerHTML = '<div style="color:var(--muted);padding:12px">Could not load events</div>';
+  }
+}
+
+// ══════════════════════════════════════
+// CASH & CASHLESS TAB
+// ══════════════════════════════════════
+
+async function renderMachineCash() {
+  const mid = document.getElementById('md-id')?.textContent?.trim();
+  if (!mid) return;
+  const setEl = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  const fmtD  = cents => cents != null && cents !== undefined ? '$' + (cents/100).toFixed(2) : '—';
+
+  if (!fbReady || !fbDb) { setEl('md-cash-sales','No Firebase'); return; }
+
+  const snap = await fbDb.ref('vynd/dexReadings/' + mid + '/last').once('value');
+  const data = snap.val();
+  if (!data) { setEl('md-cash-sales','—'); return; }
+
+  const cash     = data.cash     || {};
+  const cashless = data.cashless || {};
+
+  setEl('md-cash-sales',      fmtD(cash.salesSinceReset));
+  setEl('md-cashless1-sales', fmtD(cashless.c1SalesResetCents));
+  setEl('md-cashless2-sales', fmtD(cashless.c2SalesResetCents));
+
+  const cashRows = [
+    { label:'Cash in',          val:cash.cashInSinceReset,          note:'Total cash inserted by customers' },
+    { label:'Cash to box',      val:cash.cashToBoxSinceReset,       note:'Cash collected into the cash box' },
+    { label:'Cash to tubes',    val:cash.cashToTubesSinceReset,     note:'Cash retained as change float' },
+    { label:'Change dispensed', val:cash.changeDispensedSinceReset, note:'Change given back to customers' },
+    { label:'Overpay received', val:cash.overpayResetCents,         note:'Excess cash inserted (not refunded)' },
+    { label:'Float filled',     val:cash.floatFilledSinceReset,     note:'Cash added by operator as float top-up' },
+  ];
+  const cashDetailEl = document.getElementById('md-cash-detail');
+  if (cashDetailEl) cashDetailEl.innerHTML = cashRows.map((r,i) =>
+    '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 14px;' + (i>0?'border-top:1px solid var(--border)':'') + '">' +
+      '<div><div style="font-size:13px;font-weight:500">' + r.label + '</div><div style="font-size:11px;color:var(--muted)">' + r.note + '</div></div>' +
+      '<div style="font-family:\'DM Mono\',monospace;font-size:14px;font-weight:700">' + fmtD(r.val) + '</div>' +
+    '</div>').join('');
+
+  const cashlessRows = [
+    { label:'Cashless 1 sales',        val:cashless.c1SalesResetCents, note:(cashless.c1SalesResetCount||0)+' transactions' },
+    { label:'Cashless 1 credit added', val:cashless.c1CreditSinceReset,note:'Value added to card/account' },
+    { label:'Cashless 2 sales',        val:cashless.c2SalesResetCents, note:(cashless.c2SalesResetCount||0)+' transactions' },
+    { label:'Total cashless',          val:cashless.totalCashlessCents,note:(cashless.totalCashlessCount||0)+' total transactions', bold:true },
+  ];
+  const cashlessDetailEl = document.getElementById('md-cashless-detail');
+  if (cashlessDetailEl) cashlessDetailEl.innerHTML = cashlessRows.map((r,i) =>
+    '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 14px;' + (i>0?'border-top:1px solid var(--border)':'') + (r.bold?';border-top:2px solid var(--border)':'') + '">' +
+      '<div><div style="font-size:13px;font-weight:' + (r.bold?'700':'500') + '">' + r.label + '</div><div style="font-size:11px;color:var(--muted)">' + r.note + '</div></div>' +
+      '<div style="font-family:\'DM Mono\',monospace;font-size:' + (r.bold?'16':'14') + 'px;font-weight:700;color:' + (r.bold?'var(--info)':'var(--text)') + '">' + fmtD(r.val) + '</div>' +
+    '</div>').join('');
+
+  const hasMixed = (cashless.c1MixedVendCount||0) + (cashless.c2MixedVendCount||0) > 0;
+  const mixedEl  = document.getElementById('md-mixed-payments');
+  if (mixedEl) {
+    mixedEl.style.display = hasMixed ? '' : 'none';
+    if (hasMixed) {
+      const d = document.getElementById('md-mixed-detail');
+      if (d) d.innerHTML = '<div style="font-size:13px;margin-bottom:4px">Cashless 1 — <strong>' + (cashless.c1MixedVendCount||0) + '</strong> mixed vends, cashless portion: <strong>' + fmtD(cashless.c1MixedValueCents) + '</strong></div>' +
+        (cashless.c2MixedVendCount ? '<div style="font-size:13px">Cashless 2 — <strong>' + cashless.c2MixedVendCount + '</strong> mixed vends, cashless portion: <strong>' + fmtD(cashless.c2MixedValueCents) + '</strong></div>' : '') +
+        '<div style="font-size:11px;color:var(--muted);margin-top:6px">Mixed payment = customer paid part cash, part cashless in a single transaction</div>';
+    }
+  }
+}
+
+// ══════════════════════════════════════
+// GLOBAL ALERTS — dashboard
+// ══════════════════════════════════════
+
+async function loadGlobalAlerts() {
+  if (!fbReady || !fbDb) return;
+  try {
+    const snap   = await fbDb.ref('vynd/alerts').orderByChild('createdAt').limitToLast(50).once('value');
+    const alerts = [];
+    snap.forEach(child => alerts.push({ key: child.key, ...child.val() }));
+    alerts.reverse();
+    const alertsBody = document.getElementById('dash-alerts-body');
+    if (alertsBody && alerts.length) {
+      alertsBody.innerHTML = alerts.slice(0,8).map(a => {
+        const ts  = a.createdAt ? timeAgo(new Date(a.createdAt)) : '—';
+        const col = a.severity === 'critical' ? 'red' : 'orange';
+        const foodBadge = a.foodSafety ? '<span class="pill red" style="font-size:10px;margin-left:4px">🚨 FOOD SAFETY</span>' : '';
+        return '<tr onclick="openMachineDetail(\'' + a.machineId + '\')" style="cursor:pointer">' +
+          '<td><span class="text-mono" style="font-size:12px">' + a.machineId + '</span></td>' +
+          '<td>' + a.label + foodBadge + '</td>' +
+          '<td class="text-muted">' + ts + '</td>' +
+          '<td><span class="pill ' + col + '"><span class="pill-dot"></span>' + a.severity + '</span></td>' +
+        '</tr>';
+      }).join('');
+    }
+    const openCritical = alerts.filter(a=>a.status==='open'&&a.severity==='critical').length;
+    const critEl = document.getElementById('dash-qs-critical');
+    if (critEl) critEl.textContent = openCritical;
+  } catch(e) {}
+}
+
+function timeAgo(date) {
+  const mins = Math.round((Date.now() - date.getTime()) / 60000);
+  if (mins < 1)  return 'Just now';
+  if (mins < 60) return mins + 'm ago';
+  const hrs = Math.round(mins/60);
+  if (hrs < 24)  return hrs + 'h ago';
+  return Math.round(hrs/24) + 'd ago';
+}
+
 function buildChart() {
   const data = [14200,16800,15400,17900,16100,18420,15800,18420];
   const labels = ['Feb 10','Feb 17','Feb 24','Mar 3','Mar 10','Mar 17','Mar 24','Apr 1'];
@@ -10675,6 +10943,8 @@ function switchMTab(tab, el) {
   if (pane) pane.classList.add('active');
   if (tab === 'audit')  renderMachineAuditLog();
   if (tab === 'faults') renderFaultLog();
+  if (tab === 'events') renderMachineEvents();
+  if (tab === 'cash')   renderMachineCash();
 }
 
 // ── Fault log ──

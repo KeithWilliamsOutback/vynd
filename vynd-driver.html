@@ -355,6 +355,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
 <!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js"></script>
 </head>
 <body>
 
@@ -386,7 +387,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
         <div id="topbar-sync-dot" style="width:6px;height:6px;border-radius:50%;background:var(--muted);flex-shrink:0;transition:background .3s"></div>
         <span id="topbar-sync-label" style="font-size:11px;font-weight:500;color:var(--muted);white-space:nowrap">Sync</span>
       </div>
-      <div class="avatar" onclick="navTo('screen-settings',null)" style="cursor:pointer" title="Settings">JK</div>
+      <div class="avatar" onclick="navTo('screen-settings',null)" style="cursor:pointer" title="Settings">?</div>
     </div>
   </div>
 
@@ -738,9 +739,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
   <div class="topbar">
     <div class="topbar-left">
       <div class="topbar-title">Stock pick</div>
-      <div class="topbar-sub">Pick by machine · Route R-04</div>
+      <div class="topbar-sub" id="stock-pick-sub">Pick by lane · Route Dubbo</div>
     </div>
-    <div id="stock-progress-pill" class="pill pill-blue" style="flex-shrink:0"><span class="pill-dot"></span><span id="stock-pill-text">0 of 3 picked</span></div>
+    <div id="stock-progress-pill" class="pill pill-blue" style="flex-shrink:0"><span class="pill-dot"></span><span id="stock-pill-text">0 of 5 picked</span></div>
   </div>
   <div class="scroll">
     <div class="summary-strip" id="stock-summary-strip">
@@ -870,13 +871,20 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
       </svg>
     </div>
     <div class="card" style="cursor:default">
-      <div style="display:flex;align-items:center;gap:14px">
-        <div class="avatar" id="settings-avatar" style="width:48px;height:48px;font-size:16px;flex-shrink:0">JK</div>
-        <div>
-          <div style="font-size:16px;font-weight:600" id="settings-name">Driver</div>
-          <div class="text-muted" style="margin-top:3px" id="settings-role">Driver</div>
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px">
+        <div class="avatar" id="settings-avatar" style="width:48px;height:48px;font-size:16px;flex-shrink:0">?</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:16px;font-weight:600" id="settings-name">Not signed in</div>
+          <div class="text-muted" style="margin-top:3px" id="settings-role">Select your name below</div>
           <div style="font-size:12px;color:var(--muted);margin-top:2px" id="settings-email"></div>
         </div>
+      </div>
+      <div style="border-top:1px solid var(--border);padding-top:12px">
+        <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Sign in as</div>
+        <select class="field-input" id="driver-select-identity" style="width:100%;margin-bottom:8px" onchange="applyDriverIdentity(this.value)">
+          <option value="">— Select your name —</option>
+        </select>
+        <div style="font-size:11px;color:var(--muted)">Your stops and run data load automatically once selected.</div>
       </div>
     </div>
     <div class="section-hd">Fill guide</div>
@@ -894,6 +902,28 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
       <div class="pref-row">
         <div class="pref-info"><div class="pref-title">Hide no-pick lines by default</div><div class="pref-desc">On the stock pick screen, automatically hide products that don't need picking</div></div>
         <div class="toggle-wrap" onclick="togglePref('hideNoPick',this)"><div class="toggle-track" id="pref-hideNoPick"><div class="toggle-knob"></div></div></div>
+      </div>
+    </div>
+    <div class="section-hd">Stock pick</div>
+    <div class="card" style="cursor:default">
+      <div class="pref-row">
+        <div class="pref-info">
+          <div class="pref-title">Pick mode</div>
+          <div class="pref-desc">Lane — pick slot by slot per machine. Product — group same products across all machines.</div>
+        </div>
+        <div style="display:flex;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:3px;gap:2px">
+          <button id="pref-pick-lane" onclick="setPickMode('lane')"
+            style="font-size:11px;font-weight:600;padding:4px 10px;border-radius:16px;border:none;cursor:pointer;transition:all .15s">Lane</button>
+          <button id="pref-pick-product" onclick="setPickMode('product')"
+            style="font-size:11px;font-weight:600;padding:4px 10px;border-radius:16px;border:none;cursor:pointer;transition:all .15s">Product</button>
+        </div>
+      </div>
+    </div>
+    <div class="section-hd">Fill guide</div>
+    <div class="card" style="cursor:default">
+      <div class="pref-row">
+        <div class="pref-info"><div class="pref-title">Product thumbnails in fill guide</div><div class="pref-desc">Show product images next to each slot when filling a machine</div></div>
+        <div class="toggle-wrap" onclick="togglePref('fillThumbnails',this)"><div class="toggle-track on" id="pref-fillThumbnails"><div class="toggle-knob"></div></div></div>
       </div>
     </div>
     <div class="section-hd">Cash collection</div>
@@ -942,19 +972,14 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
         <button class="btn btn-primary" style="flex:1" onclick="syncFromPortal()">↓ Pull from portal</button>
         <button class="btn btn-secondary" style="flex:1" onclick="syncToPortal()">↑ Push to portal</button>
       </div>
-      <!-- Firebase config (collapsed by default) -->
+      <!-- Firebase status -->
       <div style="border-top:1px solid var(--border);padding-top:10px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;cursor:pointer" onclick="toggleFbConfig()">
-          <span style="font-size:12px;font-weight:600;color:var(--muted)">Firebase config</span>
-          <span style="font-size:11px;color:var(--accent)" id="fb-config-toggle">▸ Setup</span>
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <span style="font-size:12px;font-weight:600;color:var(--muted)">Firebase</span>
+          <span id="fb-conn-status" style="font-size:11px;color:var(--muted)">Checking…</span>
         </div>
-        <div id="fb-config-panel" style="display:none">
-          <input class="form-input" id="drv-fb-apiKey"    placeholder="API Key"        style="margin-bottom:6px;font-size:12px" oninput="saveDriverFbConfig()">
-          <input class="form-input" id="drv-fb-projectId" placeholder="Project ID"     style="margin-bottom:6px;font-size:12px" oninput="saveDriverFbConfig()">
-          <input class="form-input" id="drv-fb-appId"     placeholder="App ID"         style="margin-bottom:6px;font-size:12px" oninput="saveDriverFbConfig()">
-          <input class="form-input" id="drv-fb-dbUrl"     placeholder="Database URL"   style="margin-bottom:10px;font-size:12px" oninput="saveDriverFbConfig()">
-          <button class="btn btn-primary" style="width:100%" onclick="applyDriverFbConfig()">Connect to Firebase</button>
-        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px" id="fb-conn-detail">vynd-pilot · auto-connect</div>
+        <button class="btn btn-secondary btn-sm" style="width:100%;margin-top:8px" onclick="tryAutoConnect();showToast('Reconnecting…')">↺ Reconnect</button>
       </div>
     </div>
     <div class="card" style="cursor:default">
@@ -1066,83 +1091,100 @@ const ALL_PRODUCTS = [
 ];
 
 // Mutable — gets updated when Firebase products sync
-let PRODUCT_DATA = {}; // name → { barcode, rrp, cost, brand, family, cat, gstFree, ... }
+let PRODUCT_DATA   = {}; // name → { barcode, rrp, cost, brand, family, cat, gstFree, ... }
+let PRODUCT_IMAGES = {}; // name → imageUrl (loaded from Firebase + localStorage cache)
 
-const STOPS = {
-  'M-001':{ id:'M-001', customer:'Westfield Office', locationName:'Westfield Office Tower', addr:'Level 3 breakroom', cash:'$112.60', cashType:'cash', status:'done', fault:false, lastService:'Today', fillCount:4, hasPriceChange:false,
-    slots:[
-      {id:'A1',product:'Coca-Cola 375ml',price:3.50,current:12,par:10,capacity:12,dexVends:8},
-      {id:'A2',product:'Pepsi Max 375ml',price:3.50,current:11,par:10,capacity:12,dexVends:5},
-      {id:'A3',product:'Mount Franklin Water 600ml',price:2.50,current:9,par:10,capacity:12,dexVends:11},
-      {id:'B1',product:'Red Bull 250ml',price:4.50,current:8,par:8,capacity:10,dexVends:2},
-      {id:'B2',product:'V Energy 250ml',price:4.50,current:10,par:8,capacity:10,dexVends:0},
-      {id:'C1',product:"Smith's Original 45g",price:2.00,current:7,par:8,capacity:10,dexVends:3},
-      {id:'C2',product:'Twix 58g',price:2.50,current:10,par:8,capacity:10,dexVends:1},
-      {id:'C3',product:'Snickers 50g',price:2.50,current:9,par:8,capacity:10,dexVends:2},
-    ]},
-  'M-002':{ id:'M-002', customer:'Harbour Medical', locationName:'Harbour Medical Centre', addr:'Ground floor foyer', cash:'$96.40', cashType:'mixed', status:'fault', fault:true, lastService:'18 days ago', fillCount:9, hasPriceChange:true,
-    slots:[
-      {id:'A1',product:'Coca-Cola 375ml',price:3.50,dexPrice:3.00,dexVends:11,current:1,par:10,capacity:12},
-      {id:'A2',product:'Sprite 375ml',price:3.50,dexPrice:3.50,dexVends:10,current:0,par:10,capacity:12},
-      {id:'A3',product:'Mount Franklin Water 600ml',price:2.50,dexPrice:2.00,dexVends:8,current:2,par:10,capacity:12},
-      {id:'B1',product:'Gatorade Blue 600ml',price:4.00,dexPrice:4.00,dexVends:0,current:8,par:8,capacity:10},
-      {id:'C1',product:'Milo Bar 45g',price:2.00,dexPrice:1.80,dexVends:7,current:1,par:8,capacity:10},
-      {id:'C2',product:'Kit Kat 45g',price:2.50,dexPrice:2.50,dexVends:1,current:9,par:8,capacity:10},
-    ]},
-  'M-003':{ id:'M-003', customer:'Civic Library', locationName:'Civic Library', addr:'Staff room', cash:'$0.00', cashType:'cashless', status:'pending', fault:false, lastService:'12 days ago', fillCount:2, hasPriceChange:false,
-    slots:[
-      {id:'A1',product:'Coca-Cola 375ml',price:3.00,current:10,par:10,capacity:12,dexVends:2, minPick:{mode:'pct',value:30}},
-      {id:'A2',product:'Mount Franklin Water 600ml',price:2.00,current:2,par:10,capacity:12,dexVends:8},
-      {id:'B1',product:'Tim Tam Original 200g',price:3.50,current:3,par:6,capacity:8,dexVends:3},
-      {id:'C1',product:'Sanitarium Up&Go 250ml',price:3.50,current:7,par:6,capacity:8,dexVends:1, prekit:true, lifespan:5},
-    ]},
+const STORAGE_BUCKET = 'vynd-pilot.firebasestorage.app';
+
+function getStorageImageUrl(barcode) {
+  return `https://firebasestorage.googleapis.com/v0/b/${STORAGE_BUCKET}/o/products%2F${barcode}.jpg?alt=media`;
+}
+
+function resolveProductImage(name) {
+  if (PRODUCT_IMAGES[name]) return PRODUCT_IMAGES[name];
+  const p = PRODUCT_DATA[name];
+  if (p?.imageUrl) return p.imageUrl;
+  if (p?.barcode)  return getStorageImageUrl(p.barcode);
+  return null;
+}
+
+function getProductImg(name, size = 44) {
+  const url = resolveProductImage(name);
+  if (url) {
+    return `<img src="${url}" alt="${name}"
+      style="width:${size}px;height:${size}px;object-fit:contain;border-radius:4px;display:block"
+      onerror="this.style.display='none';this.nextSibling.style.display='block'">
+      <span style="display:none;font-size:${Math.round(size*0.6)}px">📦</span>`;
+  }
+  return `<span style="font-size:${Math.round(size*0.6)}px">📦</span>`;
+}
+
+// Load images from Firebase products node + localStorage cache
+function loadProductImages() {
+  try {
+    const cached = localStorage.getItem('vynd_product_images');
+    if (cached) Object.assign(PRODUCT_IMAGES, JSON.parse(cached));
+  } catch(e) {}
+  if (!fbDb) return Promise.resolve();
+  return fbDb.ref('vynd/products').once('value').then(snap => {
+    const data = snap.val();
+    if (!data) return;
+    let updated = false;
+    Object.entries(data).forEach(([key, p]) => {
+      const name = p.name || key.replace(/_/g,' ');
+      if (p.imageUrl && PRODUCT_IMAGES[name] !== p.imageUrl) {
+        PRODUCT_IMAGES[name] = p.imageUrl;
+        if (PRODUCT_DATA[name]) PRODUCT_DATA[name].imageUrl = p.imageUrl;
+        updated = true;
+      }
+    });
+    if (updated) {
+      try { localStorage.setItem('vynd_product_images', JSON.stringify(PRODUCT_IMAGES)); } catch(e) {}
+    }
+  }).catch(() => {});
+}
+
+// STOPS — built from Firebase runs on load, seeded from MACHINE_META for structure
+// Keyed by machine ID
+const STOPS = {};
+
+// Seed STOPS from MACHINE_META so the app has structure before Firebase loads
+const MACHINE_META_DRIVER = {
+  '10420767': { id:'10420767', locationName:'Dubbo Autobarn',             addr:'Near Front Counter', customer:'Dubbo Autobarn',             cashType:'cashless', lat:-32.2569, lng:148.6011 },
+  '76581280': { id:'76581280', locationName:'Dubbo Earlyrise Bakery',     addr:'Lunchroom',          customer:'Dubbo Earlyrise Bakery',     cashType:'cashless', lat:-32.2559, lng:148.6021 },
+  '1383968':  { id:'1383968',  locationName:'Dubbo Earlyrise Bakery',     addr:'Inside Roller Door', customer:'Dubbo Earlyrise Bakery',     cashType:'cashless', lat:-32.2559, lng:148.6021 },
+  '42097963': { id:'42097963', locationName:'Dubbo Agriweld Engineering', addr:'Workshop',           customer:'Dubbo Agriweld Engineering', cashType:'cash',     lat:-32.2701, lng:148.6138 },
+  'M-001':    { id:'M-001',    locationName:'Test Machine',               addr:'',                   customer:'',                           cashType:'cash',     lat:0, lng:0 },
 };
 
-const LOCATIONS = [
-  { site:'Westfield Complex', machines:[
-    { id:'M-001', name:'Level 3 Breakroom', type:'Snack & Drink', customer:'Westfield Office', routed:true, status:'done', fault:false, lastService:'Today' },
-    { id:'M-005', name:'Level 7 Staff Room', type:'Drink only', customer:'Westfield Office', routed:false, status:'ok', fault:false, lastService:'5 days ago',
-      slots:[
-        {id:'A1',product:'Coca-Cola 375ml',price:3.50,current:10,par:10,capacity:12},
-        {id:'A2',product:'Pepsi Max 375ml',price:3.50,current:8,par:10,capacity:12},
-        {id:'A3',product:'Sprite 375ml',price:3.50,current:11,par:10,capacity:12},
-        {id:'B1',product:'Mount Franklin Water 600ml',price:2.50,current:6,par:10,capacity:12},
-      ]},
-  ]},
-  { site:'Harbour Medical Centre', machines:[
-    { id:'M-002', name:'Ground Floor Foyer', type:'Snack & Drink', customer:'Harbour Medical', routed:true, status:'fault', fault:true, lastService:'18 days ago' },
-  ]},
-  { site:'Civic Library', machines:[
-    { id:'M-003', name:'Staff Room', type:'Snack & Drink', customer:'Civic Library', routed:true, status:'pending', fault:false, lastService:'12 days ago' },
-  ]},
-  { site:'Central Station', machines:[
-    { id:'M-004', name:'Platform 2 Concourse', type:'Snack & Drink', customer:'TransitCorp', routed:false, status:'ok', fault:false, lastService:'3 days ago',
-      slots:[
-        {id:'A1',product:'Coca-Cola 375ml',price:4.00,current:5,par:12,capacity:15},
-        {id:'A2',product:'Pepsi Max 375ml',price:4.00,current:12,par:12,capacity:15},
-        {id:'A3',product:'Mount Franklin Water 600ml',price:3.00,current:2,par:12,capacity:15},
-        {id:'B1',product:'Red Bull 250ml',price:5.00,current:9,par:10,capacity:12},
-        {id:'B2',product:'Monster Energy 500ml',price:5.00,current:11,par:10,capacity:12},
-        {id:'C1',product:"Smith's Original 45g",price:2.50,current:4,par:10,capacity:12},
-        {id:'C2',product:'Twix 58g',price:3.00,current:8,par:10,capacity:12},
-      ]},
-    { id:'M-006', name:'Platform 5 Waiting', type:'Drink only', customer:'TransitCorp', routed:false, status:'ok', fault:false, lastService:'3 days ago',
-      slots:[
-        {id:'A1',product:'Coca-Cola 375ml',price:4.00,current:14,par:12,capacity:15},
-        {id:'A2',product:'Sprite 375ml',price:4.00,current:7,par:12,capacity:15},
-        {id:'A3',product:'Gatorade Blue 600ml',price:4.50,current:10,par:10,capacity:12},
-      ]},
-  ]},
-];
+// Build STOPS from MACHINE_META_DRIVER
+Object.entries(MACHINE_META_DRIVER).forEach(([mid, m]) => {
+  STOPS[mid] = {
+    id:           mid,
+    customer:     m.customer,
+    locationName: m.locationName,
+    addr:         m.addr,
+    cash:         '—',
+    cashType:     m.cashType,
+    status:       'pending',
+    fault:        false,
+    lastService:  '—',
+    fillCount:    0,
+    lat:          m.lat,
+    lng:          m.lng,
+    slots:        [],
+  };
+});
 
 function getMachineData(id) {
-  if(STOPS[id]) return {...STOPS[id]};
-  for(const site of LOCATIONS) {
-    const m = site.machines.find(m=>m.id===id);
-    if(m) return {...m, locationName: m.name, addr: site.site, cash:'—', status: m.status||'ok'};
+  if (STOPS[id]) return { ...STOPS[id] };
+  if (MACHINE_META_DRIVER[id]) {
+    const m = MACHINE_META_DRIVER[id];
+    return { ...m, cash:'—', status:'pending', fault:false, lastService:'—', fillCount:0, slots:[] };
   }
   return null;
 }
+
 
 // ══════════════════════════════════════
 // NAVIGATION
@@ -1170,7 +1212,9 @@ async function loadHomeScreen() {
       let todayRun = null;
       runsSnap.forEach(child => {
         const run = child.val();
-        if (run.driverId === driverId) todayRun = { key: child.key, ...run };
+        if (run.driverId === driverId && run.status !== 'cancelled') {
+          todayRun = { key: child.key, ...run };
+        }
       });
 
       if (todayRun) {
@@ -1187,30 +1231,38 @@ async function loadHomeScreen() {
 
         // Merge into STOPS
         stopData.forEach(({ stop, dex }) => {
+          // Get machine details — local seed first, Firebase machineMeta enriches
+          const seed = MACHINE_META_DRIVER[stop.id] || {};
           if (!STOPS[stop.id]) {
             STOPS[stop.id] = {
               id:           stop.id,
-              customer:     stop.name,
-              locationName: stop.name,
-              addr:         '',
+              customer:     seed.customer     || stop.name || stop.id,
+              locationName: seed.locationName || stop.name || stop.id,
+              addr:         seed.addr         || '',
               cash:         '—',
-              cashType:     'cash',
-              status:       stop.status || 'pending',
+              cashType:     seed.cashType     || 'cash',
+              status:       stop.status       || 'pending',
               fault:        false,
               lastService:  '—',
               fillCount:    0,
+              lat:          seed.lat          || 0,
+              lng:          seed.lng          || 0,
               slots:        [],
             };
+          } else {
+            // Update status from run
+            STOPS[stop.id].status = stop.status || STOPS[stop.id].status;
           }
           if (dex?.slots) {
             STOPS[stop.id].slots = Object.entries(dex.slots).map(([id, s]) => ({
               id,
-              product:  s.product || '',
+              product:  s.product  || '',
               price:    (s.priceCents || 0) / 100,
               current:  s.currentSOH || 0,
-              par:      s.par || 10,
-              capacity: s.capacity || 12,
+              par:      s.par        || 10,
+              capacity: s.capacity   || 12,
               dexVends: s.vendsSinceLastRead || 0,
+              barcode:  s.barcode    || '',
             }));
           }
           STOPS[stop.id].serviceOrder = stop.serviceOrder;
@@ -1225,10 +1277,15 @@ async function loadHomeScreen() {
     }
   }
 
-  // Fallback to demo STOPS data
-  const demoStops = Object.values(STOPS).map((s, i) => ({
-    id: s.id, name: s.locationName, serviceOrder: i + 1, status: s.status,
-  }));
+  // Fallback — show real machines without an active run, in route order
+  const DUBBO_ORDER = ['10420767', '76581280', '1383968', '42097963'];
+  const demoStops = DUBBO_ORDER
+    .filter(id => MACHINE_META_DRIVER[id])
+    .map((id, i) => ({
+      id, name: MACHINE_META_DRIVER[id].locationName,
+      serviceOrder: i + 1,
+      status: STOPS[id]?.status || 'pending',
+    }));
   renderHomeStops(demoStops);
   updateHomeProgress(demoStops);
 }
@@ -1244,7 +1301,7 @@ function renderHomeStops(stops) {
     const status   = s.status || stop.status || 'pending';
     const isDone   = status === 'done';
     const isFault  = s.fault || status === 'fault';
-    const cashType = s.cashType || 'cash';
+    const cashType = s.cashType || MACHINE_META_DRIVER[stop.id]?.cashType || 'cash';
     const cashIcon = cashType === 'cashless' ? '💳 Cashless' : cashType === 'mixed' ? '💵 Cash + Card' : '💵 Cash';
 
     // Urgency from slots
@@ -1350,6 +1407,8 @@ function navTo(screenId, btn) {
     b.classList.toggle('active', oc.includes("'"+screenId+"'"));
   });
   showScreen(screenId);
+  if (screenId === 'screen-stock')    buildStockPick();
+  if (screenId === 'screen-settings') initSettingsScreen();
 }
 
 // ══════════════════════════════════════
@@ -1430,7 +1489,7 @@ function showStop(machineId) {
   document.getElementById('stop-last-service').textContent = s.lastService || '—';
 
   // Cash type logic
-  const cashType = s.cashType || 'cash';
+  const cashType = s.cashType || MACHINE_META_DRIVER[machineId]?.cashType || 'cash';
   const isCashless = cashType === 'cashless';
   const isMixed    = cashType === 'mixed';
   const hasCash    = !isCashless;
@@ -1507,6 +1566,49 @@ function buildPlanogram(s) {
   const container = document.getElementById('planogram-slots');
   if (!container) return;
   container.innerHTML = '';
+
+  // If no slots yet — try loading from Firebase dexReadings
+  if (!s.slots || s.slots.length === 0) {
+    if (fbDb) {
+      container.innerHTML = '<div class="text-muted" style="text-align:center;padding:24px">Loading slot data…</div>';
+      fbDb.ref('vynd/dexReadings/' + s.id + '/last').once('value').then(snap => {
+        const dex = snap.val();
+        if (dex?.slots) {
+          s.slots = Object.entries(dex.slots).map(([id, sl]) => ({
+            id,
+            product:  sl.product   || '',
+            price:    (sl.priceCents || 0) / 100,
+            current:  sl.currentSOH !== null && sl.currentSOH !== undefined ? sl.currentSOH : 0,
+            par:      sl.par       || 10,
+            capacity: sl.capacity  || 12,
+            dexVends: sl.vendsSinceLastRead || 0,
+            barcode:  sl.barcode   || '',
+          })).sort((a,b) => String(a.id).localeCompare(String(b.id), undefined, {numeric:true}));
+          STOPS[s.id].slots = s.slots;
+          // Enrich with planogram par/capacity
+          fbDb.ref('vynd/planograms/' + s.id + '/slots').once('value').then(pogSnap => {
+            const pog = pogSnap.val() || {};
+            s.slots.forEach(slot => {
+              const p = pog[slot.id];
+              if (p) {
+                if (p.par      !== undefined) slot.par      = p.par;
+                if (p.capacity !== undefined) slot.capacity = p.capacity;
+                if (p.product  && !slot.product) slot.product = p.product;
+              }
+            });
+            buildPlanogram(s);
+          }).catch(() => buildPlanogram(s));
+        } else {
+          container.innerHTML = '<div class="text-muted" style="text-align:center;padding:24px">No slot data yet — machine needs to dial in first.</div>';
+        }
+      }).catch(() => {
+        container.innerHTML = '<div class="text-muted" style="text-align:center;padding:24px">Could not load slot data.</div>';
+      });
+      return;
+    }
+    container.innerHTML = '<div class="text-muted" style="text-align:center;padding:24px">No slot data — connect to Firebase to load live data.</div>';
+    return;
+  }
 
   // Count mismatches for the summary banner
   const mismatchSlots = s.slots.filter(sl => sl.dexPrice !== undefined && Math.abs(sl.dexPrice - sl.price) > 0.001);
@@ -2326,6 +2428,7 @@ function buildInvTab() {
     row.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
         <div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);width:26px;flex-shrink:0">${slot.id}</div>
+        ${userPrefs.fillThumbnails !== false ? '<div style="width:36px;height:36px;flex-shrink:0;border-radius:6px;overflow:hidden;background:var(--border);display:flex;align-items:center;justify-content:center">' + getProductImg(slot.product, 36) + '</div>' : ''}
         <div style="flex:1;min-width:0">
           <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:4px">${slot.product}</div>
           <div class="stock-bar"><div class="stock-fill ${bc}" id="inv-bar-${slot.id}" style="width:${pct*100}%"></div></div>
@@ -2528,28 +2631,108 @@ function signOut() {
 }
 
 // ── Render settings profile from userPrefs ──
+function initSettingsScreen() {
+  // Apply all pref toggle states
+  Object.keys(userPrefs).forEach(key => {
+    const el = document.getElementById('pref-' + key);
+    if (el && el.classList.contains('toggle-track')) {
+      el.classList.toggle('on', !!userPrefs[key]);
+    }
+  });
+
+  // Apply pick mode buttons
+  const mode       = userPrefs.pickMode || 'lane';
+  const prefLane    = document.getElementById('pref-pick-lane');
+  const prefProduct = document.getElementById('pref-pick-product');
+  if (prefLane) {
+    prefLane.style.background = mode === 'lane' ? 'var(--accent)' : 'transparent';
+    prefLane.style.color      = mode === 'lane' ? '#fff' : 'var(--muted)';
+  }
+  if (prefProduct) {
+    prefProduct.style.background = mode === 'product' ? 'var(--accent)' : 'transparent';
+    prefProduct.style.color      = mode === 'product' ? '#fff' : 'var(--muted)';
+  }
+
+  // Sync badge
+  const badge = document.getElementById('sync-mode-badge');
+  if (badge) badge.textContent = fbReady ? '☁ Cloud' : '📱 Local';
+  if (badge) badge.style.color = fbReady ? 'var(--accent)' : 'var(--muted)';
+
+  // Populate driver dropdown if Firebase is ready
+  if (fbReady) populateDriverDropdown();
+
+  renderSettingsProfile();
+  updateSyncStatus();
+  loadDriverFbConfig();
+}
+
 function renderSettingsProfile() {
-  const name  = userPrefs.driverName  || 'Driver';
+  const name  = userPrefs.driverName  || '';
   const email = userPrefs.driverEmail || '';
   const route = userPrefs.routeId     || '';
-  const initials = name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'DR';
+  const initials = name ? name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) : '?';
 
   const setEl = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
-  setEl('settings-name',       name);
+  setEl('settings-name',       name  || 'Not signed in');
   setEl('settings-email',      email);
-  setEl('settings-role',       'Driver' + (route ? ' · Route ' + route : ''));
-  setEl('settings-topbar-sub', name);
+  setEl('settings-role',       name ? ('Driver' + (route ? ' · Route ' + route : '')) : 'Select your name below');
+  setEl('settings-topbar-sub', name  || 'Settings');
   setEl('settings-avatar',     initials);
 
   // Update home topbar greeting
-  const hour     = new Date().getHours();
-  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
-  const firstName = name.split(' ')[0];
-  setEl('home-greeting', greeting + ', ' + firstName + (route ? ' · Route ' + route : ''));
+  if (name) {
+    const hour     = new Date().getHours();
+    const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+    const firstName = name.split(' ')[0];
+    setEl('home-greeting', greeting + ', ' + firstName + (route ? ' · Route ' + route : ''));
+  }
 
   // Update home avatar
   const av = document.querySelector('.avatar[onclick*="screen-settings"]');
   if (av) av.textContent = initials;
+
+  // Set dropdown to current driver
+  const sel = document.getElementById('driver-select-identity');
+  if (sel && userPrefs.driverId) sel.value = userPrefs.driverId;
+}
+
+// Populate the driver identity dropdown from Firebase users
+async function populateDriverDropdown() {
+  if (!fbDb) return;
+  const snap  = await fbDb.ref('vynd/users').once('value').catch(() => null);
+  if (!snap)  return;
+  const users = snap.val() || {};
+  const sel   = document.getElementById('driver-select-identity');
+  if (!sel) return;
+
+  const active = Object.values(users).filter(u => u.active !== false)
+    .sort((a,b) => (a.name||'').localeCompare(b.name||''));
+
+  sel.innerHTML = '<option value="">— Select your name —</option>' +
+    active.map(u => `<option value="${u.id}">${u.name}${u.role === 'manager' ? ' (Manager)' : ''}</option>`).join('');
+
+  // Restore current selection
+  if (userPrefs.driverId) sel.value = userPrefs.driverId;
+}
+
+async function applyDriverIdentity(userId) {
+  if (!userId || !fbDb) return;
+  const snap = await fbDb.ref('vynd/users/' + userId).once('value').catch(() => null);
+  if (!snap) return;
+  const u = snap.val();
+  if (!u) return;
+
+  userPrefs.driverName  = u.name    || '';
+  userPrefs.driverEmail = u.email   || '';
+  userPrefs.driverId    = u.id      || userId;
+  userPrefs.routeId     = u.routeId || '';
+  savePrefs();
+
+  renderSettingsProfile();
+  showToast('✓ Signed in as ' + u.name);
+
+  // Reload home screen with new driver's runs
+  setTimeout(() => loadHomeScreen(), 300);
 }
 
 // ── Load driver profile from Firebase users ──
@@ -2654,6 +2837,39 @@ function buildPriceTab() {
   });
 }
 
+function buildFillThumbnails(slots) {
+  if (!slots || !slots.length) return '';
+
+  // Only show products that have images — skip those without
+  const withImages = slots.filter(sl => sl.product && resolveProductImage(sl.product));
+  if (!withImages.length) return '';
+
+  // Show unique products only (no duplicates), max 8
+  const seen = new Set();
+  const unique = withImages.filter(sl => {
+    if (seen.has(sl.product)) return false;
+    seen.add(sl.product);
+    return true;
+  }).slice(0, 8);
+
+  const imgs = unique.map(sl => {
+    const url     = resolveProductImage(sl.product);
+    const isEmpty = sl.current === 0;
+    return '<div style="position:relative;flex-shrink:0">' +
+      '<img src="' + url + '" alt="' + sl.product + '"' +
+        ' style="width:32px;height:32px;object-fit:contain;border-radius:4px;border:1px solid var(--border);background:var(--surface);display:block;' + (isEmpty ? 'opacity:0.4;' : '') + '"' +
+        ' onerror="this.parentElement.style.display=\'none\'">' +
+      (isEmpty ? '<div style="position:absolute;top:-3px;right:-3px;width:8px;height:8px;border-radius:50%;background:var(--danger)"></div>' : '') +
+    '</div>';
+  }).join('');
+
+  const overflow = withImages.length > 8
+    ? '<div style="width:32px;height:32px;border-radius:4px;border:1px solid var(--border);background:var(--surface);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--muted);flex-shrink:0">+' + (withImages.length - 8) + '</div>'
+    : '';
+
+  return '<div style="display:flex;gap:4px;margin-top:8px;flex-wrap:nowrap;overflow:hidden">' + imgs + overflow + '</div>';
+}
+
 function buildProdTab() {
   const el = document.getElementById('prod-slots');
   el.innerHTML = '';
@@ -2663,6 +2879,7 @@ function buildProdTab() {
     el.innerHTML += `<div class="slot-manage-row" data-slot-id="${slot.id}">
       <div class="slot-manage-header" onclick="toggleExpand(this)">
         <div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)">${slot.id}</div>
+        ${userPrefs.fillThumbnails !== false ? '<div style="width:32px;height:32px;flex-shrink:0;border-radius:5px;overflow:hidden;background:var(--border);display:flex;align-items:center;justify-content:center">' + getProductImg(slot.product, 32) + '</div>' : ''}
         <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${slot.product}</div><div style="font-size:12px;color:var(--muted)">Tap to change product</div></div>
         <svg viewBox="0 0 16 16" fill="none" width="14" style="color:var(--muted);flex-shrink:0"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </div>
@@ -2732,11 +2949,217 @@ function toggleExpand(header) {
 // ══════════════════════════════════════
 const pickHideState = {};
 
+function setPickMode(mode) {
+  userPrefs.pickMode = mode;
+  savePrefs();
+
+  // Update header toggle buttons
+  const laneBtn    = document.getElementById('pick-mode-lane');
+  const productBtn = document.getElementById('pick-mode-product');
+  if (laneBtn)    { laneBtn.style.background    = mode === 'lane'    ? 'var(--accent)' : 'transparent'; laneBtn.style.color    = mode === 'lane'    ? '#fff' : 'var(--muted)'; }
+  if (productBtn) { productBtn.style.background = mode === 'product' ? 'var(--accent)' : 'transparent'; productBtn.style.color = mode === 'product' ? '#fff' : 'var(--muted)'; }
+
+  // Update settings buttons
+  const prefLane    = document.getElementById('pref-pick-lane');
+  const prefProduct = document.getElementById('pref-pick-product');
+  if (prefLane)    { prefLane.style.background    = mode === 'lane'    ? 'var(--accent)' : 'transparent'; prefLane.style.color    = mode === 'lane'    ? '#fff' : 'var(--muted)'; }
+  if (prefProduct) { prefProduct.style.background = mode === 'product' ? 'var(--accent)' : 'transparent'; prefProduct.style.color = mode === 'product' ? '#fff' : 'var(--muted)'; }
+
+  const sub = document.getElementById('stock-pick-sub');
+  if (sub) sub.textContent = (mode === 'product' ? 'Pick by product' : 'Pick by lane') + ' · Route ' + (userPrefs.routeId || 'Dubbo');
+}
+
+function buildStockPickProduct(container) {
+  Object.keys(STOPS).forEach(mid => {
+    const stop  = STOPS[mid];
+    const state = stockPickState[mid];
+    if (!state) return;
+
+    const isDone = state.done;
+
+    // Group slots by product name within this machine
+    const productGroups = {};
+    stop.slots.forEach(slot => {
+      const name = slot.product || ('Lane ' + slot.id);
+      if (!productGroups[name]) productGroups[name] = [];
+      productGroups[name].push(slot);
+    });
+
+    const totalUnits = Object.values(productGroups).reduce((a, slots) => {
+      return a + slots.reduce((s, slot) => s + (state.slots[slot.id] ?? 0), 0);
+    }, 0);
+    const lines = Object.values(productGroups).filter(slots =>
+      slots.some(slot => (state.slots[slot.id] ?? 0) > 0)
+    ).length;
+
+    const slotsHtml = Object.entries(productGroups).map(([name, slots], i) => {
+      const totalQty  = slots.reduce((a, slot) => a + (state.slots[slot.id] ?? 0), 0);
+      const totalCur  = slots.reduce((a, slot) => a + (slot.current || 0), 0);
+      const par       = slots[0].par || slots[0].capacity || 0;
+      const isPicked  = totalQty === 0;
+      const laneNums  = slots.map(s => s.id).join(', ');
+      const anchorId  = slots[0].id;
+      const needPick  = totalQty > 0;
+      const img       = getProductImg(name, 32);
+
+      return `<div class="psr-wrap${needPick ? ' need-pick' : ''}" id="pick-slot-row-${mid}-${anchorId}">
+        <div class="psr-inner${isPicked ? ' pick-slot-done pick-slot-zero' : ''}" id="psr-inner-${mid}-${anchorId}"
+          style="display:flex;align-items:center;gap:10px;padding:10px 14px">
+          <div style="width:32px;height:32px;flex-shrink:0;border-radius:5px;overflow:hidden;background:var(--surface2);display:flex;align-items:center;justify-content:center">${img}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${name}</div>
+            <div style="font-size:11px;color:var(--muted)">Lanes ${laneNums} · in machine: ${totalCur} · par: ${par}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
+            <button class="pick-qty-btn" data-mid="${mid}" data-slots="${slots.map(s=>s.id).join(',')}" data-delta="-1" data-par="${par}" onclick="pickGroupAdjBtn(this)">−</button>
+            <span class="pick-qty-val" id="pick-need-${mid}-${anchorId}" style="min-width:28px;text-align:center;color:${needPick?'var(--warn)':'var(--accent)'}">${totalQty}</span>
+            <button class="pick-qty-btn" data-mid="${mid}" data-slots="${slots.map(s=>s.id).join(',')}" data-delta="1" data-par="${par}" onclick="pickGroupAdjBtn(this)">+</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+
+    const card = document.createElement('div');
+    card.className = 'pick-machine-card' + (isDone ? ' pick-done' : '');
+    card.id = 'pick-card-' + mid;
+    card.innerHTML = `
+      <div class="pick-machine-header" onclick="togglePickCard('${mid}')">
+        <div class="pick-machine-icon ${isDone ? 'done' : ''}">📦</div>
+        <div class="pick-machine-meta">
+          <div class="pick-machine-id">${mid}</div>
+          <div class="pick-machine-name">${stop.locationName || mid}</div>
+          <div class="pick-machine-count">${lines} products · ${totalUnits} units</div>
+        </div>
+        ${isDone
+          ? '<span class="pill pill-green" style="font-size:10px;flex-shrink:0"><span class="pill-dot"></span>Done</span>'
+          : totalUnits === 0
+            ? '<span class="pill pill-gray" style="font-size:11px;flex-shrink:0">No pick needed</span>'
+            : `<span class="pill pill-orange" style="font-size:11px;flex-shrink:0">${totalUnits} units</span>`}
+        <svg class="pick-chevron" viewBox="0 0 16 16" fill="none" width="14"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="pick-slot-list" id="pick-slots-${mid}" style="display:none">
+        ${slotsHtml}
+        <div class="pick-footer">
+          <div class="toggle-wrap" onclick="toggleHideZero('${mid}')" style="flex-shrink:0">
+            <div class="toggle-track" id="pick-hide-toggle-${mid}"><div class="toggle-knob"></div></div>
+            <span class="toggle-label" style="font-size:11px" id="pick-hide-label-${mid}">Hide no-pick</span>
+          </div>
+          <button class="pick-done-btn ${isDone?'undone':''}" id="pick-done-btn-${mid}" onclick="markPickDone('${mid}')">
+            ${isDone ? 'Undo pick' : '✓ Mark pick complete'}
+          </button>
+        </div>
+      </div>`;
+    container.appendChild(card);
+  });
+  updateStockSummary();
+}
+
+// Adjust quantity across all lanes of the same product
+function pickGroupAdjBtn(btn) {
+  const mid     = btn.dataset.mid;
+  const slotIds = btn.dataset.slots.split(',');
+  const delta   = parseInt(btn.dataset.delta);
+  const maxPar  = parseInt(btn.dataset.par) || 20;
+  pickGroupAdj(mid, slotIds, delta, maxPar);
+}
+
+function pickGroupAdj(mid, slotIds, delta, maxPar) {
+  const state = stockPickState[mid];
+  if (!state) return;
+  // Distribute delta evenly across slots, or apply to first slot with capacity
+  slotIds.forEach(slotId => {
+    const cur  = state.slots[slotId] ?? 0;
+    const stop = STOPS[mid];
+    const slot = stop?.slots.find(s => s.id === slotId);
+    const max  = maxPar || (slot ? (slot.par || slot.capacity || 20) : 20);
+    state.slots[slotId]  = Math.max(0, Math.min(max, cur + delta));
+    state.picked[slotId] = state.slots[slotId];
+  });
+  // Total across all slots in this group
+  const total    = slotIds.reduce((a, id) => a + (state.slots[id] ?? 0), 0);
+  const anchorId = slotIds[0];
+  const el       = document.getElementById('pick-need-' + mid + '-' + anchorId);
+  if (el) { el.textContent = total; el.style.color = total > 0 ? 'var(--warn)' : 'var(--accent)'; }
+  // Update need-pick class on the row for hide filter
+  const row = document.getElementById('pick-slot-row-' + mid + '-' + anchorId);
+  if (row) row.classList.toggle('need-pick', total > 0);
+  updatePickCardHeader(mid);
+  updateStockSummary();
+}
+
+let _buildingStockPick = false;
 function buildStockPick() {
+  if (_buildingStockPick) return;
+  _buildingStockPick = true;
   const container = document.getElementById('stock-machine-list');
-  if (!container) return;
+  if (!container) { _buildingStockPick = false; return; }
+  container.innerHTML = '';
+
+  // Check if any stops are missing slots — load from Firebase first
+  const stopsNeedingSlots = Object.values(STOPS).filter(s => !s.slots || s.slots.length === 0);
+  if (stopsNeedingSlots.length > 0 && fbDb) {
+    container.innerHTML = '<div class="text-muted" style="text-align:center;padding:32px">Loading slot data…</div>';
+    Promise.all(stopsNeedingSlots.map(stop =>
+      fbDb.ref('vynd/dexReadings/' + stop.id + '/last').once('value')
+        .then(snap => {
+          const dex = snap.val();
+          if (dex?.slots) {
+            STOPS[stop.id].slots = Object.entries(dex.slots).map(([id, sl]) => ({
+              id,
+              product:  sl.product  || '',
+              price:    (sl.priceCents || 0) / 100,
+              current:  sl.currentSOH !== null && sl.currentSOH !== undefined ? sl.currentSOH : 0,
+              par:      sl.par      || 10,
+              capacity: sl.capacity || 12,
+              dexVends: sl.vendsSinceLastRead || 0,
+            })).sort((a,b) => String(a.id).localeCompare(String(b.id), undefined, {numeric:true}));
+          }
+        }).catch(() => {})
+    )).then(() => {
+      // Enrich slots with planogram par/capacity from Firebase
+      Promise.all(stopsNeedingSlots.map(stop =>
+        fbDb.ref('vynd/planograms/' + stop.id + '/slots').once('value')
+          .then(snap => {
+            const pog = snap.val() || {};
+            if (STOPS[stop.id].slots) {
+              STOPS[stop.id].slots.forEach(slot => {
+                const p = pog[slot.id];
+                if (p) {
+                  if (p.par      !== undefined) slot.par      = p.par;
+                  if (p.capacity !== undefined) slot.capacity = p.capacity;
+                  if (p.product  && !slot.product) slot.product = p.product;
+                }
+              });
+            }
+            // Reset pick state so it recalculates with correct par
+            delete stockPickState[stop.id];
+          }).catch(() => {})
+      )).then(() => { _buildingStockPick = false; buildStockPickRender(container); });
+    });
+    return;
+  }
+  _buildingStockPick = false;
+  buildStockPickRender(container);
+}
+
+function buildStockPickRender(container) {
   container.innerHTML = '';
   initStockPickState();
+
+  // Apply pick mode UI (without rebuilding)
+  const mode = userPrefs.pickMode || 'lane';
+  const laneBtn    = document.getElementById('pick-mode-lane');
+  const productBtn = document.getElementById('pick-mode-product');
+  if (laneBtn)    { laneBtn.style.background    = mode === 'lane'    ? 'var(--accent)' : 'transparent'; laneBtn.style.color    = mode === 'lane'    ? '#fff' : 'var(--muted)'; }
+  if (productBtn) { productBtn.style.background = mode === 'product' ? 'var(--accent)' : 'transparent'; productBtn.style.color = mode === 'product' ? '#fff' : 'var(--muted)'; }
+  const sub = document.getElementById('stock-pick-sub');
+  if (sub) sub.textContent = (mode === 'product' ? 'Pick by product' : 'Pick by lane') + ' · Route ' + (userPrefs.routeId || 'Dubbo');
+
+  if (mode === 'product') {
+    buildStockPickProduct(container);
+    updateStockSummary();
+    return;
+  }
 
   Object.keys(STOPS).forEach(mid => {
     const stop  = STOPS[mid];
@@ -2766,7 +3189,7 @@ function buildStockPick() {
       const rowStyle = isPrekit ? 'border-left:3px solid var(--accent);background:rgba(74,222,128,.04)'
                      : belowMin ? 'border-left:3px solid var(--warn)' : '';
 
-      return `<div class="psr-wrap need-pick${belowMin?' below-min-pick':''}" id="pick-slot-row-${mid}-${slot.id}" style="${rowStyle}">
+      return `<div class="psr-wrap${(!isPicked || isPrekit) ? ' need-pick' : ''}${belowMin?' below-min-pick':''}${(isPicked && !isPrekit) ? ' hide-zero' : ''}" id="pick-slot-row-${mid}-${slot.id}" style="${rowStyle}">
         <div class="psr-bg" id="psr-bg-${mid}-${slot.id}">
           <svg viewBox="0 0 14 14" fill="none" width="16"><path d="M2 7l3.5 3.5 6.5-6" stroke="#0f1117" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Picked
         </div>
@@ -2852,13 +3275,13 @@ function applyHideZero(mid, on) {
   const track = document.getElementById('pick-hide-toggle-'+mid);
   const label = document.getElementById('pick-hide-label-'+mid);
   if (track) track.classList.toggle('on', on);
-  if (label) label.textContent = on ? 'Showing picks' : 'Hide no-pick';
+  if (label) label.textContent = on ? 'Show all' : 'Hide no-pick';
   const list = document.getElementById('pick-slots-'+mid);
   if (!list) return;
   list.querySelectorAll('.psr-wrap').forEach(wrap => {
-    const isNoPick   = !wrap.classList.contains('need-pick');
-    const isBelowMin = wrap.classList.contains('below-min-pick');
-    wrap.classList.toggle('hide-zero', on && (isNoPick || isBelowMin));
+    const needsPick = wrap.classList.contains('need-pick');
+    // Hide rows that don't need picking when filter is on
+    wrap.classList.toggle('hide-zero', on && !needsPick);
   });
 }
 
@@ -3858,9 +4281,8 @@ async function startCamera() {
   const status  = document.getElementById('scan-status');
   const manWrap = document.getElementById('scan-manual-wrap');
 
-  // Check camera API availability
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    status.textContent = 'Camera not available on this device';
+    status.textContent = 'Camera not available — enter number below';
     if (manWrap) manWrap.style.display = 'block';
     return;
   }
@@ -3870,25 +4292,44 @@ async function startCamera() {
       video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
     });
     video.srcObject = scanStream;
-    video.setAttribute('playsinline', 'true'); // Required for iOS Safari
+    video.setAttribute('playsinline', 'true');
     video.setAttribute('autoplay', 'true');
     video.muted = true;
     await video.play();
 
+    // Try ZXing first (best cross-browser support including iOS Safari)
+    if (window.ZXing) {
+      try {
+        const hints = new Map();
+        const formats = [
+          ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.CODE_39,
+          ZXing.BarcodeFormat.EAN_13,   ZXing.BarcodeFormat.EAN_8,
+          ZXing.BarcodeFormat.UPC_A,    ZXing.BarcodeFormat.UPC_E,
+          ZXing.BarcodeFormat.QR_CODE,  ZXing.BarcodeFormat.DATA_MATRIX,
+          ZXing.BarcodeFormat.ITF,      ZXing.BarcodeFormat.CODABAR,
+        ];
+        hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
+        const reader = new ZXing.MultiFormatReader();
+        reader.setHints(hints);
+        status.textContent = 'Point camera at barcode…';
+        scanLoop_ZXing(video, status, reader);
+        return;
+      } catch(e) { console.warn('ZXing init failed, trying BarcodeDetector', e); }
+    }
+
+    // Fallback: native BarcodeDetector (Chrome/Android)
     if ('BarcodeDetector' in window) {
       scanDetector = new BarcodeDetector({ formats: ['code_128','code_39','ean_13','ean_8','upc_a','upc_e','qr_code','data_matrix'] });
       status.textContent = 'Point camera at barcode…';
       scanLoop(video, status);
-    } else {
-      // iOS Safari — camera shows for visual aid but no auto-detect
-      status.textContent = 'Auto-scan not supported on this browser — enter number below';
-      if (manWrap) { manWrap.style.display = 'block'; }
-      // Focus manual input after short delay
-      setTimeout(() => {
-        const inp = document.getElementById('scan-manual-input');
-        if (inp) inp.focus();
-      }, 400);
+      return;
     }
+
+    // Last resort: show manual entry
+    status.textContent = 'Auto-scan unavailable — enter number below';
+    if (manWrap) manWrap.style.display = 'block';
+    setTimeout(() => { document.getElementById('scan-manual-input')?.focus(); }, 400);
+
   } catch(e) {
     if (e.name === 'NotAllowedError') {
       status.textContent = 'Camera permission denied — enter number below';
@@ -3898,8 +4339,40 @@ async function startCamera() {
       status.textContent = 'Camera unavailable — enter number below';
     }
     if (manWrap) manWrap.style.display = 'block';
-    setTimeout(() => { const inp = document.getElementById('scan-manual-input'); if (inp) inp.focus(); }, 200);
+    setTimeout(() => { document.getElementById('scan-manual-input')?.focus(); }, 200);
   }
+}
+
+// ZXing scan loop — draws video frame to canvas and decodes
+let zxingCanvas = null;
+function scanLoop_ZXing(video, status, reader) {
+  if (!zxingCanvas) {
+    zxingCanvas = document.createElement('canvas');
+  }
+  scanAnimFrame = requestAnimationFrame(() => {
+    try {
+      if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        zxingCanvas.width  = video.videoWidth;
+        zxingCanvas.height = video.videoHeight;
+        const ctx = zxingCanvas.getContext('2d');
+        ctx.drawImage(video, 0, 0);
+        const imageData = ctx.getImageData(0, 0, zxingCanvas.width, zxingCanvas.height);
+        const luminance = new ZXing.RGBLuminanceSource(imageData.data, zxingCanvas.width, zxingCanvas.height);
+        const binary    = new ZXing.HybridBinarizer(luminance);
+        const bitmap    = new ZXing.BinaryBitmap(binary);
+        try {
+          const result = reader.decode(bitmap);
+          if (result) {
+            const val = result.getText();
+            status.textContent = '✓ ' + val;
+            setTimeout(() => applyScanResult(val), 200);
+            return;
+          }
+        } catch(e) {} // NotFoundException is normal — keep scanning
+      }
+    } catch(e) {}
+    scanLoop_ZXing(video, status, reader);
+  });
 }
 
 function scanLoop(video, status) {
@@ -3990,17 +4463,19 @@ async function loadGlobalOpSettings() {
 }
 
 const PREF_DEFAULTS = {
-  hideFilled:     false,
-  hideDoneStops:  false,
-  hideNoPick:     false,
-  faultAlerts:    true,
-  lowStockAlerts: true,
-  individualBags: true,
-  lightMode:      false,
-  driverName:     '',
-  driverEmail:    '',
-  driverId:       '',
-  routeId:        '',
+  hideFilled:      false,
+  hideDoneStops:   false,
+  hideNoPick:      false,
+  faultAlerts:     true,
+  lowStockAlerts:  true,
+  individualBags:  true,
+  fillThumbnails:  true,
+  pickMode:        'lane',
+  lightMode:       false,
+  driverName:      '',
+  driverEmail:     '',
+  driverId:        '',
+  routeId:         '',
 };
 let userPrefs = { ...PREF_DEFAULTS };
 
@@ -4054,13 +4529,13 @@ const SYNC_TO_KEY   = 'vynd_driver_to_portal';
 
 // Paste your Firebase config here (same in both apps)
 const FIREBASE_CONFIG = {
-  apiKey:            "PASTE_YOUR_API_KEY",
-  authDomain:        "PASTE_YOUR_PROJECT_ID.firebaseapp.com",
-  databaseURL:       "https://PASTE_YOUR_PROJECT_ID-default-rtdb.firebaseio.com",
-  projectId:         "PASTE_YOUR_PROJECT_ID",
-  storageBucket:     "PASTE_YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: "PASTE_YOUR_SENDER_ID",
-  appId:             "PASTE_YOUR_APP_ID"
+  apiKey:            "AIzaSyBaOmBRd6bPmvghGFaWNHLNjRrXKkMV6gQ",
+  authDomain:        "vynd-pilot.firebaseapp.com",
+  databaseURL:       "https://vynd-pilot-default-rtdb.firebaseio.com",
+  projectId:         "vynd-pilot",
+  storageBucket:     "vynd-pilot.firebasestorage.app",
+  messagingSenderId: "195432514791",
+  appId:             "1:195432514791:web:a14755a307cdafbb5d0e42"
 };
 
 let fbReady = false;
@@ -4128,8 +4603,12 @@ function applyDriverFbConfig() {
     updateSyncStatus();
     showToast('☁ Firebase connected ✓');
     loadDriverProfileFromFirebase();
+    populateDriverDropdown();
     loadGlobalOpSettings();
-    loadProductsFromFirebase();
+    loadProductsFromFirebase().then(() => loadProductImages().then(() => {
+      // Rebuild stock pick now that images are available
+      if (document.getElementById('stock-machine-list')) buildStockPick();
+    }));
     // Close config panel
     const panel = document.getElementById('fb-config-panel');
     const toggle = document.getElementById('fb-config-toggle');
@@ -4141,43 +4620,72 @@ function applyDriverFbConfig() {
 }
 
 function initFirebase() {
+  if (typeof firebase === 'undefined') {
+    console.error('Firebase SDK not loaded');
+    return;
+  }
   try {
-    if (FIREBASE_CONFIG.apiKey === 'PASTE_YOUR_API_KEY') return; // not configured yet
     if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
     fbDb    = firebase.database();
     fbReady = true;
-    // Listen for portal → driver updates in real time
+    console.log('Firebase connected: vynd-pilot');
+
+    // Real-time listener for portal → driver sync
     fbDb.ref('vynd/' + SYNC_FROM_KEY).on('value', snap => {
       const val = snap.val();
       if (val) {
         try { localStorage.setItem(SYNC_FROM_KEY, val); } catch(e) {}
         updateSyncStatus();
-        // Auto-apply if driver is on the settings screen
-        const settScreen = document.getElementById('screen-settings');
-        if (settScreen && settScreen.classList.contains('active')) {
-          showToast('📥 Portal update received');
-        }
       }
     });
+
+    // Real-time listener on today's runs — catches cancellations instantly
+    const today = new Date().toISOString().split('T')[0];
+    fbDb.ref('vynd/runs').orderByChild('plannedDate').equalTo(today).on('value', snap => {
+      const driverId = userPrefs.driverId || '';
+      if (!driverId) return;
+      let activeRun = null;
+      snap.forEach(child => {
+        const run = child.val();
+        if (run.driverId === driverId && run.status !== 'cancelled' && run.status !== 'complete') {
+          activeRun = { key: child.key, ...run };
+        }
+      });
+      // If current run was cancelled, clear it and reload
+      if (currentRunData && !activeRun) {
+        currentRunData = null;
+        showToast('Run was cancelled by manager');
+        loadHomeScreen();
+      }
+    });
+
     updateSyncStatus();
     updateConnStatus(true);
-    // Load driver profile from Firebase users
     loadDriverProfileFromFirebase();
-    // Load global operational settings (photo/audit freq etc)
+    populateDriverDropdown();
     loadGlobalOpSettings();
-    // Sync product catalogue from Firebase
-    loadProductsFromFirebase();
+    loadProductsFromFirebase().then(() => loadProductImages().then(() => {
+      if (document.getElementById('stock-machine-list')?.children.length > 0) buildStockPick();
+    }));
+    loadHomeScreen();
   } catch(e) {
-    console.warn('Firebase init failed, using localStorage fallback:', e.message);
+    console.error('Firebase init failed:', e.message, e);
+    showToast('Firebase error: ' + e.message);
   }
 }
 
 function updateConnStatus(connected) {
   const dot   = document.getElementById('topbar-sync-dot');
   const label = document.getElementById('topbar-sync-label');
+  const status = document.getElementById('fb-conn-status');
+  const detail = document.getElementById('fb-conn-detail');
   if (connected && fbReady) {
-    // Let updateSyncStatus handle the colour
+    if (status) { status.textContent = '☁ Connected'; status.style.color = 'var(--accent)'; }
+    if (detail) detail.textContent = 'vynd-pilot · real-time sync active';
     updateSyncStatus();
+  } else {
+    if (status) { status.textContent = '⚠ Not connected'; status.style.color = 'var(--warn)'; }
+    if (detail) detail.textContent = 'vynd-pilot · tap Reconnect to retry';
   }
 }
 
@@ -4280,8 +4788,12 @@ async function loadProductsFromFirebase() {
       }
       // Store product data for barcode lookups etc
       PRODUCT_DATA[name] = p;
+      // Cache imageUrl if present
+      if (p.imageUrl) PRODUCT_IMAGES[name] = p.imageUrl;
     });
     ALL_PRODUCTS.sort();
+    // Save image cache to localStorage for offline use
+    try { localStorage.setItem('vynd_product_images', JSON.stringify(PRODUCT_IMAGES)); } catch(e) {}
     console.log('Products synced from Firebase:', ALL_PRODUCTS.length);
   } catch(e) {
     console.warn('Product sync failed:', e.message);
@@ -4680,28 +5192,29 @@ function completeReconciliation(machineId, slots) {
 loadPrefs();
 initStockPickState();
 renderLocations();
-buildStockPick();
 initCash();
 initRouteBagCard();
-loadGlobalOpSettings(); // load photo/audit frequency from management portal settings
-setTimeout(loadHomeScreen, 300);
-// Auto-apply saved Firebase config if present
+loadGlobalOpSettings();
+
+// Load cached product images immediately (works offline)
 try {
-  const savedFb = localStorage.getItem('vynd_fb_config');
-  if (savedFb) {
-    const cfg = JSON.parse(savedFb);
-    if (cfg.apiKey && cfg.apiKey !== 'PASTE_YOUR_API_KEY') {
-      FIREBASE_CONFIG.apiKey        = cfg.apiKey;
-      FIREBASE_CONFIG.authDomain    = cfg.projectId + '.firebaseapp.com';
-      FIREBASE_CONFIG.databaseURL   = cfg.dbUrl;
-      FIREBASE_CONFIG.projectId     = cfg.projectId;
-      FIREBASE_CONFIG.storageBucket = cfg.projectId + '.appspot.com';
-      FIREBASE_CONFIG.appId         = cfg.appId;
-    }
-  }
+  const cached = localStorage.getItem('vynd_product_images');
+  if (cached) Object.assign(PRODUCT_IMAGES, JSON.parse(cached));
 } catch(e) {}
-updateSyncStatus();
-initFirebase();
+
+// Auto-connect to Firebase — credentials hardcoded
+function tryAutoConnect() {
+  if (typeof firebase === 'undefined') {
+    console.warn('Firebase SDK not ready, retrying...');
+    setTimeout(tryAutoConnect, 300);
+    return;
+  }
+  console.log('Firebase SDK ready, connecting...');
+  initFirebase();
+}
+// Small delay to ensure DOM is fully ready
+setTimeout(tryAutoConnect, 100);
+
 // Show initial pick/photo/audit status on route cards
 Object.keys(STOPS).forEach(mid => {
   updateStopPickPill(mid);

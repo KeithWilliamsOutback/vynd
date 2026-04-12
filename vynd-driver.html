@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="theme-color" content="#0f1117">
@@ -452,7 +453,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
     <button class="nav-btn" onclick="navTo('screen-locations',this)">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="10" r="3" stroke="currentColor" stroke-width="1.8"/><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>Locations
     </button>
-    <button class="nav-btn" onclick="navTo('screen-stock',this)">
+    <button class="nav-btn" style="display:none" onclick="navTo('screen-stock',this)">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none"><rect x="2" y="7" width="20" height="14" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Stock
     </button>
     <button class="nav-btn" onclick="navTo('screen-cash',this)">
@@ -533,9 +534,15 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
 
     <div class="row" style="align-items:center">
       <div class="section-hd">Fill guide</div>
-      <div class="toggle-wrap" onclick="toggleFilledLanes()">
-        <div class="toggle-track" id="fill-toggle"><div class="toggle-knob"></div></div>
-        <span class="toggle-label" id="fill-toggle-lbl">Hide filled</span>
+      <div style="display:flex;gap:8px;align-items:center">
+        <div class="toggle-wrap" onclick="toggleUnpickedSlots()" id="unpicked-toggle-wrap" style="display:none">
+          <div class="toggle-track" id="unpicked-toggle"><div class="toggle-knob"></div></div>
+          <span class="toggle-label" id="unpicked-toggle-lbl">Show all</span>
+        </div>
+        <div class="toggle-wrap" onclick="toggleFilledLanes()">
+          <div class="toggle-track" id="fill-toggle"><div class="toggle-knob"></div></div>
+          <span class="toggle-label" id="fill-toggle-lbl">Hide filled</span>
+        </div>
       </div>
     </div>
 
@@ -664,7 +671,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
     <button class="nav-btn active" onclick="navTo('screen-locations',this)">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="10" r="3" stroke="currentColor" stroke-width="1.8"/><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>Locations
     </button>
-    <button class="nav-btn" onclick="navTo('screen-stock',this)">
+    <button class="nav-btn" style="display:none" onclick="navTo('screen-stock',this)">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none"><rect x="2" y="7" width="20" height="14" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Stock
     </button>
     <button class="nav-btn" onclick="navTo('screen-cash',this)">
@@ -804,7 +811,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
     <button class="nav-btn" onclick="navTo('screen-locations',this)">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="10" r="3" stroke="currentColor" stroke-width="1.8"/><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>Locations
     </button>
-    <button class="nav-btn" onclick="navTo('screen-stock',this)">
+    <button class="nav-btn" style="display:none" onclick="navTo('screen-stock',this)">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none"><rect x="2" y="7" width="20" height="14" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Stock
     </button>
     <button class="nav-btn active" onclick="navTo('screen-cash',this)">
@@ -898,26 +905,6 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
         <div class="pref-info"><div class="pref-title">Hide completed stops by default</div><div class="pref-desc">Automatically hide stops marked as done on the route screen</div></div>
         <div class="toggle-wrap" onclick="togglePref('hideDoneStops',this)"><div class="toggle-track" id="pref-hideDoneStops"><div class="toggle-knob"></div></div></div>
       </div>
-      <div class="divider"></div>
-      <div class="pref-row">
-        <div class="pref-info"><div class="pref-title">Hide no-pick lines by default</div><div class="pref-desc">On the stock pick screen, automatically hide products that don't need picking</div></div>
-        <div class="toggle-wrap" onclick="togglePref('hideNoPick',this)"><div class="toggle-track" id="pref-hideNoPick"><div class="toggle-knob"></div></div></div>
-      </div>
-    </div>
-    <div class="section-hd">Stock pick</div>
-    <div class="card" style="cursor:default">
-      <div class="pref-row">
-        <div class="pref-info">
-          <div class="pref-title">Pick mode</div>
-          <div class="pref-desc">Lane — pick slot by slot per machine. Product — group same products across all machines.</div>
-        </div>
-        <div style="display:flex;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:3px;gap:2px">
-          <button id="pref-pick-lane" onclick="setPickMode('lane')"
-            style="font-size:11px;font-weight:600;padding:4px 10px;border-radius:16px;border:none;cursor:pointer;transition:all .15s">Lane</button>
-          <button id="pref-pick-product" onclick="setPickMode('product')"
-            style="font-size:11px;font-weight:600;padding:4px 10px;border-radius:16px;border:none;cursor:pointer;transition:all .15s">Product</button>
-        </div>
-      </div>
     </div>
     <div class="section-hd">Fill guide</div>
     <div class="card" style="cursor:default">
@@ -997,7 +984,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
     <button class="nav-btn" onclick="navTo('screen-locations',this)">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="10" r="3" stroke="currentColor" stroke-width="1.8"/><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>Locations
     </button>
-    <button class="nav-btn" onclick="navTo('screen-stock',this)">
+    <button class="nav-btn" style="display:none" onclick="navTo('screen-stock',this)">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none"><rect x="2" y="7" width="20" height="14" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Stock
     </button>
     <button class="nav-btn" onclick="navTo('screen-cash',this)">
@@ -1196,23 +1183,35 @@ function getMachineData(id) {
 let currentRunData = null;
 
 async function loadHomeScreen() {
+  // Update greeting
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const firstName = (userPrefs.driverName || '').split(' ')[0] || 'Driver';
+  const greetEl = document.getElementById('home-greeting');
+  if (greetEl) greetEl.textContent = greeting + ', ' + firstName;
+
   // Try to load today's run from Firebase
-  if (typeof firebase !== 'undefined' && firebase.apps?.length) {
+  if (typeof firebase !== 'undefined' && firebase.apps?.length && fbReady) {
     try {
       const db       = firebase.database();
       const today    = new Date().toISOString().split('T')[0];
-      const driverId = userPrefs.driverId || 'jake';
+      const driverId = userPrefs.driverId;
 
-      // Find today's run for this driver
-      const runsSnap = await db.ref('vynd/runs')
-        .orderByChild('plannedDate')
-        .equalTo(today)
-        .once('value');
+      if (!driverId) {
+        // No driver selected — show prompt
+        showNoDriverPrompt();
+        return;
+      }
 
+      // Fetch all runs and filter client-side (avoids index requirement)
+      const runsSnap = await db.ref('vynd/runs').once('value');
       let todayRun = null;
       runsSnap.forEach(child => {
         const run = child.val();
-        if (run.driverId === driverId && run.status !== 'cancelled') {
+        if (run.plannedDate === today &&
+            run.driverId   === driverId &&
+            run.status     !== 'cancelled' &&
+            run.status     !== 'complete') {
           todayRun = { key: child.key, ...run };
         }
       });
@@ -1220,18 +1219,19 @@ async function loadHomeScreen() {
       if (todayRun) {
         currentRunData = todayRun;
 
-        // Load stop data for each machine in the run
+        // Update header
+        const routeEl = document.getElementById('home-route-label');
+        if (routeEl) routeEl.textContent = 'Route ' + (todayRun.routeId || '');
+
+        // Load DEX data for each stop
         const stopPromises = todayRun.stops.map(stop =>
           db.ref('vynd/dexReadings/' + stop.id + '/last').once('value')
             .then(snap => ({ stop, dex: snap.val() }))
             .catch(() => ({ stop, dex: null }))
         );
-
         const stopData = await Promise.all(stopPromises);
 
-        // Merge into STOPS
         stopData.forEach(({ stop, dex }) => {
-          // Get machine details — local seed first, Firebase machineMeta enriches
           const seed = MACHINE_META_DRIVER[stop.id] || {};
           if (!STOPS[stop.id]) {
             STOPS[stop.id] = {
@@ -1240,7 +1240,7 @@ async function loadHomeScreen() {
               locationName: seed.locationName || stop.name || stop.id,
               addr:         seed.addr         || '',
               cash:         '—',
-              cashType:     seed.cashType     || 'cash',
+              cashType:     seed.cashType     || MACHINE_META_DRIVER[stop.id]?.cashType || 'cash',
               status:       stop.status       || 'pending',
               fault:        false,
               lastService:  '—',
@@ -1250,7 +1250,6 @@ async function loadHomeScreen() {
               slots:        [],
             };
           } else {
-            // Update status from run
             STOPS[stop.id].status = stop.status || STOPS[stop.id].status;
           }
           if (dex?.slots) {
@@ -1258,7 +1257,7 @@ async function loadHomeScreen() {
               id,
               product:  s.product  || '',
               price:    (s.priceCents || 0) / 100,
-              current:  s.currentSOH || 0,
+              current:  s.currentSOH ?? 0,
               par:      s.par        || 10,
               capacity: s.capacity   || 12,
               dexVends: s.vendsSinceLastRead || 0,
@@ -1272,22 +1271,34 @@ async function loadHomeScreen() {
         updateHomeProgress(todayRun.stops);
         return;
       }
+
+      // Logged in but no run today
+      showNoRunToday();
+      return;
+
     } catch(e) {
       console.warn('Firebase run load failed:', e.message);
     }
   }
 
-  // Fallback — show real machines without an active run, in route order
-  const DUBBO_ORDER = ['10420767', '76581280', '1383968', '42097963'];
-  const demoStops = DUBBO_ORDER
-    .filter(id => MACHINE_META_DRIVER[id])
-    .map((id, i) => ({
-      id, name: MACHINE_META_DRIVER[id].locationName,
-      serviceOrder: i + 1,
-      status: STOPS[id]?.status || 'pending',
-    }));
-  renderHomeStops(demoStops);
-  updateHomeProgress(demoStops);
+  // Not connected or no driverId — show fallback machines
+  if (!userPrefs.driverId) {
+    showNoDriverPrompt();
+    return;
+  }
+  showNoRunToday();
+}
+
+function showNoDriverPrompt() {
+  const list = document.getElementById('home-stop-list');
+  if (list) list.innerHTML = '<div style="text-align:center;padding:48px 24px;color:var(--muted)"><div style="font-size:32px;margin-bottom:12px">👤</div><div style="font-size:15px;font-weight:600;margin-bottom:8px">Who are you?</div><div style="font-size:13px;margin-bottom:20px">Go to Settings and select your name to load your run.</div><button class="btn btn-primary" onclick="navTo(\'screen-settings\',null)">Go to Settings</button></div>';
+  const greetEl = document.getElementById('home-greeting');
+  if (greetEl) greetEl.textContent = 'Welcome to VYND';
+}
+
+function showNoRunToday() {
+  const list = document.getElementById('home-stop-list');
+  if (list) list.innerHTML = '<div style="text-align:center;padding:48px 24px;color:var(--muted)"><div style="font-size:32px;margin-bottom:12px">📅</div><div style="font-size:15px;font-weight:600;margin-bottom:8px">No run scheduled today</div><div style="font-size:13px;margin-bottom:20px">Check with your manager to schedule a run.</div><button class="btn btn-secondary btn-sm" onclick="loadHomeScreen()">↺ Check again</button></div>';
 }
 
 function renderHomeStops(stops) {
@@ -1415,33 +1426,109 @@ function navTo(screenId, btn) {
 // STOCK PICK STATE
 // ══════════════════════════════════════
 const stockPickState = {};
+let PICK_STOPS = {}; // Stops from the NEXT scheduled run (for pre-picking)
+let pickRunData = null; // The run being picked for
 
-function initStockPickState() {
-  Object.keys(STOPS).forEach(mid => {
+async function loadNextRunForPick() {
+  // Find the next scheduled (non-cancelled, non-complete) run for this driver
+  // Could be today's run (if no active run) or tomorrow's
+  if (!fbDb || !userPrefs.driverId) return;
+
+  const today    = new Date().toISOString().split('T')[0];
+  const driverId = userPrefs.driverId;
+
+  const snap = await fbDb.ref('vynd/runs').once('value').catch(() => null);
+  if (!snap) return;
+
+  let nextRun = null;
+  snap.forEach(child => {
+    const run = child.val();
+    if (run.driverId !== driverId) return;
+    if (run.status === 'cancelled' || run.status === 'complete') return;
+    if (run.plannedDate < today) return; // skip past runs
+    // Pick the earliest upcoming run
+    if (!nextRun || run.plannedDate < nextRun.plannedDate) {
+      nextRun = { key: child.key, ...run };
+    }
+  });
+
+  if (!nextRun) return;
+  pickRunData = nextRun;
+
+  // Update stock screen subtitle
+  const sub = document.getElementById('stock-pick-sub');
+  const isNextDay = nextRun.plannedDate !== today;
+  if (sub) sub.textContent = (isNextDay ? 'Picking for tomorrow · ' : 'Picking for today · ') + 'Route ' + (nextRun.routeId || 'Dubbo');
+
+  // Load slot data for each stop in the pick run
+  const promises = nextRun.stops.map(stop =>
+    Promise.all([
+      fbDb.ref('vynd/dexReadings/' + stop.id + '/last').once('value').catch(() => null),
+      fbDb.ref('vynd/planograms/' + stop.id + '/slots').once('value').catch(() => null),
+    ]).then(([dexSnap, pogSnap]) => {
+      const dex = dexSnap?.val();
+      const pog = pogSnap?.val() || {};
+      const seed = MACHINE_META_DRIVER[stop.id] || {};
+
+      if (!PICK_STOPS[stop.id]) {
+        PICK_STOPS[stop.id] = {
+          id:           stop.id,
+          locationName: seed.locationName || stop.name || stop.id,
+          slots:        [],
+          serviceOrder: stop.serviceOrder,
+        };
+      }
+
+      if (dex?.slots) {
+        PICK_STOPS[stop.id].slots = Object.entries(dex.slots).map(([id, sl]) => {
+          const p = pog[id] || {};
+          return {
+            id,
+            product:  sl.product  || p.product  || '',
+            price:    (sl.priceCents || 0) / 100,
+            current:  sl.currentSOH ?? 0,
+            par:      p.par      ?? sl.par      ?? 10,
+            capacity: p.capacity ?? sl.capacity ?? 12,
+            dexVends: sl.vendsSinceLastRead || 0,
+          };
+        }).sort((a, b) => String(a.id).localeCompare(String(b.id), undefined, { numeric: true }));
+      }
+    })
+  );
+  await Promise.all(promises);
+}
+
+function initStockPickState(pickSource) {
+  pickSource = pickSource || STOPS;
+  Object.keys(pickSource).forEach(mid => {
     if (!stockPickState[mid]) {
       stockPickState[mid] = { done: false, slots: {}, picked: {}, original: {}, belowMinPick: {}, prekitSlots: {} };
-      STOPS[mid].slots.forEach(slot => {
-        const par  = slot.par || slot.capacity || 0;
-        const need = Math.max(0, par - slot.current);
+      (pickSource[mid].slots || []).forEach(slot => {
+        const par     = slot.par || slot.capacity || 0;
+        const current = slot.current != null ? slot.current : 0;
 
         // Prekit override: always pick par, spoil all current
         if (slot.prekit) {
-          stockPickState[mid].slots[slot.id]      = par;
-          stockPickState[mid].picked[slot.id]     = par;
-          stockPickState[mid].original[slot.id]   = par;
+          stockPickState[mid].slots[slot.id]       = par;
+          stockPickState[mid].picked[slot.id]      = par;
+          stockPickState[mid].original[slot.id]    = par;
           stockPickState[mid].prekitSlots[slot.id] = true;
           return;
         }
 
-        // Min pick threshold check
-        const unitsSold = slot.dexVends !== undefined ? slot.dexVends : (par - slot.current);
-        let threshold = 0;
-        if (slot.minPick) {
-          threshold = slot.minPick.mode === 'pct'
-            ? Math.ceil(par * slot.minPick.value / 100)
-            : slot.minPick.value;
-        }
-        const belowMin = slot.minPick && unitsSold < threshold;
+        // Look up product settings from PRODUCT_DATA (same source as portal)
+        const prodData       = PRODUCT_DATA[slot.product] || {};
+        const overridePar    = prodData.overridePar    || slot.overridePar    || false;
+        const minPickEnabled = prodData.minPickEnabled || slot.minPickEnabled || false;
+        const minPickMode    = prodData.minPickMode    || 'pct';
+        const minPickPct     = prodData.minPickPct     || 0;
+        const minPickUnits   = prodData.minPickUnits   || 0;
+        const threshold      = minPickMode === 'units' ? minPickUnits : Math.round(par * minPickPct / 100);
+
+        // Override par: always pick to par regardless of SOH
+        const need       = overridePar ? par : Math.max(0, par - current);
+        const unitsSold  = slot.dexVends != null ? slot.dexVends : Math.max(0, par - current);
+        const belowMin   = minPickEnabled && need > 0 && unitsSold < threshold;
 
         stockPickState[mid].slots[slot.id]        = belowMin ? 0 : need;
         stockPickState[mid].picked[slot.id]       = belowMin ? 0 : need;
@@ -1459,8 +1546,11 @@ function initStockPickState() {
 function getPickedQty(machineId, slotId, slot) {
   const state = stockPickState[machineId];
   if (state && state.picked && state.picked[slotId] !== undefined) return state.picked[slotId];
-  if (state && state.slots[slotId] !== undefined) return state.slots[slotId];
-  return Math.max(0, (slot.par || slot.capacity || 0) - slot.current);
+  if (state && state.slots  && state.slots[slotId]  !== undefined) return state.slots[slotId];
+  const par        = slot.par || slot.capacity || 0;
+  const prodData   = PRODUCT_DATA[slot.product] || {};
+  const overridePar = prodData.overridePar || false;
+  return overridePar ? par : Math.max(0, par - (slot.current || 0));
 }
 
 // ══════════════════════════════════════
@@ -1470,14 +1560,135 @@ let stopSlotState = {};
 let currentStopId = null;
 let hideFilledOn = false;
 
-function showStop(machineId) {
+async function showStop(machineId) {
   const s = STOPS[machineId];
   currentStopId = machineId;
   stopSlotState = {};
 
+  // Load pick quantities from portal export — portal decides what gets picked
+  const runDate = (currentRunData && currentRunData.plannedDate)
+    ? currentRunData.plannedDate
+    : new Date().toISOString().split('T')[0];
+
+  // Load live slot SOH from Firebase
+  let slotSOH    = {}; // slotId → currentSOH
+  let slotVends  = {}; // slotId → vendsSinceLastRead
+  if (fbDb) {
+    try {
+      const dexSnap = await fbDb.ref('vynd/dexReadings/' + machineId + '/last/slots').once('value');
+      if (dexSnap && dexSnap.val()) {
+        Object.entries(dexSnap.val()).forEach(([id, sl]) => {
+          if (sl.currentSOH    != null) slotSOH[id]   = sl.currentSOH;
+          if (sl.vendsSinceLastRead != null) slotVends[id] = sl.vendsSinceLastRead;
+        });
+      }
+      const pogSnap = await fbDb.ref('vynd/planograms/' + machineId + '/slots').once('value');
+      if (pogSnap && pogSnap.val()) {
+        Object.entries(pogSnap.val()).forEach(([id, sl]) => {
+          if (slotSOH[id] == null) {
+            const soh = sl.currentSOH ?? sl.current;
+            if (soh != null) slotSOH[id] = soh;
+          }
+        });
+      }
+    } catch(e) { console.warn('SOH load:', e.message); }
+  }
+
+  // Load portal pick export — this is the source of truth for what was picked
+  let exportByProduct = {}; // productName → pickQty from portal
+  let hasExport = false;
+  if (fbDb) {
+    try {
+      const dateKey  = runDate.replace(/-/g,'');
+      const routeId  = currentRunData?.routeId || '';
+      for (const key of [dateKey + '_' + routeId, dateKey + '_all']) {
+        if (!key.includes('_')) continue;
+        const snap = await fbDb.ref('vynd/pickExports/' + key).once('value');
+        const data = snap.val();
+        if (data && data.lockedLines && data.lockedLines.length > 0) {
+          data.lockedLines
+            .filter(l => l.machineId === machineId)
+            .forEach(l => {
+              const qty = Math.max(0, l.pickQty - (l.shortSupply || 0));
+              exportByProduct[l.product] = (exportByProduct[l.product] || 0) + qty;
+            });
+          hasExport = true;
+          break;
+        }
+      }
+    } catch(e) { console.warn('Export load:', e.message); }
+  }
+
+  // Distribute export quantities across slots (emptiest first, up to par)
+  // Products not on the pick list get 0 — filler knows not to add them
+  const slotPicked = {}; // slotId → qty to fill
+
+  if (hasExport) {
+    // Group slots by product
+    const slotsByProduct = {};
+    s.slots.forEach(sl => {
+      if (!sl.product || sl.product === 'Empty' || sl.overflow) return;
+      if (!slotsByProduct[sl.product]) slotsByProduct[sl.product] = [];
+      slotsByProduct[sl.product].push(sl);
+    });
+
+    Object.entries(slotsByProduct).forEach(([product, slots]) => {
+      const totalPick = exportByProduct[product] || 0;
+      if (totalPick === 0) {
+        // Not on pick list — filler has no stock for this product
+        slots.forEach(sl => { slotPicked[sl.id] = 0; });
+        return;
+      }
+      // Distribute to emptiest slots first
+      const sorted = [...slots].sort((a, b) => {
+        const sohA = slotSOH[a.id] ?? a.current ?? 0;
+        const sohB = slotSOH[b.id] ?? b.current ?? 0;
+        return sohA - sohB;
+      });
+      let remaining = totalPick;
+      sorted.forEach(sl => {
+        const par     = sl.par || sl.capacity || 0;
+        const current = slotSOH[sl.id] ?? sl.current ?? 0;
+        const need    = Math.max(0, par - current);
+        const give    = Math.min(need, remaining);
+        slotPicked[sl.id] = give;
+        remaining -= give;
+      });
+    });
+  } else {
+    // No export — apply same min-pick filtering as portal so fill guide matches
+    s.slots.forEach(sl => {
+      if (!sl.product || sl.product === 'Empty' || sl.overflow) return;
+      const par        = sl.par || sl.capacity || 0;
+      const current    = slotSOH[sl.id] ?? sl.current ?? 0;
+      const prodData   = PRODUCT_DATA[sl.product] || {};
+      const overridePar    = prodData.overridePar    || false;
+      const minPickEnabled = prodData.minPickEnabled || false;
+      const minPickMode    = prodData.minPickMode    || 'pct';
+      const minPickPct     = prodData.minPickPct     || 0;
+      const minPickUnits   = prodData.minPickUnits   || 0;
+      const threshold      = minPickMode === 'units' ? minPickUnits : Math.round(par * minPickPct / 100);
+      const need           = overridePar ? par : Math.max(0, par - current);
+      // Use actual DEX vends if available — more accurate than par-SOH proxy
+      const unitsSold      = slotVends[sl.id] != null ? slotVends[sl.id] : Math.max(0, par - current);
+      const belowMin       = minPickEnabled && need > 0 && unitsSold < threshold;
+      slotPicked[sl.id]    = belowMin ? 0 : need;
+    });
+  }
+
   s.slots.forEach(sl => {
-    const picked = getPickedQty(machineId, sl.id, sl);
-    stopSlotState[sl.id] = { added: picked, spoilt: 0, damaged: 0 };
+    if (sl.overflow) {
+      stopSlotState[sl.id] = { added: 0, spoilt: 0, damaged: 0, notOnPick: true };
+      return;
+    }
+    const noProduct = !sl.product || sl.product === 'Empty';
+    const qty = noProduct ? 0 : (slotPicked[sl.id] ?? 0);
+    stopSlotState[sl.id] = {
+      added:     qty,
+      spoilt:    0,
+      damaged:   0,
+      notOnPick: qty === 0 && !noProduct,
+    };
   });
 
   hideFilledOn = userPrefs.hideFilled || false;
@@ -1655,7 +1866,8 @@ function buildPlanogram(s) {
       stopSlotState[slot.id].added  = par;
     }
 
-    const isFull = isPrekit ? false : (current >= par);
+    const isFull      = isPrekit ? false : (current >= par);
+    const notOnPick   = !!stopSlotState[slot.id]?.notOnPick;
 
     // Price mismatch: DEX price from machine vs VMS price
     const hasDex      = slot.dexPrice !== undefined;
@@ -1857,10 +2069,26 @@ function buildPlanogram(s) {
     container.appendChild(row);
 
     if (hideFilledOn && isFull && !isPrekit) row.classList.add('fg-hidden');
+    if (notOnPick) {
+      row.classList.add('fg-hidden');
+      row.classList.add('not-on-pick');
+    }
   });
 
   // Attach swipe after DOM is built
   s.slots.forEach(slot => attachFgSwipe(slot.id, slot.par || slot.capacity || 12, slot.capacity || 12, slot.current));
+
+  // Show "Show all" toggle if any slots are hidden due to not being on pick list
+  showUnpickedOn = false;
+  const unpickedCount = s.slots.filter(sl => stopSlotState[sl.id]?.notOnPick).length;
+  const unpickedWrap  = document.getElementById('unpicked-toggle-wrap');
+  const unpickedTrack = document.getElementById('unpicked-toggle');
+  const unpickedLabel = document.getElementById('unpicked-toggle-lbl');
+  if (unpickedWrap) {
+    unpickedWrap.style.display = unpickedCount > 0 ? '' : 'none';
+    if (unpickedTrack) unpickedTrack.classList.remove('on');
+    if (unpickedLabel) unpickedLabel.textContent = 'Show all';
+  }
 }
 
 // ══════════════════════════════════════
@@ -2188,6 +2416,18 @@ function updateWasteSummary() {
     </div>`).join('');
 }
 
+let showUnpickedOn = false;
+function toggleUnpickedSlots() {
+  showUnpickedOn = !showUnpickedOn;
+  const track = document.getElementById('unpicked-toggle');
+  const label = document.getElementById('unpicked-toggle-lbl');
+  if (track) track.classList.toggle('on', showUnpickedOn);
+  if (label) label.textContent = showUnpickedOn ? 'Pick list only' : 'Show all';
+  document.querySelectorAll('.fg-row.not-on-pick').forEach(row => {
+    row.classList.toggle('fg-hidden', !showUnpickedOn);
+  });
+}
+
 function toggleFilledLanes() {
   hideFilledOn = !hideFilledOn;
   const track = document.getElementById('fill-toggle');
@@ -2319,64 +2559,73 @@ function setFilter(f, btn) {
 
 function renderLocations() {
   const container = document.getElementById('locations-list');
+  if (!container) return;
   container.innerHTML = '';
-  LOCATIONS.forEach(site => {
+
+  const siteMap = {};
+  const source = Object.keys(STOPS).length > 0 ? STOPS : MACHINE_META_DRIVER;
+  Object.values(source).forEach(m => {
+    if (m.id === 'M-001') return;
+    const siteName = m.customer || m.locationName || m.id;
+    if (!siteMap[siteName]) siteMap[siteName] = { site: siteName, machines: [] };
+    siteMap[siteName].machines.push({
+      id:     m.id,
+      name:   m.locationName || m.id,
+      addr:   m.addr || '',
+      routed: !!(currentRunData && currentRunData.stops && currentRunData.stops.some(s => s.id === m.id)),
+      fault:  STOPS[m.id] && STOPS[m.id].fault || false,
+      status: STOPS[m.id] && STOPS[m.id].status || 'pending',
+    });
+  });
+
+  const sites = Object.values(siteMap);
+  if (!sites.length) {
+    container.innerHTML = '<div class="text-muted" style="text-align:center;padding:40px">No locations — connect to Firebase</div>';
+    return;
+  }
+
+  sites.forEach(site => {
     let machines = site.machines;
-    if (activeFilter==='today')     machines = machines.filter(m=>m.routed);
-    if (activeFilter==='not-today') machines = machines.filter(m=>!m.routed);
-    if (activeFilter==='fault')     machines = machines.filter(m=>m.fault);
+    if (activeFilter === 'today')     machines = machines.filter(m => m.routed);
+    if (activeFilter === 'not-today') machines = machines.filter(m => !m.routed);
+    if (activeFilter === 'fault')     machines = machines.filter(m => m.fault);
     if (!machines.length) return;
 
     const siteEl = document.createElement('div');
     siteEl.className = 'site-group';
-    siteEl.innerHTML = `<div class="site-header">
-      <div class="site-icon">🏢</div>
-      <div class="site-name">${site.site}</div>
-      <div class="site-count">${machines.length} machine${machines.length>1?'s':''}</div>
-    </div>`;
+    const hdr = document.createElement('div');
+    hdr.className = 'site-header';
+    hdr.innerHTML = '<div class="site-icon">🏢</div><div class="site-name">' + site.site + '</div><div class="site-count">' + machines.length + ' machine' + (machines.length > 1 ? 's' : '') + '</div>';
+    siteEl.appendChild(hdr);
 
     machines.forEach(m => {
-      const fullData = getMachineData(m.id) || m;
-      const slots = fullData.slots || [];
-      const criticalSlots = slots.filter(s=>s.current/(s.capacity||1)<0.25).length;
-      const lowSlots = slots.filter(s=>{ const p=s.current/(s.capacity||1); return p>=0.25&&p<0.5; }).length;
+      const slots         = (STOPS[m.id] && STOPS[m.id].slots) || [];
+      const criticalSlots = slots.filter(s => s.current / (s.capacity || 1) < 0.25).length;
+      const lowSlots      = slots.filter(s => { const p = s.current / (s.capacity || 1); return p >= 0.25 && p < 0.5; }).length;
 
       const statusPill = m.fault
-        ? `<span class="pill pill-orange" style="font-size:10px"><span class="pill-dot"></span>Fault</span>`
-        : m.status==='done'
-          ? `<span class="pill pill-green" style="font-size:10px"><span class="pill-dot"></span>Done</span>`
+        ? '<span class="pill pill-orange" style="font-size:10px"><span class="pill-dot"></span>Fault</span>'
+        : m.status === 'done'
+          ? '<span class="pill pill-green" style="font-size:10px"><span class="pill-dot"></span>Done</span>'
           : m.routed
-            ? `<span class="pill pill-blue" style="font-size:10px"><span class="pill-dot"></span>On route</span>`
-            : `<span class="pill pill-gray" style="font-size:10px">Not today</span>`;
+            ? '<span class="pill pill-blue" style="font-size:10px"><span class="pill-dot"></span>On route</span>'
+            : '<span class="pill pill-gray" style="font-size:10px">Not today</span>';
 
-      const stockLine = criticalSlots>0
-        ? `<span style="font-size:11px;color:var(--danger)">● ${criticalSlots} critical</span>`
-        : lowSlots>0
-          ? `<span style="font-size:11px;color:var(--warn)">● ${lowSlots} low</span>`
-          : `<span style="font-size:11px;color:var(--accent)">● Stock OK</span>`;
+      const stockLine = criticalSlots > 0
+        ? '<span style="font-size:11px;color:var(--danger)">● ' + criticalSlots + ' critical</span>'
+        : lowSlots > 0
+          ? '<span style="font-size:11px;color:var(--warn)">● ' + lowSlots + ' low</span>'
+          : '<span style="font-size:11px;color:var(--accent)">● Stock OK</span>';
 
       const mEl = document.createElement('div');
       mEl.className = 'machine-item';
-      mEl.innerHTML = `
-        <div class="machine-icon ${m.routed?'routed':'idle'}">${m.routed?'🚚':'📍'}</div>
-        <div class="machine-meta">
-          <div class="machine-id">${m.id} · ${m.type}</div>
-          <div class="machine-loc">${m.name}</div>
-          <div class="machine-sub">${m.customer} · ${m.lastService}</div>
-        </div>
-        <div class="machine-right">${statusPill}${stockLine}</div>`;
-      mEl.onclick = () => openManage(m.id, site.site);
+      mEl.innerHTML = '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600">' + m.name + '</div><div style="font-size:11px;color:var(--muted)">' + (m.addr || m.id) + '</div><div style="margin-top:4px">' + stockLine + '</div></div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">' + statusPill + '</div>';
+      mEl.onclick = () => showStop(m.id);
       siteEl.appendChild(mEl);
     });
     container.appendChild(siteEl);
   });
 }
-
-// ══════════════════════════════════════
-// MACHINE MANAGE
-// ══════════════════════════════════════
-let currentMachine = null;
-const invRemovals  = {};
 
 function openManage(machineId, siteName) {
   const base = getMachineData(machineId);
@@ -2969,9 +3218,10 @@ function setPickMode(mode) {
   if (sub) sub.textContent = (mode === 'product' ? 'Pick by product' : 'Pick by lane') + ' · Route ' + (userPrefs.routeId || 'Dubbo');
 }
 
-function buildStockPickProduct(container) {
-  Object.keys(STOPS).forEach(mid => {
-    const stop  = STOPS[mid];
+function buildStockPickProduct(container, pickSource) {
+  pickSource = pickSource || PICK_STOPS || STOPS;
+  Object.keys(pickSource).forEach(mid => {
+    const stop  = pickSource[mid];
     const state = stockPickState[mid];
     if (!state) return;
 
@@ -3074,6 +3324,7 @@ function pickGroupAdj(mid, slotIds, delta, maxPar) {
     const max  = maxPar || (slot ? (slot.par || slot.capacity || 20) : 20);
     state.slots[slotId]  = Math.max(0, Math.min(max, cur + delta));
     state.picked[slotId] = state.slots[slotId];
+    if (stopSlotState[slotId] !== undefined) stopSlotState[slotId].added = state.slots[slotId];
   });
   // Total across all slots in this group
   const total    = slotIds.reduce((a, id) => a + (state.slots[id] ?? 0), 0);
@@ -3093,58 +3344,93 @@ function buildStockPick() {
   _buildingStockPick = true;
   const container = document.getElementById('stock-machine-list');
   if (!container) { _buildingStockPick = false; return; }
-  container.innerHTML = '';
+  container.innerHTML = '<div class="text-muted" style="text-align:center;padding:32px">Loading pick list...</div>';
 
-  // Check if any stops are missing slots — load from Firebase first
-  const stopsNeedingSlots = Object.values(STOPS).filter(s => !s.slots || s.slots.length === 0);
-  if (stopsNeedingSlots.length > 0 && fbDb) {
-    container.innerHTML = '<div class="text-muted" style="text-align:center;padding:32px">Loading slot data…</div>';
-    Promise.all(stopsNeedingSlots.map(stop =>
-      fbDb.ref('vynd/dexReadings/' + stop.id + '/last').once('value')
-        .then(snap => {
-          const dex = snap.val();
-          if (dex?.slots) {
-            STOPS[stop.id].slots = Object.entries(dex.slots).map(([id, sl]) => ({
-              id,
-              product:  sl.product  || '',
-              price:    (sl.priceCents || 0) / 100,
-              current:  sl.currentSOH !== null && sl.currentSOH !== undefined ? sl.currentSOH : 0,
-              par:      sl.par      || 10,
-              capacity: sl.capacity || 12,
-              dexVends: sl.vendsSinceLastRead || 0,
-            })).sort((a,b) => String(a.id).localeCompare(String(b.id), undefined, {numeric:true}));
-          }
-        }).catch(() => {})
-    )).then(() => {
-      // Enrich slots with planogram par/capacity from Firebase
-      Promise.all(stopsNeedingSlots.map(stop =>
-        fbDb.ref('vynd/planograms/' + stop.id + '/slots').once('value')
-          .then(snap => {
-            const pog = snap.val() || {};
-            if (STOPS[stop.id].slots) {
-              STOPS[stop.id].slots.forEach(slot => {
-                const p = pog[slot.id];
-                if (p) {
-                  if (p.par      !== undefined) slot.par      = p.par;
-                  if (p.capacity !== undefined) slot.capacity = p.capacity;
-                  if (p.product  && !slot.product) slot.product = p.product;
-                }
-              });
-            }
-            // Reset pick state so it recalculates with correct par
-            delete stockPickState[stop.id];
-          }).catch(() => {})
-      )).then(() => { _buildingStockPick = false; buildStockPickRender(container); });
-    });
-    return;
+  // Only pick for machines in the active run
+  const runStopIds = currentRunData && currentRunData.stops
+    ? currentRunData.stops.map(s => s.id)
+    : Object.keys(STOPS);
+  const pickStops = {};
+  runStopIds.forEach(id => { if (STOPS[id]) pickStops[id] = STOPS[id]; });
+
+  // Load portal locked pick quantities if available (ensures match with warehouse pick list)
+  const runDate = (currentRunData && currentRunData.plannedDate)
+    ? currentRunData.plannedDate
+    : new Date().toISOString().split('T')[0];
+
+  if (fbDb) {
+    const exportKey = runDate.replace(/-/g,'') + '_all';
+    fbDb.ref('vynd/pickExports/' + exportKey).once('value').then(snap => {
+      const exportData = snap.val();
+      if (exportData && exportData.lockedLines && exportData.lockedLines.length > 0) {
+        // Apply portal locked quantities to stockPickState — fill guide will match
+        exportData.lockedLines.forEach(line => {
+          const mid = line.machineId;
+          if (!pickStops[mid] || !STOPS[mid] || !STOPS[mid].slots) return;
+          const slot = STOPS[mid].slots.find(s =>
+            s.barcode === line.barcode || s.product === line.product
+          );
+          if (!slot) return;
+          const qty = Math.max(0, line.pickQty - (line.shortSupply || 0));
+          if (!stockPickState[mid]) stockPickState[mid] = { done: false, slots: {}, picked: {}, original: {}, belowMinPick: {}, prekitSlots: {} };
+          stockPickState[mid].slots[slot.id]    = qty;
+          stockPickState[mid].picked[slot.id]   = qty;
+          stockPickState[mid].original[slot.id] = qty;
+        });
+        showToast('Pick list loaded from portal export', 2000);
+        _buildingStockPick = false;
+        buildStockPickRender(container, pickStops);
+        return;
+      }
+      loadSlotsAndRender(container, pickStops);
+    }).catch(() => loadSlotsAndRender(container, pickStops));
+  } else {
+    loadSlotsAndRender(container, pickStops);
   }
-  _buildingStockPick = false;
-  buildStockPickRender(container);
 }
 
-function buildStockPickRender(container) {
+function loadSlotsAndRender(container, pickStops) {
+  const stopsNeedingSlots = Object.values(pickStops).filter(s => !s.slots || s.slots.length === 0);
+  if (stopsNeedingSlots.length > 0 && fbDb) {
+    Promise.all(stopsNeedingSlots.map(stop =>
+      Promise.all([
+        fbDb.ref('vynd/dexReadings/' + stop.id + '/last').once('value').catch(() => null),
+        fbDb.ref('vynd/planograms/' + stop.id + '/slots').once('value').catch(() => null),
+      ]).then(([dexSnap, pogSnap]) => {
+        const dex = dexSnap && dexSnap.val();
+        const pog = (pogSnap && pogSnap.val()) || {};
+        if (dex && dex.slots) {
+          STOPS[stop.id].slots = Object.entries(dex.slots).map(([id, sl]) => {
+            const p = pog[id] || {};
+            return {
+              id,
+              product:  sl.product  || p.product  || '',
+              price:    (sl.priceCents || 0) / 100,
+              current:  sl.currentSOH != null ? sl.currentSOH : 0,
+              par:      p.par      != null ? p.par      : (sl.par      || 10),
+              capacity: p.capacity != null ? p.capacity : (sl.capacity || 12),
+              dexVends: sl.vendsSinceLastRead || 0,
+            };
+          }).sort((a, b) => String(a.id).localeCompare(String(b.id), undefined, { numeric: true }));
+        } else if (Object.keys(pog).length > 0) {
+          STOPS[stop.id].slots = Object.entries(pog).map(([id, p]) => ({
+            id, product: p.product || '', price: p.price || 0,
+            current: null, par: p.par || 10, capacity: p.capacity || 12, dexVends: 0,
+          })).sort((a, b) => String(a.id).localeCompare(String(b.id), undefined, { numeric: true }));
+        }
+        delete stockPickState[stop.id];
+      })
+    )).then(() => { _buildingStockPick = false; buildStockPickRender(container, pickStops); });
+  } else {
+    _buildingStockPick = false;
+    buildStockPickRender(container, pickStops);
+  }
+}
+
+function buildStockPickRender(container, pickSource) {
+  pickSource = pickSource || PICK_STOPS || STOPS;
   container.innerHTML = '';
-  initStockPickState();
+  initStockPickState(pickSource);
 
   // Apply pick mode UI (without rebuilding)
   const mode = userPrefs.pickMode || 'lane';
@@ -3156,14 +3442,15 @@ function buildStockPickRender(container) {
   if (sub) sub.textContent = (mode === 'product' ? 'Pick by product' : 'Pick by lane') + ' · Route ' + (userPrefs.routeId || 'Dubbo');
 
   if (mode === 'product') {
-    buildStockPickProduct(container);
+    buildStockPickProduct(container, pickSource);
     updateStockSummary();
     return;
   }
 
-  Object.keys(STOPS).forEach(mid => {
-    const stop  = STOPS[mid];
+  Object.keys(pickSource).forEach(mid => {
+    const stop  = pickSource[mid];
     const state = stockPickState[mid];
+    if (!state) return;
     const isDone = state.done;
     const totalUnits = Object.values(state.slots).reduce((a,b)=>a+b,0);
     const lines = Object.values(state.slots).filter(v=>v>0).length;
@@ -3406,6 +3693,8 @@ function pickAdj(mid, slotId, delta, maxPar) {
   state.slots[slotId] = v;
   if (!state.picked) state.picked = {};
   state.picked[slotId] = v;
+  // Sync to fill guide — shorted picks reduce fill guide quantity
+  if (stopSlotState[slotId] !== undefined) stopSlotState[slotId].added = v;
 
   const qEl   = document.getElementById('pick-qty-'+mid+'-'+slotId);
   const nEl   = document.getElementById('pick-need-'+mid+'-'+slotId);
@@ -3507,17 +3796,20 @@ function updatePickCardHeader(mid) {
 }
 
 function updateStockSummary() {
-  const mids  = Object.keys(STOPS);
-  const done  = mids.filter(m=>stockPickState[m]?.done).length;
-  const items = mids.reduce((a,m)=>a+Object.values(stockPickState[m]?.slots||{}).filter(v=>v>0).length,0);
-  const units = mids.reduce((a,m)=>a+Object.values(stockPickState[m]?.slots||{}).reduce((s,v)=>s+v,0),0);
-  const setEl = (id,v)=>{ const el=document.getElementById(id); if(el) el.textContent=v; };
+  const runIds = currentRunData && currentRunData.stops
+    ? currentRunData.stops.map(s => s.id)
+    : Object.keys(STOPS);
+  const mids  = runIds.filter(id => stockPickState[id]);
+  const done  = mids.filter(m => stockPickState[m]?.done).length;
+  const items = mids.reduce((a,m) => a + Object.values(stockPickState[m]?.slots||{}).filter(v=>v>0).length, 0);
+  const units = mids.reduce((a,m) => a + Object.values(stockPickState[m]?.slots||{}).reduce((s,v)=>s+v,0), 0);
+  const setEl = (id,v) => { const el = document.getElementById(id); if(el) el.textContent = v; };
   setEl('stock-stat-done',  done);
   setEl('stock-stat-items', items);
   setEl('stock-stat-units', units);
-  setEl('stock-pill-text',  done+' of '+mids.length+' picked');
+  setEl('stock-pill-text',  done + ' of ' + mids.length + ' picked');
   const pill = document.getElementById('stock-progress-pill');
-  if (pill) pill.className = 'pill ' + (done===mids.length?'pill-green':'pill-blue');
+  if (pill) pill.className = 'pill ' + (mids.length && done === mids.length ? 'pill-green' : 'pill-blue');
 }
 
 // ══════════════════════════════════════
@@ -4639,23 +4931,30 @@ function initFirebase() {
       }
     });
 
-    // Real-time listener on today's runs — catches cancellations instantly
+    // Real-time listener on today's runs — catches new runs and cancellations instantly
     const today = new Date().toISOString().split('T')[0];
-    fbDb.ref('vynd/runs').orderByChild('plannedDate').equalTo(today).on('value', snap => {
+    fbDb.ref('vynd/runs').on('value', snap => {
       const driverId = userPrefs.driverId || '';
       if (!driverId) return;
       let activeRun = null;
       snap.forEach(child => {
         const run = child.val();
-        if (run.driverId === driverId && run.status !== 'cancelled' && run.status !== 'complete') {
+        if (run.plannedDate === today &&
+            run.driverId   === driverId &&
+            run.status     !== 'cancelled' &&
+            run.status     !== 'complete') {
           activeRun = { key: child.key, ...run };
         }
       });
-      // If current run was cancelled, clear it and reload
-      if (currentRunData && !activeRun) {
+      // New run appeared — load it
+      if (activeRun && !currentRunData) {
+        loadHomeScreen();
+      }
+      // Run was cancelled — clear and show message
+      if (!activeRun && currentRunData) {
         currentRunData = null;
         showToast('Run was cancelled by manager');
-        loadHomeScreen();
+        showNoRunToday();
       }
     });
 
@@ -4998,6 +5297,16 @@ function syncStopOnComplete(mid) {
       slots,
     };
     existing.sentAt = new Date().toISOString();
+    // Write fill data to Firebase so server applies it on restock dial
+    if (fbDb) {
+      fbDb.ref('vynd/completedStops/' + mid).set({
+        machineId:   mid,
+        completedAt: new Date().toISOString(),
+        runId:       currentRunData ? currentRunData.key : null,
+        slots,
+      }).catch(e => console.warn('Could not write fill data:', e.message));
+    }
+
     store.set(SYNC_TO_KEY, JSON.stringify(existing));
     store.set('vynd_last_driver_sync', new Date().toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit'}));
     updateSyncStatus();

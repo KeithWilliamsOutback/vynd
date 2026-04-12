@@ -1244,6 +1244,12 @@ tr.clickable:hover td{background:var(--bg)}
         <!-- Col 3: Run builder with map -->
         <div style="border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;background:var(--surface)">
 
+          <!-- Today's saved runs -->
+          <div id="todays-runs-panel" style="border-bottom:1px solid var(--border);padding:10px 14px;flex-shrink:0;display:none">
+            <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Today's runs</div>
+            <div id="todays-runs-list" style="display:flex;flex-direction:column;gap:6px"></div>
+          </div>
+
           <!-- Header -->
           <div style="padding:12px 14px;border-bottom:1px solid var(--border);flex-shrink:0">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
@@ -1735,6 +1741,14 @@ tr.clickable:hover td{background:var(--bg)}
 
       <!-- EXPORT TAB -->
       <div id="picking-tab-export">
+        <div id="pick-export-banner" style="display:none;background:rgba(217,119,6,.08);border:1px solid rgba(217,119,6,.3);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:var(--warn)"></div>
+
+        <!-- Scheduled runs for pick date — cancel from here -->
+        <div id="pick-runs-panel" style="display:none;margin-bottom:16px">
+          <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px" id="pick-runs-heading">Scheduled runs</div>
+          <div id="pick-runs-list" style="display:flex;flex-direction:column;gap:6px"></div>
+        </div>
+
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
           <div class="card">
             <div style="font-weight:700;font-size:13px;margin-bottom:12px">Generate pick list</div>
@@ -2362,6 +2376,35 @@ tr.clickable:hover td{background:var(--bg)}
 
       <!-- Cloud sync tab -->
       <div id="settings-tab-cloud" style="display:none">
+        <!-- Firebase Maintenance -->
+        <div class="card" style="margin-bottom:20px">
+          <div style="font-weight:700;font-size:13px;margin-bottom:4px">🧹 Firebase maintenance</div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:16px">Clean up stale data from Firebase to keep things tidy</div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div style="display:flex;align-items:center;justify-content:space-between;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 14px">
+              <div>
+                <div style="font-size:12px;font-weight:600">Cancelled runs</div>
+                <div style="font-size:11px;color:var(--muted)">Remove cancelled runs older than 7 days</div>
+              </div>
+              <button class="btn btn-sm btn-secondary" onclick="cleanupCancelledRuns()" id="cleanup-runs-btn">🗑 Clean up</button>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 14px">
+              <div>
+                <div style="font-size:12px;font-weight:600">Stale pick exports</div>
+                <div style="font-size:11px;color:var(--muted)">Remove pick export records older than 30 days</div>
+              </div>
+              <button class="btn btn-sm btn-secondary" onclick="cleanupPickExports()" id="cleanup-exports-btn">🗑 Clean up</button>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 14px">
+              <div>
+                <div style="font-size:12px;font-weight:600">All cancelled runs (force)</div>
+                <div style="font-size:11px;color:var(--muted);color:var(--danger)">Remove ALL cancelled runs regardless of age</div>
+              </div>
+              <button class="btn btn-sm" style="color:var(--danger);border-color:var(--danger)" onclick="cleanupAllCancelledRuns()" id="cleanup-all-runs-btn">🗑 Remove all</button>
+            </div>
+          </div>
+          <div id="cleanup-result" style="display:none;margin-top:12px;font-size:12px;padding:8px 12px;border-radius:6px"></div>
+        </div>
         <div class="card" style="border-color:var(--accent-border);background:var(--accent-bg)">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
             <div>
@@ -3547,7 +3590,17 @@ function urgencyColor(score) {
 
 // ── Init route list ──
 function initRoutingPage() {
-  buildRouteDriversAndUnplanned(); // ensure ROUTE_DRIVERS and UNPLANNED_MACHINES are fresh
+  buildRouteDriversAndUnplanned();
+  loadTodaysRuns();
+
+  // Always reload users from Firebase so dropdown is current
+  if (fbReady && fbDb) {
+    fbDb.ref('vynd/users').once('value').then(snap => {
+      const data = snap.val();
+      if (data) Object.assign(USERS, data);
+      refreshDriverSelectors();
+    });
+  }
   const list = document.getElementById('routing-route-list');
   if (!list || list.innerHTML.includes('rcard-')) return; // already rendered
 
@@ -3699,9 +3752,11 @@ function selectRoute(routeId) {
 
   const dateEl = document.getElementById('run-date');
   if (dateEl) {
-    const today = new Date();
-    today.setDate(today.getDate() + 1);
-    dateEl.value = today.toISOString().split('T')[0];
+    const now = new Date();
+    const localToday = now.getFullYear() + '-' +
+      String(now.getMonth()+1).padStart(2,'0') + '-' +
+      String(now.getDate()).padStart(2,'0');
+    dateEl.value = localToday;
     updateRunDate();
   }
 
@@ -4104,31 +4159,95 @@ async function saveRun() {
   }
 }
 
-async function cancelRun() {
-  if (!currentRunId) { showToast('No saved run to cancel'); return; }
-  if (!confirm('Cancel this run? It will be removed from the driver app and marked as cancelled.')) return;
+async function loadTodaysRuns(forDate) {
+  if (!fbReady || !fbDb) return;
+  const targetDate = forDate || new Date().toISOString().split('T')[0];
+  const today      = new Date().toISOString().split('T')[0];
+  const isToday    = targetDate === today;
 
-  if (fbReady && fbDb) {
-    try {
-      await fbDb.ref('vynd/runs/' + currentRunId + '/status').set('cancelled');
-      await fbDb.ref('vynd/runs/' + currentRunId + '/cancelledAt').set(new Date().toISOString());
-      if (currentRouteId) {
-        await fbDb.ref('vynd/routeHistory/' + currentRouteId + '/' + currentRunId + '/status').set('cancelled');
-      }
-      showToast('Run cancelled ✓ — removed from driver app');
-    } catch(e) {
-      showToast('Error cancelling run: ' + e.message);
-      return;
+  const snap = await fbDb.ref('vynd/runs').once('value').catch(() => null);
+  if (!snap) return;
+
+  const runs = [];
+  snap.forEach(child => {
+    const r = child.val();
+    if (r.plannedDate === targetDate) runs.push({ id: child.key, ...r });
+  });
+
+  const panel = document.getElementById('todays-runs-panel');
+  const list  = document.getElementById('todays-runs-list');
+  if (!panel || !list) return;
+
+  const active = runs.filter(r => r.status !== 'cancelled');
+  if (!active.length) { panel.style.display = 'none'; return; }
+
+  const dateLabel = isToday ? "Today's runs" : `Runs for ${targetDate}`;
+  panel.style.display = '';
+  // Update heading
+  const hd = panel.querySelector('div[style*="font-size:11px"]');
+  if (hd) hd.textContent = dateLabel;
+
+  list.innerHTML = active.map(r => {
+    const statusColor = r.status === 'complete' ? 'var(--accent)' : 'var(--warn)';
+    const statusLabel = r.status === 'complete' ? '✓ Complete' : '● Scheduled';
+    return `<div style="display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--border);border-radius:7px;padding:8px 10px">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:600">${r.driverName || r.driverId} · ${(r.stops||[]).length} stops · ${r.plannedDate}</div>
+        <div style="font-size:11px;color:var(--muted);font-family:'DM Mono',monospace">${r.id}</div>
+      </div>
+      <span style="font-size:11px;color:${statusColor};font-weight:600">${statusLabel}</span>
+      ${r.status !== 'complete'
+        ? `<button class="btn btn-sm" style="color:var(--danger);border-color:var(--danger);font-size:11px;padding:3px 8px" onclick="cancelRunById('${r.id}','${r.routeId||''}')">✕ Cancel</button>`
+        : ''}
+    </div>`;
+  }).join('');
+}
+
+async function cancelRunById(runId, routeId) {
+  if (!fbReady || !fbDb) { showToast('Not connected to Firebase'); return; }
+
+  // Check if a pick list has been exported for this run's date
+  const run = await fbDb.ref('vynd/runs/' + runId).once('value').then(s => s.val()).catch(() => null);
+  if (run && run.plannedDate) {
+    const dateKey = run.plannedDate.replace(/-/g,'');
+    const exportSnap = await fbDb.ref('vynd/pickExports').orderByKey().startAt(dateKey).endAt(dateKey + '\uffff').once('value').catch(() => null);
+    const hasExport = exportSnap && exportSnap.exists();
+    if (hasExport) {
+      const exportData = Object.values(exportSnap.val())[0];
+      const exportedAt = exportData.exportedAt ? new Date(exportData.exportedAt).toLocaleString('en-AU', {day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : 'recently';
+      const go = confirm(
+        `⚠ A pick list for ${run.plannedDate} was exported at ${exportedAt}.\n\n` +
+        `Cancelling this run will remove picks that may have already been sent to the warehouse.\n\n` +
+        `Do you want to continue and cancel the run?`
+      );
+      if (!go) return;
+    } else {
+      if (!confirm('Cancel this run? The driver will be notified immediately.')) return;
     }
+  } else {
+    if (!confirm('Cancel this run? The driver will be notified immediately.')) return;
   }
 
-  // Reset local state
-  currentRunId = null;
-  runStops = [];
-  document.getElementById('mark-complete-btn').style.display = 'none';
-  document.getElementById('cancel-run-btn').style.display    = 'none';
-  renderRunList();
-  showToast('Run cancelled ✓');
+  try {
+    await fbDb.ref('vynd/runs/' + runId + '/status').set('cancelled');
+    await fbDb.ref('vynd/runs/' + runId + '/cancelledAt').set(new Date().toISOString());
+    if (routeId) await fbDb.ref('vynd/routeHistory/' + routeId + '/' + runId + '/status').set('cancelled');
+    showToast('Run cancelled ✓');
+    if (currentRunId === runId) {
+      currentRunId = null;
+      runStops = [];
+      document.getElementById('mark-complete-btn').style.display = 'none';
+      document.getElementById('cancel-run-btn').style.display    = 'none';
+    }
+    loadTodaysRuns();
+  } catch(e) {
+    showToast('Error: ' + e.message);
+  }
+}
+
+async function cancelRun() {
+  if (!currentRunId) { showToast('No saved run to cancel'); return; }
+  await cancelRunById(currentRunId, currentRouteId);
 }
 
 // ══════════════════════════════════════
@@ -5435,6 +5554,27 @@ function initFirebasePortal() {
     loadPickingIdMap();
     loadDynamicParSettings();
     scheduleDynamicParNightly();
+    // Load users so routing driver dropdown is always current
+    fbDb.ref('vynd/users').once('value').then(snap => {
+      const data = snap.val();
+      if (data) Object.assign(USERS, data);
+      refreshDriverSelectors();
+    });
+
+    // Real-time listener on runs — auto-refresh pick preview when runs are added/changed/cancelled
+    fbDb.ref('vynd/runs').on('value', () => {
+      // Only refresh if picking page is currently open
+      const pickPage = document.getElementById('page-picking');
+      if (pickPage && pickPage.classList.contains('active')) {
+        updatePickPreview();
+      }
+      // Also refresh the today's runs panel on routing page
+      const routePage = document.getElementById('page-routing');
+      if (routePage && routePage.classList.contains('active')) {
+        loadTodaysRuns();
+      }
+    });
+
     setTimeout(refreshDashboard, 800);
 
   } catch(e) {
@@ -6990,13 +7130,35 @@ function initPickingPage() {
   if (routeSel)  routeSel.innerHTML  = allOpt + routes;
   if (sheetSel)  sheetSel.innerHTML  = allOpt + routes;
 
-  // Default date to today
+  // Always reset to today's local date
   const dateEl = document.getElementById('pick-date');
-  if (dateEl && !dateEl.value) {
-    dateEl.value = new Date().toISOString().split('T')[0];
-  }
+  const today  = new Date();
+  const localDate = today.getFullYear() + '-' +
+    String(today.getMonth()+1).padStart(2,'0') + '-' +
+    String(today.getDate()).padStart(2,'0');
+  if (dateEl) dateEl.value = localDate;
 
-  updatePickPreview();
+  // If Firebase connected, check for nearest scheduled run (past or future) and jump to that date
+  if (fbReady && fbDb) {
+    fbDb.ref('vynd/runs').once('value').then(snap => {
+      let bestDate = null;
+      snap.forEach(child => {
+        const r = child.val();
+        if (r.status === 'cancelled' || r.status === 'complete') return;
+        // Prefer today or future; fall back to most recent past scheduled run
+        if (!bestDate) { bestDate = r.plannedDate; return; }
+        // Prefer dates closest to today
+        const today = localDate;
+        const curDiff = Math.abs(new Date(r.plannedDate) - new Date(today));
+        const bestDiff = Math.abs(new Date(bestDate) - new Date(today));
+        if (curDiff < bestDiff) bestDate = r.plannedDate;
+      });
+      if (bestDate && dateEl) dateEl.value = bestDate;
+      updatePickPreview();
+    }).catch(() => updatePickPreview());
+  } else {
+    updatePickPreview();
+  }
 }
 
 function switchPickingTab(tab, btn) {
@@ -7008,68 +7170,138 @@ function switchPickingTab(tab, btn) {
   if (btn) btn.classList.add('active');
 }
 
-function buildPickList(routeId) {
-  // Get machines for this route
-  const machines = routeId
-    ? (ROUTES[routeId]?.stops || []).map((s, i) => ({ ...s, serviceOrder: i + 1, routeId, driver: ROUTES[routeId].driver }))
-    : Object.entries(ROUTES).flatMap(([rid, r]) =>
-        r.stops.map((s, i) => ({ ...s, serviceOrder: i + 1, routeId: rid, driver: r.driver }))
-      );
+let pickRunsCache = {}; // date → array of runs from Firebase
+
+async function buildPickList(routeId, runsForDate) {
+  console.log('buildPickList called — routeId:', routeId, 'runs:', runsForDate?.length);
+  let machines = [];
+  if (runsForDate && runsForDate.length > 0) {
+    const relevantRuns = routeId ? runsForDate.filter(r => r.routeId === routeId) : runsForDate;
+    if (!relevantRuns.length) { console.log('No relevant runs after filter'); return []; }
+    machines = relevantRuns.flatMap(r =>
+      (r.stops || []).map((s, i) => ({
+        ...s,
+        serviceOrder: s.serviceOrder || i + 1,
+        routeId:      r.routeId,
+        driver:       r.driverName || r.driverId || '—',
+      }))
+    );
+    console.log('Machines from run:', machines.map(m => m.id));
+  } else {
+    console.log('No runs passed to buildPickList');
+    return [];
+  }
+
+  // Fetch live SOH from Firebase for each machine
+  const liveSOH = {};  // mid → { slotId → currentSOH }
+  if (fbReady && fbDb) {
+    await Promise.all([...new Set(machines.map(m => m.id))].map(async mid => {
+      liveSOH[mid] = {};
+      const dexSnap = await fbDb.ref('vynd/dexReadings/' + mid + '/last/slots').once('value').catch(() => null);
+      if (dexSnap && dexSnap.val()) {
+        Object.entries(dexSnap.val()).forEach(([slotId, slot]) => {
+          if (slot.currentSOH != null) liveSOH[mid][slotId] = slot.currentSOH;
+        });
+      }
+      console.log('DEX SOH for', mid, ':', liveSOH[mid]);
+      const pogSnap = await fbDb.ref('vynd/planograms/' + mid + '/slots').once('value').catch(() => null);
+      if (pogSnap && pogSnap.val()) {
+        Object.entries(pogSnap.val()).forEach(([slotId, slot]) => {
+          if (liveSOH[mid][slotId] == null) {
+            const pogSOH = slot.currentSOH ?? slot.current;
+            if (pogSOH != null) liveSOH[mid][slotId] = pogSOH;
+          }
+        });
+      }
+      console.log('Final SOH for', mid, ':', liveSOH[mid]);
+    }));
+  }
+
+  // Also fetch full planogram slot data from Firebase for machines not in memory
+  const fbPogSlots = {};
+  if (fbReady && fbDb) {
+    await Promise.all([...new Set(machines.map(m => m.id))].map(async mid => {
+      if (!PLANOGRAMS[mid] || !PLANOGRAMS[mid].slots || PLANOGRAMS[mid].slots.length === 0) {
+        const pogSnap = await fbDb.ref('vynd/planograms/' + mid + '/slots').once('value').catch(() => null);
+        if (pogSnap && pogSnap.val()) fbPogSlots[mid] = pogSnap.val();
+      }
+    }));
+  }
 
   const rows = [];
-  const floatThreshold = OPERATIONAL_SETTINGS.floatThreshold || 20;
 
   machines.forEach(stop => {
-    const mid  = stop.id;
-    const pog  = PLANOGRAMS[mid];
-    if (!pog || !pog.slots) return;
+    const mid = stop.id;
 
-    // Group slots by product to combine quantities
+    // Use in-memory PLANOGRAMS first, fall back to Firebase planogram data
+    let slots = PLANOGRAMS[mid]?.slots;
+    console.log('mid:', mid, 'in-mem slots:', slots?.length ?? 0, 'fbPog keys:', fbPogSlots[mid] ? Object.keys(fbPogSlots[mid]).length : 0, 'liveSOH keys:', Object.keys(liveSOH[mid]||{}).length);
+    if (!slots || slots.length === 0) {
+      const fbSlots = fbPogSlots[mid];
+      if (!fbSlots) { console.log('NO PLANOGRAM for', mid, '— skipping'); return; }
+      slots = Object.entries(fbSlots).map(([id, s]) => ({
+        id,
+        product:    s.product    || 'Empty',
+        barcode:    s.barcode    || '',
+        par:        s.par        || 10,
+        capacity:   s.capacity   || 10,
+        currentSOH: s.currentSOH ?? s.current ?? 0,
+        cost:       s.cost       || 0,
+        price:      s.price      || s.priceDollars || 0,
+      }));
+      console.log('Built', slots.length, 'slots from Firebase pog for', mid);
+    }
+
     const productMap = {};
-    pog.slots.forEach(slot => {
-      const product  = slot.product || 'Empty';
+    slots.forEach(slot => {
+      const product = slot.product || 'Empty';
       if (product === 'Empty') return;
+      if (slot.overflow) return; // overflow slots fed by primary slot — not picked separately
 
-      // Get live SOH from Firebase data or planogram
-      const liveSnap = PLANOGRAMS[mid]?.slots?.find(s => s.id === slot.id);
-      const currentSOH = liveSnap?.current ?? slot.current ?? 0;
-      const par        = slot.par || 10;
-      const capacity   = slot.capacity || par;
+      // Live SOH — Firebase DEX/planogram first, fallback to in-memory
+      // DEX currentSOH can be null if machine hasn't had baseline set yet
+      const dexSOH  = liveSOH[mid]?.[slot.id];
+      const pogSOH  = slot.currentSOH ?? slot.current;  // planogram baseline (manually set)
+      const currentSOH = (dexSOH != null) ? dexSOH : (pogSOH != null ? pogSOH : 0);
+      const par      = slot.par || 10;
+      const capacity = slot.capacity || par;
 
-      // Get product settings from registry
-      const prodData     = getProductData(product);
-      const overridePar  = prodData.overridePar  || slot.overridePar  || false;
+      // Product settings (min pick, override par)
+      const prodData       = getProductData(product);
+      const overridePar    = prodData.overridePar    || slot.overridePar    || false;
       const minPickEnabled = prodData.minPickEnabled || slot.minPickEnabled || false;
-      const minPickPct   = prodData.minPickPct   || 0;
-      const minPickUnits = prodData.minPickUnits || Math.round(par * minPickPct / 100) || 0;
+      const minPickMode    = prodData.minPickMode    || 'pct';
+      const minPickPct     = prodData.minPickPct     || 0;
+      const minPickUnits   = prodData.minPickUnits   || Math.round(par * minPickPct / 100) || 0;
+      const threshold      = minPickMode === 'units' ? minPickUnits : Math.round(par * minPickPct / 100);
 
-      // Apply Override to Par — always pick to par regardless of SOH
+      // Pick qty = par - currentSOH (or full par if overridePar)
       const needed = overridePar ? par : Math.max(0, par - currentSOH);
 
-      // Apply minimum pick threshold — skip if not enough sold
-      if (minPickEnabled && needed < minPickUnits) return;
+      // Min pick — skip if not enough sold to justify a pick run
+      const unitsSold = slot.dexVends || Math.max(0, par - currentSOH);
+      if (minPickEnabled && needed > 0 && unitsSold < threshold) return;
 
-      if (needed <= 0) return; // nothing needed
+      if (needed <= 0) return;
 
       const key = product;
       if (!productMap[key]) {
         productMap[key] = {
           product,
-          barcode:  slot.barcode || getProductBarcode(product),
+          barcode:     slot.barcode || getProductBarcode(product),
           overridePar,
           totalNeeded: 0,
-          slots: [],
+          slots:       [],
         };
       }
       productMap[key].totalNeeded += needed;
       productMap[key].slots.push({ id: slot.id, currentSOH, par, needed });
     });
 
-    // One row per product per machine (combined)
     Object.values(productMap).forEach(p => {
       rows.push({
         machineId:    mid,
-        locationName: stop.name || mid,
+        locationName: stop.name || stop.id,
         address:      stop.addr || '',
         serviceOrder: stop.serviceOrder,
         routeId:      stop.routeId,
@@ -7078,107 +7310,175 @@ function buildPickList(routeId) {
         barcode:      p.barcode || '',
         pickQty:      p.totalNeeded,
         confirmedQty: p.totalNeeded,
+        currentSOH:   p.slots[0]?.currentSOH ?? null,
+        par:          p.slots[0]?.par ?? null,
         slots:        p.slots,
         lineType:     'regular',
       });
     });
 
-    // ── Planogram change lines ──
-    const pogChanges = getPlanogramChangeLinesForMachine(mid, stop);
-    pogChanges.forEach(line => rows.push(line));
+    // Planogram change lines — skipped (no pending changes workflow yet)
   });
 
+  console.log("buildPickList rows generated:", rows.length, rows.map(r => r.machineId + "/" + r.product + " qty=" + r.pickQty));
   return rows;
 }
 
-function getPlanogramChangeLinesForMachine(mid, stop) {
-  const lines = [];
-  const pog   = PLANOGRAMS[mid];
-  if (!pog?.slots) return lines;
-
-  pog.slots.forEach(slot => {
-    const pending = slot.pendingChange || PENDING_POG_CHANGES[mid]?.[slot.id];
-    if (!pending) return;
-
-    const base = {
-      machineId:    mid,
-      locationName: stop?.name || mid,
-      address:      stop?.addr || '',
-      serviceOrder: stop?.serviceOrder || 0,
-      routeId:      stop?.routeId || '',
-      driver:       stop?.driver || '',
-      slotId:       slot.id,
-      oldProduct:   pending.oldProduct || slot.product,
-      newProduct:   pending.newProduct,
-      isMove:       pending.isMove || false,
-    };
-
-    // COLLECT line — old stock to remove
-    if (pending.collectQty > 0) {
-      lines.push({
-        ...base,
-        lineType:     'collect',
-        product:      pending.oldProduct || slot.product,
-        barcode:      getProductBarcode(pending.oldProduct || slot.product),
-        pickQty:      pending.collectQty,
-        confirmedQty: pending.collectQty,
-        slots:        [{ id: slot.id }],
-        label:        'COLLECT',
-        note:         'Remove from slot ' + slot.id,
-      });
-    }
-
-    // MOVE line — physically carry stock within machine
-    if (pending.isMove && pending.existingSOHofNew > 0) {
-      // Find source slots
-      const fromSlots = pog.slots
-        .filter(s => s.id !== slot.id && s.product === pending.newProduct)
-        .map(s => s.id).join(', ');
-      lines.push({
-        ...base,
-        lineType:     'move',
-        product:      pending.newProduct,
-        barcode:      getProductBarcode(pending.newProduct),
-        pickQty:      pending.existingSOHofNew,
-        confirmedQty: pending.existingSOHofNew,
-        slots:        [{ id: slot.id }],
-        label:        'MOVE',
-        note:         'Move ' + pending.existingSOHofNew + ' units from ' + fromSlots + ' → ' + slot.id,
-      });
-    }
-
-    // PICK line — new stock needed
-    if (pending.pickQty > 0) {
-      lines.push({
-        ...base,
-        lineType:     'pick',
-        product:      pending.newProduct,
-        barcode:      getProductBarcode(pending.newProduct),
-        pickQty:      pending.pickQty,
-        confirmedQty: pending.pickQty,
-        slots:        [{ id: slot.id }],
-        label:        'PICK',
-        note:         'New product for slot ' + slot.id + ' (par ' + slot.par + ')',
-      });
-    }
-  });
-
-  return lines;
-}
 
 function getProductBarcode(productName) {
   return PRODUCTS[productName]?.barcode || '';
 }
 
-function updatePickPreview() {
+async function updatePickPreview() {
   const routeId = document.getElementById('pick-route-sel')?.value || '';
   const date    = document.getElementById('pick-date')?.value || new Date().toISOString().split('T')[0];
   pickRouteId   = routeId;
   pickDate      = date;
 
-  pickData = buildPickList(routeId);
+  // Check if this date's pick was already exported and show warning
+  if (fbReady && fbDb) {
+    const dateKey = date.replace(/-/g,'');
+    fbDb.ref('vynd/pickExports').orderByKey().startAt(dateKey).endAt(dateKey + '\uffff').once('value').then(snap => {
+      const banner = document.getElementById('pick-export-banner');
+      if (!banner) return;
+      if (snap.exists()) {
+        const exports = Object.values(snap.val());
+        const latest  = exports.sort((a,b) => (b.exportedAt||'').localeCompare(a.exportedAt||''))[0];
+        const time    = latest.exportedAt ? new Date(latest.exportedAt).toLocaleString('en-AU', {day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : '';
+        banner.style.display = '';
+        banner.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+          <span>⚠ Pick list for ${date} was exported at ${time} · ${latest.lines} lines — re-exporting will generate a new list. Ensure warehouse has discarded the previous version.</span>
+          <button class="btn btn-sm" onclick="clearPickLock()" style="white-space:nowrap;flex-shrink:0;color:var(--danger);border-color:var(--danger);font-size:11px">✕ Clear export</button>
+        </div>`;
+      } else {
+        banner.style.display = 'none';
+      }
+    }).catch(() => {});
+  }
 
+  // Fetch runs for the selected date from Firebase, then build pick list
+  if (fbReady && fbDb) {
+    // First check if this date has already been exported (locked quantities)
+    const exportKey = date.replace(/-/g,'') + '_' + (routeId||'all');
+    fbDb.ref('vynd/pickExports/' + exportKey).once('value').then(exportSnap => {
+      const exportData = exportSnap.val();
+      if (exportData && exportData.lockedLines && exportData.lockedLines.length > 0) {
+        // Use locked quantities — don't recalculate from live DEX
+        pickData = exportData.lockedLines.map(l => ({
+          machineId:    l.machineId,
+          barcode:      l.barcode,
+          product:      l.product,
+          pickQty:      l.pickQty - (l.shortSupply || 0), // apply any short supply adjustment
+          originalQty:  l.pickQty,
+          shortSupply:  l.shortSupply || 0,
+          currentSOH:   l.snapshotSOH,
+          par:          l.par,
+          locationName: l.locationName,
+          driver:       l.driver,
+          serviceOrder: l.serviceOrder,
+          lineType:     'regular',
+          locked:       true,
+        }));
+        renderPickPreview();
+        // Still show runs panel
+        fbDb.ref('vynd/runs').once('value').then(snap => {
+          const runs = [];
+          snap.forEach(child => {
+            const r = child.val();
+            if (r.plannedDate === date && r.status !== 'cancelled') runs.push({ id: child.key, ...r });
+          });
+          showPickRunsPanel(runs, date);
+        });
+        return;
+      }
+
+      // Not exported — calculate from runs
+      fbDb.ref('vynd/runs').once('value').then(async snap => {
+        const runs = [];
+        const allRuns = [];
+        snap.forEach(child => {
+          const r = child.val();
+          allRuns.push({ id: child.key, date: r.plannedDate, status: r.status });
+          if (r.plannedDate === date && r.status !== 'cancelled' && r.status !== 'complete') {
+            runs.push({ id: child.key, ...r });
+          }
+        });
+        console.log('All runs in Firebase:', allRuns);
+        console.log('Runs for', date, ':', runs.length, runs.map(r => r.id));
+        pickRunsCache[date] = runs;
+
+        // Show diagnostic in summary if no runs found
+        if (runs.length === 0) {
+          const summary = document.getElementById('pick-summary');
+          if (summary) summary.innerHTML = `<div style="color:var(--muted)">📅 No run found for ${date} — ${allRuns.length} total runs in Firebase (${allRuns.map(r=>r.date+'='+r.status).join(', ')})</div>`;
+          return;
+        }
+
+        pickData = await buildPickList(routeId, runs);
+
+        showPickRunsPanel(runs, date);
+        renderPickPreview();
+      }).catch(async () => {
+        pickData = await buildPickList(routeId, pickRunsCache[date] || []);
+        renderPickPreview();
+      });
+    }).catch(async () => {
+      pickData = await buildPickList(routeId, pickRunsCache[date] || []);
+      renderPickPreview();
+    });
+  } else {
+    buildPickList(routeId, pickRunsCache[date] || []).then(d => { pickData = d; renderPickPreview(); });
+  }
+}
+
+function showPickRunsPanel(runs, date) {
+  const panel = document.getElementById('pick-runs-panel');
+  const list  = document.getElementById('pick-runs-list');
+  const hd    = document.getElementById('pick-runs-heading');
+  if (!panel || !list) return;
+  const active = runs.filter(r => r.status !== 'cancelled');
+  if (!active.length) { panel.style.display = 'none'; return; }
+  panel.style.display = '';
+  if (hd) hd.textContent = 'Scheduled runs for ' + date;
+  list.innerHTML = active.map(r =>
+    '<div style="display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--border);border-radius:7px;padding:8px 12px">' +
+    '<div style="flex:1;min-width:0">' +
+    '<div style="font-size:12px;font-weight:600">' + (r.driverName || r.driverId || '—') + ' · ' + (r.stops||[]).length + ' stops</div>' +
+    '<div style="font-size:11px;color:var(--muted)">' + (r.routeId||'') + ' · <span style="font-family:\'DM Mono\',monospace">' + r.id + '</span></div>' +
+    '</div>' +
+    '<span style="font-size:11px;font-weight:600;color:' + (r.status==='complete'?'var(--accent)':'var(--warn)') + '">' +
+    (r.status === 'complete' ? '✓ Complete' : '● Scheduled') + '</span>' +
+    (r.status !== 'complete' ? '<button class="btn btn-sm" style="color:var(--danger);border-color:var(--danger);font-size:11px;padding:3px 10px;flex-shrink:0" onclick="cancelRunById(\'' + r.id + '\',\'' + (r.routeId||'') + '\')">✕ Cancel run</button>' : '') +
+    '</div>'
+  ).join('');
+}
+
+async function clearPickLock() {
+  if (!fbReady || !fbDb) { showToast('Not connected to Firebase'); return; }
+  if (!confirm(`Clear the exported pick list for ${pickDate}? This will allow fresh quantities to be calculated from live DEX data.`)) return;
+
+  // Delete ALL export records for this date (any routeId)
+  const dateKey = pickDate.replace(/-/g,'');
+  try {
+    const snap = await fbDb.ref('vynd/pickExports').orderByKey().startAt(dateKey).endAt(dateKey + '\uffff').once('value');
+    if (snap.exists()) {
+      const deletes = Object.keys(snap.val()).map(k => fbDb.ref('vynd/pickExports/' + k).remove());
+      await Promise.all(deletes);
+    }
+    showToast('Pick exports cleared ✓ — regenerating from live data');
+    const banner = document.getElementById('pick-export-banner');
+    if (banner) banner.style.display = 'none';
+    const panel = document.getElementById('pick-runs-panel');
+    if (panel) panel.style.display = 'none';
+    updatePickPreview();
+  } catch(e) {
+    showToast('Error: ' + e.message);
+  }
+}
+
+function renderPickPreview() {
   // Summary
+  const isLocked = pickData.length > 0 && pickData[0].locked;
   const summary  = document.getElementById('pick-summary');
   const regularLines  = pickData.filter(r => r.lineType === 'regular');
   const changeLines   = pickData.filter(r => r.lineType !== 'regular');
@@ -7191,8 +7491,12 @@ function updatePickPreview() {
 
   if (summary) {
     summary.innerHTML = pickData.length === 0
-      ? '<div style="color:var(--muted)">No picks required — all machines at par</div>'
+      ? `<div style="color:var(--muted)">${(pickRunsCache[pickDate]||[]).length === 0 && !isLocked ? '📅 No run scheduled for this date — save a run in Routing first' : '✓ No picks required — all machines at par'}</div>`
       : `<div style="display:flex;flex-direction:column;gap:8px">
+          ${isLocked ? `<div style="padding:6px 8px;background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.3);border-radius:5px;font-size:11px;color:var(--info);margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:8px">
+            <span>🔒 Quantities locked at export time — not affected by live DEX updates</span>
+            <button class="btn btn-sm" style="font-size:11px;padding:3px 10px;color:var(--danger);border-color:var(--danger);white-space:nowrap;flex-shrink:0" onclick="clearPickLock()">✕ Clear lock</button>
+          </div>` : ''}
           <div style="display:flex;justify-content:space-between"><span class="text-muted">Machines</span><strong>${machines.length}</strong></div>
           <div style="display:flex;justify-content:space-between"><span class="text-muted">Regular picks</span><strong>${regularLines.length} lines</strong></div>
           <div style="display:flex;justify-content:space-between"><span class="text-muted">Total units</span><strong style="color:var(--accent)">${totalQty}</strong></div>
@@ -7218,8 +7522,8 @@ function updatePickPreview() {
     return;
   }
 
-  const routeLabel = routeId ? ROUTES[routeId]?.label : 'All routes';
-  if (title) title.textContent = `Pick list — ${routeLabel} — ${date}`;
+  const routeLabel = pickRouteId ? (ROUTES[pickRouteId]?.label || pickRouteId) : 'All routes';
+  if (title) title.textContent = `Pick list — ${routeLabel} — ${pickDate}`;
 
   // Group by machine for display — regular picks then planogram changes
   const byMachine = {};
@@ -7287,13 +7591,7 @@ function updatePickPreview() {
 function exportPickCSV() {
   if (!pickData.length) { showToast('Generate a pick list first'); return; }
 
-  // External picking system format
-  // Core: Machine ID, Barcode, Qty — what warehouse needs to pick
-  // Reference (right side): Location, Driver, Call Sequence — routing context only
-  // No product name for planogram change picks — keeping it clean
-  // Excludes: collect and move lines — those belong in driver app only
   const pickLines = pickData.filter(r => r.lineType === 'regular' || r.lineType === 'pick');
-
   if (!pickLines.length) { showToast('No pick lines to export'); return; }
 
   const headers = [
@@ -7315,10 +7613,40 @@ function exportPickCSV() {
   ].join(','));
 
   const csv = [headers.join(','), ...rows].join('\n');
-
   downloadFile('vynd-picklist-' + pickDate + '.csv', csv, 'text/csv');
   showToast('Pick list exported \u2713 \u2014 ' + pickLines.length + ' lines');
+
+  // Snapshot and lock pick quantities in Firebase
+  if (fbReady && fbDb) {
+    const exportKey = pickDate.replace(/-/g,'') + '_' + (pickRouteId||'all');
+    const exportRecord = {
+      date:       pickDate,
+      routeId:    pickRouteId || 'all',
+      exportedAt: new Date().toISOString(),
+      lines:      pickLines.length,
+      exportedBy: 'manager',
+      lockedLines: pickLines.map(r => ({
+        machineId:    r.machineId,
+        barcode:      r.barcode || '',
+        product:      r.product || '',
+        pickQty:      r.pickQty,
+        snapshotSOH:  r.currentSOH !== undefined ? r.currentSOH : null,
+        par:          r.par || null,
+        locationName: r.locationName || '',
+        driver:       r.driver || '',
+        serviceOrder: r.serviceOrder || 0,
+        shortSupply:  0,
+      })),
+    };
+    fbDb.ref('vynd/pickExports/' + exportKey).set(exportRecord)
+      .then(() => {
+        // Reload preview to show locked state
+        updatePickPreview();
+      })
+      .catch(e => console.warn('Could not save export record:', e.message));
+  }
 }
+
 function handlePickFile(input) {
   const file = input.files[0];
   if (!file) return;
@@ -7382,7 +7710,7 @@ function parsePickImportCSV(csvText) {
     const product      = prodIdx >= 0 ? (cols[prodIdx] || '') : '';
     const locationName = nameIdx >= 0 ? (cols[nameIdx] || '') : '';
 
-    if (!rawMachineId) return;
+    if (!machineId) return;
 
     // Find matching row in current pick list
     // Match on machine + barcode or machine + product name
@@ -7487,81 +7815,90 @@ function confirmPickImport() {
   if (!pickImportData.length) return;
   if (!fbReady || !fbDb) { showToast('Connect to Firebase first'); return; }
 
-  const date    = pickDate || new Date().toISOString().split('T')[0];
-  const updates = {};
+  const date      = pickDate || new Date().toISOString().split('T')[0];
+  const exportKey = date.replace(/-/g,'') + '_' + (pickRouteId||'all');
+  const updates   = {};
 
-  // Group by machine
-  const byMachine = {};
-  pickImportData.forEach(r => {
-    if (!byMachine[r.machineId]) byMachine[r.machineId] = [];
-    byMachine[r.machineId].push(r);
-  });
+  // Build confirmedQty lookup: machineId|barcode → confirmedQty
+  const confirmedMap = {};
+  pickImportData.forEach(r => { confirmedMap[r.machineId + '|' + r.barcode] = r.confirmedQty; });
 
-  Object.entries(byMachine).forEach(([mid, rows]) => {
-    const slotConfirmed = {};
-    rows.forEach(r => {
-      if (r.allocation) r.allocation.forEach(a => {
-        slotConfirmed[a.id] = { product: r.product, barcode: r.barcode, confirmedQty: a.allocated };
+  // Update shortSupply on locked lines in Firebase
+  fbDb.ref('vynd/pickExports/' + exportKey).once('value').then(snap => {
+    const exportData = snap.val();
+    if (exportData && exportData.lockedLines) {
+      updates['vynd/pickExports/' + exportKey + '/lockedLines'] = exportData.lockedLines.map(line => {
+        const conf = confirmedMap[line.machineId + '|' + line.barcode];
+        if (conf !== undefined) {
+          return { ...line, shortSupply: Math.max(0, line.pickQty - conf), confirmedQty: conf };
+        }
+        return line;
+      });
+      updates['vynd/pickExports/' + exportKey + '/adjustedAt'] = new Date().toISOString();
+    }
+
+    // Write confirmed picks record per machine
+    const byMachine = {};
+    pickImportData.forEach(r => {
+      if (!byMachine[r.machineId]) byMachine[r.machineId] = [];
+      byMachine[r.machineId].push(r);
+    });
+    Object.entries(byMachine).forEach(([mid, rows]) => {
+      updates['vynd/confirmedPicks/' + mid + '/' + date] = {
+        machineId: mid, pickDate: date, routeId: pickRouteId,
+        status: 'confirmed', createdAt: new Date().toISOString(),
+        lines: rows.map(r => ({
+          product: r.product, barcode: r.barcode,
+          required: r.required, confirmed: r.confirmedQty,
+          variance: r.variance,
+          shortSupply: Math.max(0, r.required - r.confirmedQty),
+        })),
+      };
+    });
+
+    // Apply queued planogram changes
+    Object.keys(byMachine).forEach(mid => {
+      const pog = PLANOGRAMS[mid];
+      if (!pog?.slots) return;
+      pog.slots.forEach(slot => {
+        const pending = slot.pendingChange || PENDING_POG_CHANGES[mid]?.[slot.id];
+        if (!pending || pending.changeType !== 'queue') return;
+        slot.product = pending.newProduct;
+        slot.price   = pending.newPrice || slot.price;
+        slot.par     = pending.newPar   || slot.par;
+        slot.current = 0;
+        slot.pendingChange = null;
+        if (PENDING_POG_CHANGES[mid]) delete PENDING_POG_CHANGES[mid][slot.id];
+        updates['vynd/planograms/' + mid + '/slots/' + slot.id + '/product']      = pending.newProduct;
+        updates['vynd/planograms/' + mid + '/slots/' + slot.id + '/par']          = pending.newPar || slot.par;
+        updates['vynd/planograms/' + mid + '/slots/' + slot.id + '/current']      = 0;
+        updates['vynd/planograms/' + mid + '/slots/' + slot.id + '/pendingChange'] = null;
       });
     });
 
-    updates['vynd/confirmedPicks/' + mid + '/' + date] = {
-      machineId: mid, pickDate: date, routeId: pickRouteId,
-      status: 'confirmed', createdAt: new Date().toISOString(),
-      slots: slotConfirmed,
-      lines: rows.map(r => ({ product: r.product, barcode: r.barcode, required: r.required, confirmed: r.confirmedQty, variance: r.variance })),
-    };
-  });
-
-  // ── Apply queued planogram changes for machines in this pick ──
-  const machineIds = Object.keys(byMachine);
-  machineIds.forEach(mid => {
-    const pog = PLANOGRAMS[mid];
-    if (!pog?.slots) return;
-
-    pog.slots.forEach(slot => {
-      const pending = slot.pendingChange || PENDING_POG_CHANGES[mid]?.[slot.id];
-      if (!pending || pending.changeType !== 'queue') return;
-
-      // Apply the queued change now — driver has completed the stop
-      slot.product     = pending.newProduct;
-      slot.price       = pending.newPrice || slot.price;
-      slot.par         = pending.newPar   || slot.par;
-      slot.current     = 0; // driver filled to par, DEX will update on next dial
-      slot.pendingChange = null;
-
-      // Clear from in-memory pending
-      if (PENDING_POG_CHANGES[mid]) delete PENDING_POG_CHANGES[mid][slot.id];
-
-      // Write to Firebase
-      updates['vynd/planograms/' + mid + '/slots/' + slot.id + '/product']   = pending.newProduct;
-      updates['vynd/planograms/' + mid + '/slots/' + slot.id + '/par']       = pending.newPar || slot.par;
-      updates['vynd/planograms/' + mid + '/slots/' + slot.id + '/current']   = 0;
-      updates['vynd/planograms/' + mid + '/slots/' + slot.id + '/pendingChange'] = null;
-
-      // Audit log
-      writeAuditLog({
-        machineId: mid, entityType: 'planogram', entityId: mid + '/' + slot.id,
-        field: 'Product — ' + slot.id,
-        oldValue: pending.oldProduct, newValue: pending.newProduct,
-        reason: 'Queued planogram change applied at restock — ' + date,
-        category: 'planogram', changedBy: 'VYND System', changeSource: 'Pick Confirmation',
-      });
-    });
-  });
-
-  fbDb.ref().update(updates)
-    .then(() => {
-      showToast('Pick confirmed — planogram changes applied ✓');
-      document.getElementById('pick-import-preview').style.display = 'none';
-      pickImportData = [];
-      // Refresh planogram if currently viewing an affected machine
-      if (machineIds.includes(currentPogMachine)) {
-        renderPogBody(PLANOGRAMS[currentPogMachine]);
-      }
-    })
-    .catch(e => showToast('Save failed: ' + e.message));
+    return fbDb.ref().update(updates);
+  }).then(() => {
+    showToast('Adjustments saved ✓ — pick list updated');
+    document.getElementById('pick-import-preview').style.display = 'none';
+    pickImportData = [];
+    // Reload to show adjusted quantities and re-export button
+    updatePickPreview();
+  }).catch(e => showToast('Error saving: ' + e.message));
 }
+
+function reExportAdjustedCSV() {
+  if (!pickData.length) { showToast('No pick data to export'); return; }
+  const pickLines = pickData.filter(r => r.lineType === 'regular' || r.lineType === 'pick');
+  if (!pickLines.length) { showToast('No pick lines'); return; }
+  const headers = ['B2B Customer ID Value 2','Inner Barcode','Quantity Picked','Location','Driver','Call Sequence'];
+  const rows = pickLines.map(r => [
+    r.machineId, r.barcode||'', r.pickQty,
+    '"'+(r.locationName||'')+'"', '"'+(r.driver||'')+'"', r.serviceOrder||''
+  ].join(','));
+  downloadFile('vynd-picklist-adjusted-' + pickDate + '.csv', [headers.join(','), ...rows].join('\n'), 'text/csv');
+  showToast('Adjusted pick list exported ✓ — ' + pickLines.length + ' lines');
+}
+
 
 function generateDriverSheets() {
   const routeId = document.getElementById('sheet-route-sel')?.value || '';
@@ -12696,6 +13033,84 @@ try {
     }
   }
 } catch(e) { console.warn('Could not restore saved Firebase config:', e.message); }
+// ══════════════════════════════════════
+// FIREBASE MAINTENANCE
+// ══════════════════════════════════════
+
+async function cleanupCancelledRuns() {
+  if (!fbReady || !fbDb) { showToast('Not connected to Firebase'); return; }
+  const btn = document.getElementById('cleanup-runs-btn');
+  if (btn) btn.textContent = 'Cleaning…';
+  try {
+    const snap = await fbDb.ref('vynd/runs').once('value');
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 7);
+    const cutoffStr = cutoff.toISOString().split('T')[0];
+    const deletes = [];
+    snap.forEach(child => {
+      const r = child.val();
+      if (r.status === 'cancelled' && r.plannedDate < cutoffStr) {
+        deletes.push(fbDb.ref('vynd/runs/' + child.key).remove());
+      }
+    });
+    await Promise.all(deletes);
+    showCleanupResult(`✓ Removed ${deletes.length} cancelled run${deletes.length !== 1 ? 's' : ''} older than 7 days`, 'accent');
+    if (btn) btn.textContent = '🗑 Clean up';
+  } catch(e) { showToast('Error: ' + e.message); if (btn) btn.textContent = '🗑 Clean up'; }
+}
+
+async function cleanupAllCancelledRuns() {
+  if (!fbReady || !fbDb) { showToast('Not connected to Firebase'); return; }
+  const snap = await fbDb.ref('vynd/runs').once('value');
+  let count = 0;
+  snap.forEach(child => { if (child.val().status === 'cancelled') count++; });
+  if (!confirm(`Remove ALL ${count} cancelled runs from Firebase? This cannot be undone.`)) return;
+  const btn = document.getElementById('cleanup-all-runs-btn');
+  if (btn) btn.textContent = 'Removing…';
+  try {
+    const snap2 = await fbDb.ref('vynd/runs').once('value');
+    const deletes = [];
+    snap2.forEach(child => {
+      if (child.val().status === 'cancelled') deletes.push(fbDb.ref('vynd/runs/' + child.key).remove());
+    });
+    await Promise.all(deletes);
+    showCleanupResult(`✓ Removed ${deletes.length} cancelled run${deletes.length !== 1 ? 's' : ''}`, 'accent');
+    if (btn) btn.textContent = '🗑 Remove all';
+    loadTodaysRuns();
+  } catch(e) { showToast('Error: ' + e.message); if (btn) btn.textContent = '🗑 Remove all'; }
+}
+
+async function cleanupPickExports() {
+  if (!fbReady || !fbDb) { showToast('Not connected to Firebase'); return; }
+  const btn = document.getElementById('cleanup-exports-btn');
+  if (btn) btn.textContent = 'Cleaning…';
+  try {
+    const snap = await fbDb.ref('vynd/pickExports').once('value');
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 30);
+    const cutoffKey = cutoff.toISOString().split('T')[0].replace(/-/g,''); // YYYYMMDD
+    const deletes = [];
+    snap.forEach(child => {
+      const datepart = child.key.substring(0, 8); // first 8 chars = YYYYMMDD
+      if (datepart < cutoffKey) deletes.push(fbDb.ref('vynd/pickExports/' + child.key).remove());
+    });
+    await Promise.all(deletes);
+    showCleanupResult(`✓ Removed ${deletes.length} pick export record${deletes.length !== 1 ? 's' : ''} older than 30 days`, 'accent');
+    if (btn) btn.textContent = '🗑 Clean up';
+  } catch(e) { showToast('Error: ' + e.message); if (btn) btn.textContent = '🗑 Clean up'; }
+}
+
+function showCleanupResult(msg, type) {
+  const el = document.getElementById('cleanup-result');
+  if (!el) return;
+  el.style.display = '';
+  el.style.background = type === 'accent' ? 'rgba(16,185,129,.1)' : 'rgba(239,68,68,.1)';
+  el.style.color = type === 'accent' ? 'var(--accent)' : 'var(--danger)';
+  el.style.border = '1px solid ' + (type === 'accent' ? 'rgba(16,185,129,.3)' : 'rgba(239,68,68,.3)');
+  el.textContent = msg;
+  setTimeout(() => { el.style.display = 'none'; }, 5000);
+}
+
 initFirebasePortal();
 </script>
 

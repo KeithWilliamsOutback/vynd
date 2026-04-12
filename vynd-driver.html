@@ -356,7 +356,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
 <!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-<script src="https://unpkg.com/@zxing/browser@0.1.4/umd/index.min.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" crossorigin="anonymous"></script>
 </head>
 <body>
 
@@ -827,15 +827,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
 <div id="scan-modal" style="display:none;position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;background:var(--card);border-radius:20px 20px 0 0;z-index:301;padding:0 20px 36px">
   <div style="width:36px;height:4px;background:var(--border2);border-radius:99px;margin:12px auto 16px"></div>
   <div style="font-size:15px;font-weight:600;margin-bottom:4px">Scan bag barcode</div>
-  <div style="font-size:12px;color:var(--muted);margin-bottom:16px" id="scan-target-label">Point camera at barcode</div>
-  <div style="position:relative;border-radius:12px;overflow:hidden;background:#000;aspect-ratio:4/3;margin-bottom:16px">
-    <video id="scan-video" style="width:100%;height:100%;object-fit:cover" playsinline autoplay muted></video>
-    <!-- Viewfinder overlay -->
-    <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">
-      <div style="width:70%;height:40%;border:2px solid var(--accent);border-radius:8px;box-shadow:0 0 0 9999px rgba(0,0,0,.45)"></div>
-    </div>
-    <div id="scan-status" style="position:absolute;bottom:10px;left:0;right:0;text-align:center;font-size:12px;color:#fff;font-weight:500">Searching for barcode…</div>
-  </div>
+  <div style="font-size:12px;color:var(--muted);margin-bottom:12px" id="scan-target-label">Point camera at barcode</div>
+  <!-- html5-qrcode mounts its own video inside this div -->
+  <div id="scan-reader" style="border-radius:12px;overflow:hidden;margin-bottom:12px;width:100%"></div>
+  <div id="scan-status" style="text-align:center;font-size:12px;color:var(--muted);margin-bottom:12px;min-height:18px"></div>
   <div id="scan-manual-wrap" style="display:flex;gap:10px;margin-bottom:12px">
     <input id="scan-manual-input" class="cash-input" style="flex:1;width:auto;text-align:left;padding:10px 14px;font-size:14px" placeholder="Or type bag number manually" inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
     <button onclick="confirmManualScan()" style="padding:0 16px;border-radius:8px;background:var(--accent);color:#0f1117;border:none;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer">Use</button>
@@ -4568,89 +4563,68 @@ function openScan(targetId) {
   startCamera();
 }
 
+let html5QrScanner = null;
+
 async function startCamera() {
-  const video   = document.getElementById('scan-video');
   const status  = document.getElementById('scan-status');
   const manWrap = document.getElementById('scan-manual-wrap');
 
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    status.textContent = 'Camera not available — enter number below';
-    if (manWrap) manWrap.style.display = 'block';
+  if (typeof Html5Qrcode === 'undefined') {
+    status.textContent = 'Scanner not loaded — enter number below';
+    if (manWrap) manWrap.style.display = 'flex';
     setTimeout(() => document.getElementById('scan-manual-input')?.focus(), 200);
     return;
   }
 
-  // Try ZXingBrowser.BrowserMultiFormatReader — best iOS Safari support
-  if (typeof ZXingBrowser !== 'undefined' && ZXingBrowser.BrowserMultiFormatReader) {
-    try {
-      const codeReader = new ZXingBrowser.BrowserMultiFormatReader();
-      // Get available cameras
-      const devices = await ZXingBrowser.BrowserCodeReader.listVideoInputDevices();
-      // Prefer rear camera on mobile
-      const device = devices.find(d => /back|rear|environment/i.test(d.label)) || devices[0];
-      const deviceId = device ? device.deviceId : undefined;
-
-      status.textContent = 'Point camera at barcode…';
-
-      codeReader.decodeFromVideoDevice(deviceId, 'scan-video', (result, err) => {
-        if (result) {
-          const val = result.getText();
-          status.textContent = '✓ ' + val;
-          codeReader.reset();
-          if (scanStream) { scanStream.getTracks().forEach(t => t.stop()); scanStream = null; }
-          setTimeout(() => applyScanResult(val), 200);
-        }
-        // NotFoundException is expected — keep scanning, don't log
-      });
-
-      // Store reference for cleanup
-      window._activeCodeReader = codeReader;
-      return;
-    } catch(e) {
-      console.warn('ZXingBrowser failed:', e.message);
-    }
+  // Clean up any previous instance
+  if (html5QrScanner) {
+    try { await html5QrScanner.stop(); } catch(e) {}
+    html5QrScanner = null;
   }
 
-  // Fallback: manual camera + canvas approach
   try {
-    try {
-      scanStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' } }
-      });
-    } catch(e) {
-      scanStream = await navigator.mediaDevices.getUserMedia({ video: true });
-    }
+    html5QrScanner = new Html5Qrcode('scan-reader');
 
-    video.setAttribute('playsinline', '');
-    video.muted = true;
-    video.srcObject = scanStream;
+    const config = {
+      fps: 15,
+      qrbox: { width: 280, height: 120 }, // wide box for linear barcodes
+      formatsToSupport: [
+        Html5QrcodeSupportedFormats.CODE_128,
+        Html5QrcodeSupportedFormats.CODE_39,
+        Html5QrcodeSupportedFormats.EAN_13,
+        Html5QrcodeSupportedFormats.EAN_8,
+        Html5QrcodeSupportedFormats.UPC_A,
+        Html5QrcodeSupportedFormats.UPC_E,
+        Html5QrcodeSupportedFormats.QR_CODE,
+        Html5QrcodeSupportedFormats.DATA_MATRIX,
+        Html5QrcodeSupportedFormats.ITF,
+        Html5QrcodeSupportedFormats.CODABAR,
+      ],
+    };
 
-    await new Promise((resolve) => {
-      video.onloadedmetadata = async () => {
-        try { await video.play(); } catch(e) {}
-        resolve();
-      };
-      setTimeout(resolve, 2000);
-    });
+    await html5QrScanner.start(
+      { facingMode: 'environment' },
+      config,
+      (decodedText) => {
+        // Success — barcode detected
+        status.textContent = '✓ ' + decodedText;
+        closeScan();
+        setTimeout(() => applyScanResult(decodedText), 100);
+      },
+      (errorMsg) => {
+        // Scan error — normal, fires every frame without a barcode
+      }
+    );
 
-    // Native BarcodeDetector (Chrome/Android)
-    if ('BarcodeDetector' in window) {
-      scanDetector = new BarcodeDetector({ formats: ['code_128','code_39','ean_13','ean_8','upc_a','upc_e','qr_code','data_matrix'] });
-      status.textContent = 'Point camera at barcode…';
-      scanLoop(video, status);
-      return;
-    }
-
-    status.textContent = 'Camera active — enter number below';
-    if (manWrap) manWrap.style.display = 'block';
-    setTimeout(() => document.getElementById('scan-manual-input')?.focus(), 400);
+    if (status) status.textContent = 'Point camera at barcode…';
+    if (manWrap) manWrap.style.display = 'flex'; // always show manual option
 
   } catch(e) {
-    console.warn('Camera error:', e.name, e.message);
-    status.textContent = e.name === 'NotAllowedError'
+    console.warn('Html5Qrcode error:', e);
+    if (status) status.textContent = e.toString().includes('Permission')
       ? 'Camera permission denied — enter number below'
       : 'Camera unavailable — enter number below';
-    if (manWrap) manWrap.style.display = 'block';
+    if (manWrap) manWrap.style.display = 'flex';
     setTimeout(() => document.getElementById('scan-manual-input')?.focus(), 200);
   }
 }
@@ -4736,16 +4710,21 @@ function confirmManualScan() {
 function closeScan() {
   document.getElementById('scan-overlay').style.display = 'none';
   document.getElementById('scan-modal').style.display   = 'none';
+  // Stop html5-qrcode scanner
+  if (html5QrScanner) {
+    html5QrScanner.stop().catch(() => {}).finally(() => {
+      try { html5QrScanner.clear(); } catch(e) {}
+      html5QrScanner = null;
+    });
+  }
+  // Clean up any legacy streams
+  if (scanStream) { scanStream.getTracks().forEach(t => t.stop()); scanStream = null; }
   if (scanAnimFrame) { cancelAnimationFrame(scanAnimFrame); scanAnimFrame = null; }
-  if (scanStream)    { scanStream.getTracks().forEach(t => t.stop()); scanStream = null; }
-  // Clean up ZXingBrowser reader if active
   if (window._activeCodeReader) {
     try { window._activeCodeReader.reset(); } catch(e) {}
     window._activeCodeReader = null;
   }
   scanDetector = null;
-  const video  = document.getElementById('scan-video');
-  if (video) { video.srcObject = null; video.load(); }
 }
 
 // ══════════════════════════════════════

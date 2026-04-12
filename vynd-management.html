@@ -4188,12 +4188,14 @@ async function loadTodaysRuns(forDate) {
   if (hd) hd.textContent = dateLabel;
 
   list.innerHTML = active.map(r => {
+    const bagNums    = r.bagNumbers ? Object.entries(r.bagNumbers).map(([mid, num]) => `🏷 ${mid}: ${num}`).join(' · ') : '';
     const statusColor = r.status === 'complete' ? 'var(--accent)' : 'var(--warn)';
     const statusLabel = r.status === 'complete' ? '✓ Complete' : '● Scheduled';
     return `<div style="display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--border);border-radius:7px;padding:8px 10px">
       <div style="flex:1;min-width:0">
         <div style="font-size:12px;font-weight:600">${r.driverName || r.driverId} · ${(r.stops||[]).length} stops · ${r.plannedDate}</div>
         <div style="font-size:11px;color:var(--muted);font-family:'DM Mono',monospace">${r.id}</div>
+        ${bagNums ? `<div style="font-size:11px;color:var(--accent);margin-top:2px">${bagNums}</div>` : ''}
       </div>
       <span style="font-size:11px;color:${statusColor};font-weight:600">${statusLabel}</span>
       ${r.status !== 'complete'
@@ -6667,6 +6669,19 @@ function showReconDetail(machineId, key) {
   document.getElementById('recon-detail-sub').textContent =
     `${meta.name} · ${date} · ${record.totalSoldSinceLast || 0} units sold since last fill`;
 
+  // Load bag number from run record if not already in recon record
+  if (!record.bagNumber && record.runId && fbReady && fbDb) {
+    fbDb.ref('vynd/runs/' + record.runId + '/bagNumbers/' + machineId).once('value').then(snap => {
+      const bagNum = snap.val();
+      if (bagNum) {
+        record.bagNumber = bagNum;
+        // Update displayed bag number
+        const bagEl = document.getElementById('recon-bag-' + key);
+        if (bagEl) bagEl.textContent = bagNum;
+      }
+    }).catch(() => {});
+  }
+
   // Build slot rows
   const preSlots  = record.preRestockSlots  || {};
   const postSlots = record.postRestockSlots || {};
@@ -6759,7 +6774,7 @@ function showReconDetail(machineId, key) {
         </div>
         <div>
           <div class="form-label">Bag number</div>
-          <div class="form-input" style="background:var(--bg);cursor:default">${record.bagNumber || '—'}</div>
+          <div class="form-input" style="background:var(--bg);cursor:default" id="recon-bag-${record.key}">${record.bagNumber || '—'}</div>
         </div>
         <div>
           <div class="form-label">Cash counted (back office)</div>
@@ -7173,11 +7188,10 @@ function switchPickingTab(tab, btn) {
 let pickRunsCache = {}; // date → array of runs from Firebase
 
 async function buildPickList(routeId, runsForDate) {
-  console.log('buildPickList called — routeId:', routeId, 'runs:', runsForDate?.length);
   let machines = [];
   if (runsForDate && runsForDate.length > 0) {
     const relevantRuns = routeId ? runsForDate.filter(r => r.routeId === routeId) : runsForDate;
-    if (!relevantRuns.length) { console.log('No relevant runs after filter'); return []; }
+    if (!relevantRuns.length) return [];
     machines = relevantRuns.flatMap(r =>
       (r.stops || []).map((s, i) => ({
         ...s,
@@ -7186,9 +7200,7 @@ async function buildPickList(routeId, runsForDate) {
         driver:       r.driverName || r.driverId || '—',
       }))
     );
-    console.log('Machines from run:', machines.map(m => m.id));
   } else {
-    console.log('No runs passed to buildPickList');
     return [];
   }
 
@@ -7203,7 +7215,6 @@ async function buildPickList(routeId, runsForDate) {
           if (slot.currentSOH != null) liveSOH[mid][slotId] = slot.currentSOH;
         });
       }
-      console.log('DEX SOH for', mid, ':', liveSOH[mid]);
       const pogSnap = await fbDb.ref('vynd/planograms/' + mid + '/slots').once('value').catch(() => null);
       if (pogSnap && pogSnap.val()) {
         Object.entries(pogSnap.val()).forEach(([slotId, slot]) => {
@@ -7213,7 +7224,6 @@ async function buildPickList(routeId, runsForDate) {
           }
         });
       }
-      console.log('Final SOH for', mid, ':', liveSOH[mid]);
     }));
   }
 
@@ -7235,10 +7245,9 @@ async function buildPickList(routeId, runsForDate) {
 
     // Use in-memory PLANOGRAMS first, fall back to Firebase planogram data
     let slots = PLANOGRAMS[mid]?.slots;
-    console.log('mid:', mid, 'in-mem slots:', slots?.length ?? 0, 'fbPog keys:', fbPogSlots[mid] ? Object.keys(fbPogSlots[mid]).length : 0, 'liveSOH keys:', Object.keys(liveSOH[mid]||{}).length);
     if (!slots || slots.length === 0) {
       const fbSlots = fbPogSlots[mid];
-      if (!fbSlots) { console.log('NO PLANOGRAM for', mid, '— skipping'); return; }
+      if (!fbSlots) return;
       slots = Object.entries(fbSlots).map(([id, s]) => ({
         id,
         product:    s.product    || 'Empty',
@@ -7249,7 +7258,6 @@ async function buildPickList(routeId, runsForDate) {
         cost:       s.cost       || 0,
         price:      s.price      || s.priceDollars || 0,
       }));
-      console.log('Built', slots.length, 'slots from Firebase pog for', mid);
     }
 
     const productMap = {};
@@ -7320,7 +7328,6 @@ async function buildPickList(routeId, runsForDate) {
     // Planogram change lines — skipped (no pending changes workflow yet)
   });
 
-  console.log("buildPickList rows generated:", rows.length, rows.map(r => r.machineId + "/" + r.product + " qty=" + r.pickQty));
   return rows;
 }
 
@@ -7395,24 +7402,13 @@ async function updatePickPreview() {
       // Not exported — calculate from runs
       fbDb.ref('vynd/runs').once('value').then(async snap => {
         const runs = [];
-        const allRuns = [];
         snap.forEach(child => {
           const r = child.val();
-          allRuns.push({ id: child.key, date: r.plannedDate, status: r.status });
           if (r.plannedDate === date && r.status !== 'cancelled' && r.status !== 'complete') {
             runs.push({ id: child.key, ...r });
           }
         });
-        console.log('All runs in Firebase:', allRuns);
-        console.log('Runs for', date, ':', runs.length, runs.map(r => r.id));
         pickRunsCache[date] = runs;
-
-        // Show diagnostic in summary if no runs found
-        if (runs.length === 0) {
-          const summary = document.getElementById('pick-summary');
-          if (summary) summary.innerHTML = `<div style="color:var(--muted)">📅 No run found for ${date} — ${allRuns.length} total runs in Firebase (${allRuns.map(r=>r.date+'='+r.status).join(', ')})</div>`;
-          return;
-        }
 
         pickData = await buildPickList(routeId, runs);
 
@@ -7691,14 +7687,6 @@ function parsePickImportCSV(csvText) {
 
   if (midIdx < 0) { showToast('Could not find Machine ID column'); return; }
   if (qtyIdx < 0) { showToast('Could not find Quantity column'); return; }
-
-  // Show what we detected
-  console.log('Import columns detected:', {
-    machineId: headers[midIdx],
-    barcode:   bcIdx >= 0 ? headers[bcIdx] : 'none',
-    qty:       headers[qtyIdx],
-    product:   prodIdx >= 0 ? headers[prodIdx] : 'none',
-  });
 
   pickImportData = [];
   lines.slice(1).forEach(line => {

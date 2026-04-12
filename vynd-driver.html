@@ -456,7 +456,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
     <button class="nav-btn" style="display:none" onclick="navTo('screen-stock',this)">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none"><rect x="2" y="7" width="20" height="14" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Stock
     </button>
-    <button class="nav-btn" onclick="navTo('screen-cash',this)">
+    <button class="nav-btn" style="display:none" onclick="navTo('screen-cash',this)">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none"><rect x="2" y="6" width="20" height="13" rx="2" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/></svg>Cash
     </button>
   </nav>
@@ -639,6 +639,32 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
 </div>
 
 <!-- ════════════════════════
+     SCREEN: MACHINE DETAIL
+════════════════════════ -->
+<div class="screen" id="screen-machine-detail">
+  <div class="topbar">
+    <div class="topbar-left">
+      <button class="back-btn" id="machine-detail-back">‹ Locations</button>
+    </div>
+    <div class="topbar-title" id="machine-detail-title">Machine</div>
+    <div class="topbar-right"></div>
+  </div>
+  <div class="scroll">
+    <div id="machine-detail-header" style="margin-bottom:4px">
+      <div style="font-size:16px;font-weight:700" id="machine-detail-name"></div>
+      <div style="font-size:12px;color:var(--muted)" id="machine-detail-addr"></div>
+      <div style="font-size:11px;font-family:'DM Mono',monospace;color:var(--muted);margin-top:2px" id="machine-detail-id"></div>
+    </div>
+    <div id="machine-detail-on-route-banner" style="display:none;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.3);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--info);margin-bottom:4px">
+      ℹ️ This machine is on today's route — changes apply immediately and write to the planogram
+    </div>
+    <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Planogram slots</div>
+    <div id="machine-detail-slots"></div>
+    <div style="height:80px"></div>
+  </div>
+</div>
+
+<!-- ════════════════════════
      SCREEN: LOCATIONS
 ════════════════════════ -->
 <div class="screen" id="screen-locations">
@@ -662,7 +688,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
       <div class="stat-box"><div class="stat-val orange">1</div><div class="stat-lbl">Faults</div></div>
     </div>
     <div id="locations-list" style="display:flex;flex-direction:column;gap:16px"></div>
-    <div style="height:10px"></div>
+    <div style="height:80px"></div>
   </div>
   <nav class="bottom-nav">
     <button class="nav-btn" onclick="navTo('screen-home',this)">
@@ -674,7 +700,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
     <button class="nav-btn" style="display:none" onclick="navTo('screen-stock',this)">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none"><rect x="2" y="7" width="20" height="14" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Stock
     </button>
-    <button class="nav-btn" onclick="navTo('screen-cash',this)">
+    <button class="nav-btn" style="display:none" onclick="navTo('screen-cash',this)">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none"><rect x="2" y="6" width="20" height="13" rx="2" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/></svg>Cash
     </button>
   </nav>
@@ -769,7 +795,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
     <button class="nav-btn active" onclick="navTo('screen-stock',this)">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none"><rect x="2" y="7" width="20" height="14" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Stock
     </button>
-    <button class="nav-btn" onclick="navTo('screen-cash',this)">
+    <button class="nav-btn" style="display:none" onclick="navTo('screen-cash',this)">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none"><rect x="2" y="6" width="20" height="13" rx="2" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/></svg>Cash
     </button>
   </nav>
@@ -982,7 +1008,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
     <button class="nav-btn" style="display:none" onclick="navTo('screen-stock',this)">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none"><rect x="2" y="7" width="20" height="14" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Stock
     </button>
-    <button class="nav-btn" onclick="navTo('screen-cash',this)">
+    <button class="nav-btn" style="display:none" onclick="navTo('screen-cash',this)">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none"><rect x="2" y="6" width="20" height="13" rx="2" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/></svg>Cash
     </button>
   </nav>
@@ -2542,9 +2568,200 @@ function toggleDone() {
 }
 
 // ══════════════════════════════════════
-// LOCATIONS
+// MACHINE DETAIL (from Locations)
 // ══════════════════════════════════════
-let activeFilter = 'all';
+
+let machineDetailId   = null;
+let machineDetailSlots = [];
+
+async function showMachineDetail(mid) {
+  machineDetailId    = mid;
+  machineDetailSlots = [];
+  showScreen('screen-machine-detail');
+
+  const s = STOPS[mid] || MACHINE_META_DRIVER[mid] || {};
+  document.getElementById('machine-detail-title').textContent = mid;
+  document.getElementById('machine-detail-name').textContent  = s.locationName || mid;
+  document.getElementById('machine-detail-addr').textContent  = s.addr || '';
+  document.getElementById('machine-detail-id').textContent    = mid;
+  document.getElementById('machine-detail-back').onclick = () => showScreen('screen-locations');
+
+  // Show banner if machine is on today's active run
+  const onRoute = !!(currentRunData && currentRunData.stops &&
+    currentRunData.stops.some(st => st.id === mid) &&
+    STOPS[mid]?.status !== 'done');
+  const banner = document.getElementById('machine-detail-on-route-banner');
+  if (banner) banner.style.display = onRoute ? '' : 'none';
+
+  const container = document.getElementById('machine-detail-slots');
+  container.innerHTML = '<div class="text-muted" style="text-align:center;padding:32px">Loading planogram…</div>';
+
+  if (!fbDb) {
+    container.innerHTML = '<div class="text-muted" style="text-align:center;padding:32px">Connect to Firebase first</div>';
+    return;
+  }
+
+  try {
+    const [pogSnap, dexSnap] = await Promise.all([
+      fbDb.ref('vynd/planograms/' + mid + '/slots').once('value'),
+      fbDb.ref('vynd/dexReadings/' + mid + '/last/slots').once('value'),
+    ]);
+
+    const pog = pogSnap.val() || {};
+    const dex = dexSnap.val() || {};
+
+    machineDetailSlots = Object.entries(pog).map(([id, p]) => {
+      const d = dex[id] || {};
+      return {
+        id,
+        product:        p.product    || '',
+        pendingProduct: p.pendingProduct || null, // staged product change
+        price:          parseFloat(p.price || p.priceDollars || 0),
+        par:            parseInt(p.par      || 0),
+        capacity:       parseInt(p.capacity || 0),
+        currentSOH:     d.currentSOH != null ? d.currentSOH : (p.currentSOH ?? p.current ?? 0),
+        barcode:        p.barcode    || '',
+      };
+    }).sort((a, b) => String(a.id).localeCompare(String(b.id), undefined, { numeric: true }));
+
+    if (!machineDetailSlots.length) {
+      container.innerHTML = '<div class="text-muted" style="text-align:center;padding:32px">No planogram data — set up planogram in management portal first</div>';
+      return;
+    }
+
+    renderMachineDetailSlots(container);
+  } catch(e) {
+    container.innerHTML = '<div class="text-muted" style="text-align:center;padding:32px">Error: ' + e.message + '</div>';
+  }
+}
+
+function renderMachineDetailSlots(container) {
+  container.innerHTML = machineDetailSlots.map(slot => {
+    const pct      = slot.capacity ? Math.round((slot.currentSOH / slot.capacity) * 100) : 0;
+    const barColor = pct > 50 ? 'var(--accent)' : pct > 20 ? 'var(--warn)' : 'var(--danger)';
+    const hasPending = !!slot.pendingProduct && slot.pendingProduct !== slot.product;
+
+    return `<div class="card" style="padding:14px;cursor:default;margin-bottom:8px" id="md-slot-${slot.id}">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div style="font-size:11px;font-weight:700;font-family:'DM Mono',monospace;color:var(--muted)">Slot ${slot.id}</div>
+        <div style="font-size:11px;color:var(--muted)">${slot.currentSOH}/${slot.capacity} · ${pct}%</div>
+      </div>
+      <div style="height:4px;background:var(--border);border-radius:99px;margin-bottom:12px">
+        <div style="height:4px;background:${barColor};border-radius:99px;width:${Math.min(pct,100)}%"></div>
+      </div>
+
+      <!-- Current product -->
+      <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Current product</div>
+      <div style="font-size:13px;font-weight:600;margin-bottom:${hasPending?4:12}px">${slot.product || '—'}</div>
+
+      ${hasPending ? `
+      <div style="font-size:10px;color:var(--warn);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">⏳ Staged change</div>
+      <div style="font-size:13px;font-weight:600;color:var(--warn);margin-bottom:12px">${slot.pendingProduct}</div>
+      ` : ''}
+
+      <!-- New product field -->
+      <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Change product</div>
+      <input list="md-product-list" class="field-input" style="width:100%;margin-bottom:8px;font-size:13px"
+        placeholder="Type new product name…" id="md-newproduct-${slot.id}"
+        value="${hasPending ? slot.pendingProduct : ''}">
+      <datalist id="md-product-list">
+        ${(typeof ALL_PRODUCTS !== 'undefined' ? ALL_PRODUCTS : []).map(p => `<option value="${p}">`).join('')}
+      </datalist>
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <button class="btn btn-secondary btn-sm" style="flex:1;font-size:11px" onclick="stageProductChange('${slot.id}')">Stage for next fill</button>
+        <button class="btn btn-sm" style="flex:1;font-size:11px;background:var(--accent);color:#000;border:none" onclick="forceProductChange('${slot.id}')">Apply now</button>
+      </div>
+
+      <!-- SOH / Par / Cap / Price -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px">
+        <div>
+          <div style="font-size:10px;color:var(--muted);margin-bottom:3px">SOH</div>
+          <input class="field-input" style="text-align:center;font-size:13px" type="number" min="0"
+            value="${slot.currentSOH}" id="md-soh-${slot.id}"
+            onchange="saveMachineSlot('${slot.id}', 'currentSOH', +this.value)">
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--muted);margin-bottom:3px">Par</div>
+          <input class="field-input" style="text-align:center;font-size:13px" type="number" min="0"
+            value="${slot.par}" id="md-par-${slot.id}"
+            onchange="saveMachineSlot('${slot.id}', 'par', +this.value)">
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--muted);margin-bottom:3px">Cap</div>
+          <input class="field-input" style="text-align:center;font-size:13px" type="number" min="0"
+            value="${slot.capacity}" id="md-cap-${slot.id}"
+            onchange="saveMachineSlot('${slot.id}', 'capacity', +this.value)">
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--muted);margin-bottom:3px">Price</div>
+          <input class="field-input" style="text-align:center;font-size:13px" type="number" min="0" step="0.10"
+            value="${slot.price.toFixed(2)}" id="md-price-${slot.id}"
+            onchange="saveMachineSlot('${slot.id}', 'price', +this.value)">
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function stageProductChange(slotId) {
+  const input = document.getElementById('md-newproduct-' + slotId);
+  const newProduct = input?.value?.trim();
+  if (!newProduct) { showToast('Enter a product name first'); return; }
+  const slot = machineDetailSlots.find(s => s.id === slotId);
+  if (!slot) return;
+  if (newProduct === slot.product) { showToast('Same as current product'); return; }
+
+  await saveMachineSlot(slotId, 'pendingProduct', newProduct);
+  slot.pendingProduct = newProduct;
+  showToast('Staged ✓ — will apply at next fill');
+  renderMachineDetailSlots(document.getElementById('machine-detail-slots'));
+}
+
+async function forceProductChange(slotId) {
+  const input = document.getElementById('md-newproduct-' + slotId);
+  const newProduct = input?.value?.trim();
+  if (!newProduct) { showToast('Enter a product name first'); return; }
+  if (!confirm('Apply "' + newProduct + '" to slot ' + slotId + ' now? This updates the planogram immediately.')) return;
+
+  const slot = machineDetailSlots.find(s => s.id === slotId);
+  if (!slot) return;
+
+  await saveMachineSlot(slotId, 'product', newProduct);
+  await saveMachineSlot(slotId, 'pendingProduct', null);
+  slot.product        = newProduct;
+  slot.pendingProduct = null;
+  showToast('Product updated ✓');
+  renderMachineDetailSlots(document.getElementById('machine-detail-slots'));
+}
+
+async function saveMachineSlot(slotId, field, value) {
+  if (!fbDb || !machineDetailId) return;
+
+  const slot = machineDetailSlots.find(s => s.id === slotId);
+  if (slot) slot[field] = value;
+
+  const updates = {};
+  updates['vynd/planograms/' + machineDetailId + '/slots/' + slotId + '/' + field] = value;
+
+  // Sync SOH changes to dexReadings so pick list sees them immediately
+  if (field === 'currentSOH') {
+    updates['vynd/dexReadings/' + machineDetailId + '/last/slots/' + slotId + '/currentSOH'] = value;
+  }
+
+  try {
+    await fbDb.ref().update(updates);
+    const card = document.getElementById('md-slot-' + slotId);
+    if (card) {
+      card.style.transition = 'border-color .3s';
+      card.style.borderColor = 'var(--accent)';
+      setTimeout(() => { card.style.borderColor = ''; }, 1200);
+    }
+  } catch(e) {
+    showToast('Save failed: ' + e.message);
+  }
+}
+
+
 function setFilter(f, btn) {
   activeFilter = f;
   document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('on'));
@@ -2615,7 +2832,7 @@ function renderLocations() {
       const mEl = document.createElement('div');
       mEl.className = 'machine-item';
       mEl.innerHTML = '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600">' + m.name + '</div><div style="font-size:11px;color:var(--muted)">' + (m.addr || m.id) + '</div><div style="margin-top:4px">' + stockLine + '</div></div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">' + statusPill + '</div>';
-      mEl.onclick = () => showStop(m.id);
+      mEl.onclick = () => showMachineDetail(m.id);
       siteEl.appendChild(mEl);
     });
     container.appendChild(siteEl);
@@ -5309,6 +5526,12 @@ function syncStopOnComplete(mid) {
         runId:       currentRunData ? currentRunData.key : null,
         slots,
       }).catch(e => console.warn('Could not write fill data:', e.message));
+      // Write bag number to run record so portal can see it
+      const bag = bagNumbers[mid];
+      if (bag && currentRunData && currentRunData.key) {
+        fbDb.ref('vynd/runs/' + currentRunData.key + '/bagNumbers/' + mid).set(bag)
+          .catch(e => console.warn('Could not write bag number:', e.message));
+      }
     }
 
     store.set(SYNC_TO_KEY, JSON.stringify(existing));

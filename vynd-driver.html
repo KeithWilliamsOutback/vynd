@@ -356,13 +356,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
 <!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/zxing-js/0.19.1/zxing-browser.min.js" crossorigin="anonymous"></script>
-<script>
-  // ZXing namespace compatibility — cdnjs exposes ZXingBrowser, unpkg exposes ZXing
-  if (typeof ZXingBrowser !== 'undefined' && typeof ZXing === 'undefined') {
-    window.ZXing = ZXingBrowser;
-  }
-</script>
+<script src="https://unpkg.com/@zxing/browser@0.1.4/umd/index.min.js" crossorigin="anonymous"></script>
 </head>
 <body>
 
@@ -4586,58 +4580,60 @@ async function startCamera() {
     return;
   }
 
-  // Ensure playsinline/muted set for Safari before srcObject
-  video.setAttribute('playsinline', '');
-  video.setAttribute('autoplay', '');
-  video.muted = true;
+  // Try ZXingBrowser.BrowserMultiFormatReader — best iOS Safari support
+  if (typeof ZXingBrowser !== 'undefined' && ZXingBrowser.BrowserMultiFormatReader) {
+    try {
+      const codeReader = new ZXingBrowser.BrowserMultiFormatReader();
+      // Get available cameras
+      const devices = await ZXingBrowser.BrowserCodeReader.listVideoInputDevices();
+      // Prefer rear camera on mobile
+      const device = devices.find(d => /back|rear|environment/i.test(d.label)) || devices[0];
+      const deviceId = device ? device.deviceId : undefined;
 
+      status.textContent = 'Point camera at barcode…';
+
+      codeReader.decodeFromVideoDevice(deviceId, 'scan-video', (result, err) => {
+        if (result) {
+          const val = result.getText();
+          status.textContent = '✓ ' + val;
+          codeReader.reset();
+          if (scanStream) { scanStream.getTracks().forEach(t => t.stop()); scanStream = null; }
+          setTimeout(() => applyScanResult(val), 200);
+        }
+        // NotFoundException is expected — keep scanning, don't log
+      });
+
+      // Store reference for cleanup
+      window._activeCodeReader = codeReader;
+      return;
+    } catch(e) {
+      console.warn('ZXingBrowser failed:', e.message);
+    }
+  }
+
+  // Fallback: manual camera + canvas approach
   try {
-    // Try rear camera first, fall back to any camera (Safari can be picky)
     try {
       scanStream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: { ideal: 'environment' } }
       });
-    } catch(e1) {
-      try {
-        scanStream = await navigator.mediaDevices.getUserMedia({ video: true });
-      } catch(e2) {
-        throw e2;
-      }
+    } catch(e) {
+      scanStream = await navigator.mediaDevices.getUserMedia({ video: true });
     }
 
+    video.setAttribute('playsinline', '');
+    video.muted = true;
     video.srcObject = scanStream;
 
-    // Safari needs explicit play() call after srcObject set
-    await new Promise((resolve, reject) => {
+    await new Promise((resolve) => {
       video.onloadedmetadata = async () => {
-        try { await video.play(); resolve(); }
-        catch(e) { reject(e); }
+        try { await video.play(); } catch(e) {}
+        resolve();
       };
-      video.onerror = reject;
-      setTimeout(resolve, 3000); // safety timeout
+      setTimeout(resolve, 2000);
     });
 
-    // Try ZXing (best cross-browser support including iOS Safari)
-    if (window.ZXing) {
-      try {
-        const hints = new Map();
-        const formats = [
-          ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.CODE_39,
-          ZXing.BarcodeFormat.EAN_13,   ZXing.BarcodeFormat.EAN_8,
-          ZXing.BarcodeFormat.UPC_A,    ZXing.BarcodeFormat.UPC_E,
-          ZXing.BarcodeFormat.QR_CODE,  ZXing.BarcodeFormat.DATA_MATRIX,
-          ZXing.BarcodeFormat.ITF,      ZXing.BarcodeFormat.CODABAR,
-        ];
-        hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
-        const reader = new ZXing.MultiFormatReader();
-        reader.setHints(hints);
-        status.textContent = 'Point camera at barcode…';
-        scanLoop_ZXing(video, status, reader);
-        return;
-      } catch(e) { console.warn('ZXing init failed:', e); }
-    }
-
-    // Fallback: native BarcodeDetector (Chrome/Android)
+    // Native BarcodeDetector (Chrome/Android)
     if ('BarcodeDetector' in window) {
       scanDetector = new BarcodeDetector({ formats: ['code_128','code_39','ean_13','ean_8','upc_a','upc_e','qr_code','data_matrix'] });
       status.textContent = 'Point camera at barcode…';
@@ -4645,20 +4641,15 @@ async function startCamera() {
       return;
     }
 
-    // No decoder available — manual entry
     status.textContent = 'Camera active — enter number below';
     if (manWrap) manWrap.style.display = 'block';
     setTimeout(() => document.getElementById('scan-manual-input')?.focus(), 400);
 
   } catch(e) {
     console.warn('Camera error:', e.name, e.message);
-    if (e.name === 'NotAllowedError') {
-      status.textContent = 'Camera permission denied — enter number below';
-    } else if (e.name === 'NotFoundError') {
-      status.textContent = 'No camera found — enter number below';
-    } else {
-      status.textContent = 'Camera unavailable — enter number below';
-    }
+    status.textContent = e.name === 'NotAllowedError'
+      ? 'Camera permission denied — enter number below'
+      : 'Camera unavailable — enter number below';
     if (manWrap) manWrap.style.display = 'block';
     setTimeout(() => document.getElementById('scan-manual-input')?.focus(), 200);
   }
@@ -4747,9 +4738,14 @@ function closeScan() {
   document.getElementById('scan-modal').style.display   = 'none';
   if (scanAnimFrame) { cancelAnimationFrame(scanAnimFrame); scanAnimFrame = null; }
   if (scanStream)    { scanStream.getTracks().forEach(t => t.stop()); scanStream = null; }
-  scanDetector  = null;
-  const video   = document.getElementById('scan-video');
-  if (video) video.srcObject = null;
+  // Clean up ZXingBrowser reader if active
+  if (window._activeCodeReader) {
+    try { window._activeCodeReader.reset(); } catch(e) {}
+    window._activeCodeReader = null;
+  }
+  scanDetector = null;
+  const video  = document.getElementById('scan-video');
+  if (video) { video.srcObject = null; video.load(); }
 }
 
 // ══════════════════════════════════════

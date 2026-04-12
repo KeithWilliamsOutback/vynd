@@ -356,7 +356,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
 <!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-<script src="https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/zxing-js/0.19.1/zxing-browser.min.js" crossorigin="anonymous"></script>
+<script>
+  // ZXing namespace compatibility — cdnjs exposes ZXingBrowser, unpkg exposes ZXing
+  if (typeof ZXingBrowser !== 'undefined' && typeof ZXing === 'undefined') {
+    window.ZXing = ZXingBrowser;
+  }
+</script>
 </head>
 <body>
 
@@ -4576,20 +4582,42 @@ async function startCamera() {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     status.textContent = 'Camera not available — enter number below';
     if (manWrap) manWrap.style.display = 'block';
+    setTimeout(() => document.getElementById('scan-manual-input')?.focus(), 200);
     return;
   }
 
-  try {
-    scanStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
-    });
-    video.srcObject = scanStream;
-    video.setAttribute('playsinline', 'true');
-    video.setAttribute('autoplay', 'true');
-    video.muted = true;
-    await video.play();
+  // Ensure playsinline/muted set for Safari before srcObject
+  video.setAttribute('playsinline', '');
+  video.setAttribute('autoplay', '');
+  video.muted = true;
 
-    // Try ZXing first (best cross-browser support including iOS Safari)
+  try {
+    // Try rear camera first, fall back to any camera (Safari can be picky)
+    try {
+      scanStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } }
+      });
+    } catch(e1) {
+      try {
+        scanStream = await navigator.mediaDevices.getUserMedia({ video: true });
+      } catch(e2) {
+        throw e2;
+      }
+    }
+
+    video.srcObject = scanStream;
+
+    // Safari needs explicit play() call after srcObject set
+    await new Promise((resolve, reject) => {
+      video.onloadedmetadata = async () => {
+        try { await video.play(); resolve(); }
+        catch(e) { reject(e); }
+      };
+      video.onerror = reject;
+      setTimeout(resolve, 3000); // safety timeout
+    });
+
+    // Try ZXing (best cross-browser support including iOS Safari)
     if (window.ZXing) {
       try {
         const hints = new Map();
@@ -4606,7 +4634,7 @@ async function startCamera() {
         status.textContent = 'Point camera at barcode…';
         scanLoop_ZXing(video, status, reader);
         return;
-      } catch(e) { console.warn('ZXing init failed, trying BarcodeDetector', e); }
+      } catch(e) { console.warn('ZXing init failed:', e); }
     }
 
     // Fallback: native BarcodeDetector (Chrome/Android)
@@ -4617,12 +4645,13 @@ async function startCamera() {
       return;
     }
 
-    // Last resort: show manual entry
-    status.textContent = 'Auto-scan unavailable — enter number below';
+    // No decoder available — manual entry
+    status.textContent = 'Camera active — enter number below';
     if (manWrap) manWrap.style.display = 'block';
-    setTimeout(() => { document.getElementById('scan-manual-input')?.focus(); }, 400);
+    setTimeout(() => document.getElementById('scan-manual-input')?.focus(), 400);
 
   } catch(e) {
+    console.warn('Camera error:', e.name, e.message);
     if (e.name === 'NotAllowedError') {
       status.textContent = 'Camera permission denied — enter number below';
     } else if (e.name === 'NotFoundError') {
@@ -4631,7 +4660,7 @@ async function startCamera() {
       status.textContent = 'Camera unavailable — enter number below';
     }
     if (manWrap) manWrap.style.display = 'block';
-    setTimeout(() => { document.getElementById('scan-manual-input')?.focus(); }, 200);
+    setTimeout(() => document.getElementById('scan-manual-input')?.focus(), 200);
   }
 }
 

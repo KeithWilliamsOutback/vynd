@@ -1231,11 +1231,17 @@ async function loadHomeScreen() {
       let todayRun = null;
       runsSnap.forEach(child => {
         const run = child.val();
-        if (run.plannedDate === today &&
+        // Normalise plannedDate (handle both YYYY-MM-DD and DD/MM/YYYY)
+        let runDate = run.plannedDate || '';
+        if (runDate && !runDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+          const parts = runDate.split('/');
+          if (parts.length === 3) runDate = `${parts[2]}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`;
+        }
+        if (runDate        === today &&
             run.driverId   === driverId &&
             run.status     !== 'cancelled' &&
             run.status     !== 'complete') {
-          todayRun = { key: child.key, ...run };
+          todayRun = { key: child.key, ...run, plannedDate: runDate };
         }
       });
 
@@ -2630,6 +2636,16 @@ function completeStop() {
   // Update progress
   const currentStops = currentRunData?.stops || Object.values(STOPS).map(s => ({ id:s.id, status:s.status }));
   updateHomeProgress(currentStops);
+
+  // Auto-complete the run in Firebase when all stops are done
+  const allDone = currentStops.every(st => (STOPS[st.id]?.status || st.status) === 'done');
+  if (allDone && currentRunData && currentRunData.key && fbDb) {
+    fbDb.ref('vynd/runs/' + currentRunData.key + '/status').set('complete')
+      .then(() => fbDb.ref('vynd/runs/' + currentRunData.key + '/completedAt').set(new Date().toISOString()))
+      .then(() => showToast('✓ All stops done — run complete'))
+      .catch(() => {});
+  }
+
   setTimeout(() => showScreen('screen-home'), 800);
 }
 

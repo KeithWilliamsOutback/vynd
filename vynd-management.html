@@ -4096,10 +4096,17 @@ function updateRunDate() {
 
 async function saveRun() {
   const driver = document.getElementById('run-driver-select')?.value;
-  const date   = document.getElementById('run-date')?.value;
+  let   date   = document.getElementById('run-date')?.value;
   if (!driver)          { showToast('Please assign a driver first'); return; }
   if (!date)            { showToast('Please set a planned date first'); return; }
   if (!runStops.length) { showToast('No stops in this run'); return; }
+
+  // Normalise date to ISO format (YYYY-MM-DD) regardless of browser locale
+  if (date && !date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    // Handle DD/MM/YYYY format
+    const parts = date.split('/');
+    if (parts.length === 3) date = `${parts[2]}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`;
+  }
 
   const driverName = USERS[driver]?.name || DRIVERS[driver]?.name || driver;
   const routeId    = currentRouteId;
@@ -4161,7 +4168,13 @@ async function loadTodaysRuns(forDate) {
   const runs = [];
   snap.forEach(child => {
     const r = child.val();
-    if (r.plannedDate === targetDate) runs.push({ id: child.key, ...r });
+    // Normalise plannedDate for comparison (handle both YYYY-MM-DD and DD/MM/YYYY)
+    let runDate = r.plannedDate || '';
+    if (runDate && !runDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      const parts = runDate.split('/');
+      if (parts.length === 3) runDate = `${parts[2]}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`;
+    }
+    if (runDate === targetDate) runs.push({ id: child.key, ...r, plannedDate: runDate });
   });
 
   const panel = document.getElementById('todays-runs-panel');

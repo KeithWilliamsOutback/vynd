@@ -4185,31 +4185,51 @@ async function loadTodaysRuns(forDate) {
   const list  = document.getElementById('todays-runs-list');
   if (!panel || !list) return;
 
-  const active = runs.filter(r => r.status !== 'cancelled');
+  const active    = runs.filter(r => r.status !== 'cancelled');
+  const completed = active.filter(r => r.status === 'complete');
+  const pending   = active.filter(r => r.status !== 'complete');
   if (!active.length) { panel.style.display = 'none'; return; }
 
   const dateLabel = isToday ? "Today's runs" : `Runs for ${targetDate}`;
   panel.style.display = '';
-  // Update heading
   const hd = panel.querySelector('div[style*="font-size:11px"]');
   if (hd) hd.textContent = dateLabel;
 
-  list.innerHTML = active.map(r => {
+  const showCompleted = panel._showCompleted || false;
+  const visible = showCompleted ? active : pending.length ? pending : active;
+
+  list.innerHTML = visible.map(r => {
     const bagNums    = r.bagNumbers ? Object.entries(r.bagNumbers).map(([mid, num]) => `🏷 ${mid}: ${num}`).join(' · ') : '';
-    const statusColor = r.status === 'complete' ? 'var(--accent)' : 'var(--warn)';
-    const statusLabel = r.status === 'complete' ? '✓ Complete' : '● Scheduled';
-    return `<div style="display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--border);border-radius:7px;padding:8px 10px">
+    const isComplete = r.status === 'complete';
+    const statusColor = isComplete ? 'var(--accent)' : 'var(--warn)';
+    const statusLabel = isComplete ? '✓ Complete' : '● Scheduled';
+    return `<div style="display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--border);border-radius:7px;padding:8px 10px;${isComplete?'opacity:0.6':''}">
       <div style="flex:1;min-width:0">
         <div style="font-size:12px;font-weight:600">${r.driverName || r.driverId} · ${(r.stops||[]).length} stops · ${r.plannedDate}</div>
         <div style="font-size:11px;color:var(--muted);font-family:'DM Mono',monospace">${r.id}</div>
         ${bagNums ? `<div style="font-size:11px;color:var(--accent);margin-top:2px">${bagNums}</div>` : ''}
       </div>
       <span style="font-size:11px;color:${statusColor};font-weight:600">${statusLabel}</span>
-      ${r.status !== 'complete'
+      ${!isComplete
         ? `<button class="btn btn-sm" style="color:var(--danger);border-color:var(--danger);font-size:11px;padding:3px 8px" onclick="cancelRunById('${r.id}','${r.routeId||''}')">✕ Cancel</button>`
         : ''}
     </div>`;
   }).join('');
+
+  // Show "show completed" toggle if there are completed runs
+  const existingToggle = document.getElementById('runs-show-completed-btn');
+  if (existingToggle) existingToggle.remove();
+  if (completed.length > 0) {
+    const btn = document.createElement('button');
+    btn.id = 'runs-show-completed-btn';
+    btn.className = 'btn btn-secondary btn-sm';
+    btn.style.cssText = 'margin-top:6px;width:100%;font-size:11px';
+    btn.textContent = showCompleted
+      ? `Hide completed (${completed.length})`
+      : `Show completed runs (${completed.length})`;
+    btn.onclick = () => { panel._showCompleted = !panel._showCompleted; loadTodaysRuns(forDate); };
+    list.after(btn);
+  }
 }
 
 async function cancelRunById(runId, routeId) {
@@ -4846,11 +4866,14 @@ function showPlanogram(machineId) {
   // Load live DEX data from Firebase and merge with planogram
   if (fbReady && fbDb) {
     Promise.all([
-      fbDb.ref('vynd/machines/' + machineId + '/dex').once('value'),
-      fbDb.ref('vynd/planograms/' + machineId + '/slots').once('value'),
-    ]).then(([dexSnap, pogSnap]) => {
-      const dexData = dexSnap.val();
-      const pogData = pogSnap.val();
+      fbDb.ref('vynd/machines/'    + machineId + '/dex').once('value'),
+      fbDb.ref('vynd/planograms/'  + machineId + '/slots').once('value'),
+      fbDb.ref('vynd/dexReadings/' + machineId + '/last/slots').once('value'),
+    ]).then(([dexSnap, pogSnap, liveSnap]) => {
+      const dexData  = dexSnap.val();
+      const pogData  = pogSnap.val();
+      // Live SOH from dexReadings takes priority — most current after restock dial
+      const liveSOH  = liveSnap.val() || {};
 
       if (!dexViewJustApplied && dexData && dexData.slots && Object.keys(dexData.slots).length > 0) {
         // Build planogram from live DEX data
@@ -4906,9 +4929,11 @@ function showPlanogram(machineId) {
               tray:     letter,
               product:  getField('product', 'Empty'),
               price:    parseFloat(String(getField('price', null) || getField('priceDollars', null) || slot.priceDollars || 0).replace('$','')),
-              current:  (slot.currentSOH !== null && slot.currentSOH !== undefined && (slot.currentSOH > 0 || slot.cumulativeVends > 0))
-                ? slot.currentSOH
-                : getField('currentSOH', 0),
+              current:  liveSOH[slot.id]?.currentSOH != null
+                ? liveSOH[slot.id].currentSOH
+                : (slot.currentSOH !== null && slot.currentSOH !== undefined && (slot.currentSOH > 0 || slot.cumulativeVends > 0))
+                  ? slot.currentSOH
+                  : getField('currentSOH', 0),
               par:      getField('par',      10),
               capacity: getField('capacity', 10),
               barcode:  getField('barcode',  null),
@@ -13073,12 +13098,13 @@ async function repairPlanogramValues() {
     pog.slots.forEach(slot => {
       if (!slot.par && !slot.capacity) return; // nothing to write
       const base = 'vynd/planograms/' + mid + '/slots/' + slot.id;
-      // Only update if par or capacity is set in memory
       if (slot.par)      { updates[base + '/par']      = slot.par;      fixCount++; }
       if (slot.capacity) { updates[base + '/capacity']  = slot.capacity; }
       if (slot.product)  { updates[base + '/product']   = slot.product; }
       if (slot.barcode)  { updates[base + '/barcode']   = slot.barcode; }
       if (slot.price)    { updates[base + '/price']     = slot.price; }
+      // Write overflow flag so driver app can filter without cross-referencing in-memory data
+      updates[base + '/overflow'] = slot.overflow ? true : false;
     });
   });
 

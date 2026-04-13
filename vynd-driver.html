@@ -486,6 +486,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
       </div>
       <div class="divider" style="margin:12px 0"></div>
       <div class="row"><div class="text-muted" style="font-size:12px">Last serviced</div><div class="font-mono" style="font-size:12px;color:var(--muted)" id="stop-last-service">—</div></div>
+      <div class="row mt4"><div class="text-muted" style="font-size:12px">Last DEX dial</div><div class="font-mono" style="font-size:12px;color:var(--muted)" id="stop-last-dex">—</div></div>
+      <div class="row mt4" id="stop-restock-row" style="display:none"><div class="text-muted" style="font-size:12px">Last restock dial</div><div class="font-mono" style="font-size:12px;color:var(--accent)" id="stop-last-restock">—</div></div>
       <div class="row mt4" id="stop-cash-row"><div class="text-muted" style="font-size:12px" id="stop-cash-label">Est. cash</div><div class="font-mono" style="font-size:13px;color:var(--accent)" id="stop-cash-est">$96.40</div></div>
     </div>
 
@@ -1720,6 +1722,89 @@ async function showStop(machineId) {
   document.getElementById('stop-addr').textContent = s.addr;
   document.getElementById('stop-last-service').textContent = s.lastService || '—';
 
+  // Load last DEX dial and restock dial from Firebase
+  document.getElementById('stop-last-dex').textContent = 'Loading…';
+  document.getElementById('stop-restock-row').style.display = 'none';
+  if (fbDb) {
+    fbDb.ref('vynd/dexReadings/' + machineId + '/last').once('value').then(snap => {
+      const dex      = snap.val();
+      const dexEl      = document.getElementById('stop-last-dex');
+      const restockRow = document.getElementById('stop-restock-row');
+      const restockEl  = document.getElementById('stop-last-restock');
+      if (!dex) { if (dexEl) dexEl.textContent = 'No DEX data'; return; }
+
+      function parseDexDate(val) {
+        if (!val) return null;
+        // Try direct parse first
+        let d = new Date(val);
+        if (!isNaN(d)) return d;
+        // Windcave format: YYYY-MM-DDTHH:MM:SS or YYYYMMDDTHHMMSS or similar
+        const clean = String(val).replace(/(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})/, '$1-$2-$3T$4:$5:$6');
+        d = new Date(clean);
+        if (!isNaN(d)) return d;
+        return null;
+      }
+
+      function formatAgo(d) {
+        if (!d) return '—';
+        const diffMs = Date.now() - d.getTime();
+        const diffH  = Math.floor(diffMs / 36e5);
+        const diffM  = Math.floor(diffMs / 60000);
+        if (diffM < 2)  return 'Just now';
+        if (diffM < 60) return diffM + 'm ago';
+        if (diffH < 24) return diffH + 'h ago';
+        return Math.round(diffH / 24) + 'd ago';
+      }
+
+      function formatTime(d) {
+        if (!d) return '';
+        return d.toLocaleTimeString('en-AU', {hour:'2-digit', minute:'2-digit'});
+      }
+
+      function formatDate(d) {
+        if (!d) return '';
+        return d.toLocaleDateString('en-AU', {day:'numeric', month:'short'});
+      }
+
+      const dexTime = parseDexDate(dex.transmitTime || dex.createdAt);
+      if (dexEl) {
+        if (dexTime) {
+          const reason = dex.dexReasonLabel ? ` (${dex.dexReasonLabel})` : '';
+          dexEl.textContent = formatAgo(dexTime) + reason + ' · ' + formatTime(dexTime);
+          dexEl.style.color = 'var(--muted)';
+        } else {
+          dexEl.textContent = '—';
+        }
+      }
+
+      // Show restock row if last dial was a restock
+      if (dex.dexReason === '1' && restockRow && restockEl) {
+        restockRow.style.display = '';
+        restockEl.textContent = dexTime
+          ? '✓ ' + formatAgo(dexTime) + ' · ' + formatDate(dexTime)
+          : '✓ received';
+      } else if (restockRow) {
+        // Check dexHistory for most recent restock dial
+        fbDb.ref('vynd/dexHistory/' + machineId)
+          .orderByChild('dexReason').equalTo('1').limitToLast(1).once('value').then(hSnap => {
+            if (!hSnap.exists()) return;
+            let lastRestock;
+            hSnap.forEach(c => { lastRestock = c.val(); });
+            if (lastRestock && restockRow && restockEl) {
+              const rd = parseDexDate(lastRestock.transmitTime || lastRestock.createdAt);
+              restockRow.style.display = '';
+              restockEl.textContent = rd
+                ? '✓ ' + formatAgo(rd) + ' · ' + formatDate(rd)
+                : '✓ received';
+            }
+          }).catch(() => {});
+      }
+    }).catch(() => {
+      const el = document.getElementById('stop-last-dex');
+      if (el) el.textContent = '—';
+    });
+  }
+
   // Cash type logic
   const cashType = s.cashType || MACHINE_META_DRIVER[machineId]?.cashType || 'cash';
   const isCashless = cashType === 'cashless';
@@ -2628,19 +2713,26 @@ async function showMachineDetail(mid) {
     const pog = pogSnap.val() || {};
     const dex = dexSnap.val() || {};
 
+    // Get in-memory planogram to identify overflow slots (overflow flag not stored in Firebase)
+    const memSlots = (typeof PLANOGRAMS !== 'undefined' && PLANOGRAMS[mid]?.slots) || [];
+    const overflowIds = new Set(memSlots.filter(s => s.overflow).map(s => s.id));
+
     machineDetailSlots = Object.entries(pog).map(([id, p]) => {
       const d = dex[id] || {};
       return {
         id,
         product:        p.product    || '',
-        pendingProduct: p.pendingProduct || null, // staged product change
+        pendingProduct: p.pendingProduct || null,
         price:          parseFloat(p.price || p.priceDollars || 0),
         par:            parseInt(p.par      || 0),
         capacity:       parseInt(p.capacity || 0),
         currentSOH:     d.currentSOH != null ? d.currentSOH : (p.currentSOH ?? p.current ?? 0),
         barcode:        p.barcode    || '',
+        overflow:       p.overflow || overflowIds.has(id) || false,
       };
-    }).sort((a, b) => String(a.id).localeCompare(String(b.id), undefined, { numeric: true }));
+    })
+    .filter(sl => !sl.overflow)
+    .sort((a, b) => String(a.id).localeCompare(String(b.id), undefined, { numeric: true }));
 
     if (!machineDetailSlots.length) {
       container.innerHTML = '<div class="text-muted" style="text-align:center;padding:32px">No planogram data — set up planogram in management portal first</div>';

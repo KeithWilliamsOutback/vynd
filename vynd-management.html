@@ -4060,7 +4060,7 @@ let currentRunId = null;
 
 async function markRunComplete() {
   if (!currentRunId || !currentRouteId) { showToast('Save the run first'); return; }
-  const today = new Date().toISOString().split('T')[0];
+  const today = new Date().toLocaleDateString('en-CA');
   if (fbReady && fbDb) {
     try {
       await fbDb.ref('vynd/runs/' + currentRunId + '/status').set('complete');
@@ -4158,8 +4158,8 @@ async function saveRun() {
 
 async function loadTodaysRuns(forDate) {
   if (!fbReady || !fbDb) return;
-  const targetDate = forDate || new Date().toISOString().split('T')[0];
-  const today      = new Date().toISOString().split('T')[0];
+  const targetDate = forDate || new Date().toLocaleDateString('en-CA');
+  const today      = new Date().toLocaleDateString('en-CA');
   const isToday    = targetDate === today;
 
   const snap = await fbDb.ref('vynd/runs').once('value').catch(() => null);
@@ -7394,7 +7394,7 @@ function getProductBarcode(productName) {
 
 async function updatePickPreview() {
   const routeId = document.getElementById('pick-route-sel')?.value || '';
-  const date    = document.getElementById('pick-date')?.value || new Date().toISOString().split('T')[0];
+  const date    = document.getElementById('pick-date')?.value || new Date().toLocaleDateString('en-CA');
   pickRouteId   = routeId;
   pickDate      = date;
 
@@ -7859,7 +7859,7 @@ function confirmPickImport() {
   if (!pickImportData.length) return;
   if (!fbReady || !fbDb) { showToast('Connect to Firebase first'); return; }
 
-  const date      = pickDate || new Date().toISOString().split('T')[0];
+  const date      = pickDate || new Date().toLocaleDateString('en-CA');
   const exportKey = date.replace(/-/g,'') + '_' + (pickRouteId||'all');
   const updates   = {};
 
@@ -7946,7 +7946,7 @@ function reExportAdjustedCSV() {
 
 function generateDriverSheets() {
   const routeId = document.getElementById('sheet-route-sel')?.value || '';
-  const date    = pickDate || new Date().toISOString().split('T')[0];
+  const date    = pickDate || new Date().toLocaleDateString('en-CA');
   const wrap    = document.getElementById('driver-sheets-wrap');
   if (!wrap) return;
 
@@ -11377,7 +11377,7 @@ function exportCommissionCSV() {
   });
 
   const csv = lines.join('\n');
-  downloadFile('vynd-commission-' + new Date().toISOString().split('T')[0] + '.csv', csv, 'text/csv');
+  downloadFile('vynd-commission-' + new Date().toLocaleDateString('en-CA') + '.csv', csv, 'text/csv');
   showToast('Commission report exported ✓');
 }
 
@@ -11602,7 +11602,7 @@ function exportPricingCSV() {
     const rrp = PRODUCTS[product]?.rrp || 0;
     lines.push(['"'+cust+'"', '"'+product+'"', rrp.toFixed(2), price.toFixed(2), price.toFixed(2)].join(','));
   });
-  downloadFile('vynd-pricing-' + new Date().toISOString().split('T')[0] + '.csv', lines.join('\n'), 'text/csv');
+  downloadFile('vynd-pricing-' + new Date().toLocaleDateString('en-CA') + '.csv', lines.join('\n'), 'text/csv');
   showToast('Pricing exported ✓');
 }
 
@@ -11804,7 +11804,7 @@ function exportReportCSV() {
   Object.entries(MACHINE_META).forEach(([mid,m]) => {
     lines.push([mid, '"'+m.name+'"', '"'+(m.customer||'')+'"', '—'].join(','));
   });
-  downloadFile('vynd-report-' + new Date().toISOString().split('T')[0] + '.csv', lines.join('\n'), 'text/csv');
+  downloadFile('vynd-report-' + new Date().toLocaleDateString('en-CA') + '.csv', lines.join('\n'), 'text/csv');
   showToast('Report exported ✓');
 }
 
@@ -12014,7 +12014,7 @@ function exportProductsCSV() {
     p.prekit         ? 'Yes' : 'No',
   ].join(','));
   const csv = [headers.join(','), ...rows].join('\n');
-  downloadFile('vynd-products-' + new Date().toISOString().split('T')[0] + '.csv', csv, 'text/csv');
+  downloadFile('vynd-products-' + new Date().toLocaleDateString('en-CA') + '.csv', csv, 'text/csv');
   showToast('Exported ' + Object.keys(PRODUCTS).length + ' products ✓');
 }
 
@@ -12842,7 +12842,7 @@ async function renderServiceHistory() {
 function openFaultModal() {
   const modal = document.getElementById('fault-modal');
   if (!modal) return;
-  document.getElementById('fault-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('fault-date').value = new Date().toLocaleDateString('en-CA');
   document.getElementById('fault-desc').value = '';
   document.getElementById('fault-slot').value = '';
   document.getElementById('fault-reporter').value = '';
@@ -12867,7 +12867,7 @@ async function saveFault() {
     slot:       document.getElementById('fault-slot')?.value.trim() || '',
     desc:       document.getElementById('fault-desc')?.value.trim() || '',
     reporter:   document.getElementById('fault-reporter')?.value.trim() || 'Manager',
-    date:       document.getElementById('fault-date')?.value       || new Date().toISOString().split('T')[0],
+    date:       document.getElementById('fault-date')?.value       || new Date().toLocaleDateString('en-CA'),
     status:     'open',
     createdAt:  new Date().toISOString(),
   };

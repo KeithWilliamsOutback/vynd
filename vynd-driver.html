@@ -1217,7 +1217,7 @@ async function loadHomeScreen() {
   if (typeof firebase !== 'undefined' && firebase.apps?.length && fbReady) {
     try {
       const db       = firebase.database();
-      const today    = new Date().toISOString().split('T')[0];
+      const today    = new Date().toLocaleDateString('en-CA');
       const driverId = userPrefs.driverId;
 
       if (!driverId) {
@@ -1463,7 +1463,7 @@ async function loadNextRunForPick() {
   // Could be today's run (if no active run) or tomorrow's
   if (!fbDb || !userPrefs.driverId) return;
 
-  const today    = new Date().toISOString().split('T')[0];
+  const today    = new Date().toLocaleDateString('en-CA');
   const driverId = userPrefs.driverId;
 
   const snap = await fbDb.ref('vynd/runs').once('value').catch(() => null);
@@ -1597,7 +1597,7 @@ async function showStop(machineId) {
   // Load pick quantities from portal export — portal decides what gets picked
   const runDate = (currentRunData && currentRunData.plannedDate)
     ? currentRunData.plannedDate
-    : new Date().toISOString().split('T')[0];
+    : new Date().toLocaleDateString('en-CA');
 
   // Load live slot SOH from Firebase
   let slotSOH    = {}; // slotId → currentSOH
@@ -3175,7 +3175,7 @@ function reportFaultFromDriver() {
     severity:   'medium',
     desc:       desc.trim(),
     reporter:   userPrefs.driverName || 'Driver',
-    date:       new Date().toISOString().split('T')[0],
+    date:       new Date().toLocaleDateString('en-CA'),
     status:     'open',
     createdAt:  new Date().toISOString(),
     source:     'driver-app',
@@ -3694,7 +3694,7 @@ function buildStockPick() {
   // Load portal locked pick quantities if available (ensures match with warehouse pick list)
   const runDate = (currentRunData && currentRunData.plannedDate)
     ? currentRunData.plannedDate
-    : new Date().toISOString().split('T')[0];
+    : new Date().toLocaleDateString('en-CA');
 
   if (fbDb) {
     const exportKey = runDate.replace(/-/g,'') + '_all';
@@ -4727,7 +4727,7 @@ function updateCashRouteBags() {
 function saveCashSummary() {
   const bagInput   = document.querySelector('#cash-bag-section .cash-input');
   const bagNumber  = bagInput?.value?.trim() || '';
-  const date       = new Date().toISOString().split('T')[0];
+  const date       = new Date().toLocaleDateString('en-CA');
   const collected  = document.getElementById('cash-collected')?.textContent  || '—';
   const expected   = document.getElementById('cash-expected')?.textContent   || '—';
   const total      = document.getElementById('cash-total')?.textContent      || '—';
@@ -5279,7 +5279,7 @@ function initFirebase() {
     });
 
     // Real-time listener on today's runs — catches new runs and cancellations instantly
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date().toLocaleDateString('en-CA');
     fbDb.ref('vynd/runs').on('value', snap => {
       const driverId = userPrefs.driverId || '';
       if (!driverId) return;

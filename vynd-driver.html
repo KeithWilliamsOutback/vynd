@@ -2181,6 +2181,24 @@ function fgConfirm(slotId, par, capacity, current) {
 
   updateSOH(stop);
   showToast(isPrekit ? `🥬 Fresh slot confirmed ✓` : (added > 0 ? `+${added} confirmed ✓` : 'Slot confirmed ✓'));
+
+  // Write fill data to Firebase immediately on each slot confirm
+  // This ensures completedStops has data before the machine dials restock
+  if (fbDb && currentStopId && stop) {
+    const allSlots = stop.slots.map(sl => ({
+      id:      sl.id,
+      product: sl.product,
+      added:   stopSlotState[sl.id]?.added   || 0,
+      spoilt:  stopSlotState[sl.id]?.spoilt  || 0,
+      damaged: stopSlotState[sl.id]?.damaged || 0,
+    }));
+    fbDb.ref('vynd/completedStops/' + currentStopId).set({
+      machineId:   currentStopId,
+      completedAt: new Date().toISOString(),
+      runId:       currentRunData ? currentRunData.key : null,
+      slots:       allSlots,
+    }).catch(e => console.warn('Fill write failed:', e.message));
+  }
 }
 
 function updateSOH(s) {
@@ -2210,7 +2228,7 @@ function attachFgSwipe(slotId, par, capacity, current) {
   if (!row || !inner || !bgR || row._swipeAttached) return;
   row._swipeAttached = true;
 
-  const THRESHOLD = 90, MAX_DRAG = 140;
+  const THRESHOLD = 60, MAX_DRAG = 120;
   let sx=0, sy=0, dx=0, dir=0, dragging=false, cancelled=false;
 
   function snap() {
@@ -5625,97 +5643,88 @@ async function applyPendingPogChangesAfterDial(machineId, dexSlots) {
   }
 }
 
-function completeReconciliation(machineId, slots) {
+async function completeReconciliation(machineId, slots) {
   try {
     if (!fbDb) return;
 
-    // Find the most recent pending reconciliation for this machine
-    fbDb.ref('vynd/reconciliation/' + machineId)
-      .orderByChild('status')
-      .equalTo('pending')
-      .limitToLast(1)
-      .once('value')
-      .then(snap => {
-        if (!snap.exists()) return;
+    // Build fillData from driver slot state (what was actually put in the machine)
+    const fillData = {};
+    let totalPicked = 0;
+    slots.forEach(slot => {
+      if (slot.added > 0) {
+        fillData[slot.id] = slot.added;
+        totalPicked += slot.added;
+      }
+    });
 
-        // Get the pending record key and data
+    // Check if machine already dialed restock before driver marked complete
+    // If so, back-fill the reconciliation record with fill data
+    const pendingSnap = await fbDb.ref('vynd/pendingRestock/' + machineId).once('value');
+    const pending = pendingSnap.val();
+
+    if (pending && pending.recoKey) {
+      // Machine dialed first — back-fill the existing reconciliation record
+      const recoKey      = pending.recoKey;
+      const preSlots     = pending.preRestockSlots || {};
+
+      // Build postRestockSlots from preSlots + fillData
+      const postRestockSlots = {};
+      Object.entries(preSlots).forEach(([slotId, slot]) => {
+        const added  = fillData[slotId] || 0;
+        const preSOH = slot.currentSOH != null ? slot.currentSOH : 0;
+        postRestockSlots[slotId] = { ...slot, currentSOH: preSOH + added, addedQty: added };
+      });
+
+      const update = {
+        status:            'complete',
+        completedAt:       new Date().toISOString(),
+        fillData,
+        postRestockSlots,
+        totalPicked,
+        bagNumber:         bagNumbers[machineId] || null,
+      };
+
+      await fbDb.ref('vynd/reconciliation/' + machineId + '/' + recoKey).update(update);
+      await fbDb.ref('vynd/pendingRestock/' + machineId).remove();
+      await fbDb.ref('vynd/completedStops/' + machineId).remove();
+      console.log('Back-filled recon for', machineId, 'key:', recoKey);
+
+    } else {
+      // Normal path — driver marked complete before restock dial
+      // completedStops is already written by syncStopOnComplete
+      // Just update any pending recon record if one exists from a previous run
+      const recoSnap = await fbDb.ref('vynd/reconciliation/' + machineId)
+        .orderByChild('status').equalTo('pending').limitToLast(1).once('value');
+
+      if (recoSnap.exists()) {
         let recoKey, recoData;
-        snap.forEach(child => { recoKey = child.key; recoData = child.val(); });
+        recoSnap.forEach(child => { recoKey = child.key; recoData = child.val(); });
+        if (recoKey) {
+          const preSlots = recoData.preRestockSlots || {};
+          const postRestockSlots = {};
+          Object.entries(preSlots).forEach(([slotId, slot]) => {
+            const added  = fillData[slotId] || 0;
+            const preSOH = slot.currentSOH != null ? slot.currentSOH : 0;
+            postRestockSlots[slotId] = { ...slot, currentSOH: preSOH + added, addedQty: added };
+          });
+          await fbDb.ref('vynd/reconciliation/' + machineId + '/' + recoKey).update({
+            status: 'complete', completedAt: new Date().toISOString(),
+            fillData, postRestockSlots, totalPicked,
+            bagNumber: bagNumbers[machineId] || null,
+          });
+        }
+      }
+    }
 
-        if (!recoKey || !recoData) return;
-
-        // Build picked quantities and post-restock SOH from driver slot data
-        const pickedQuantities = {};
-        const postRestockSOH   = {};
-        let totalPicked        = 0;
-
-        slots.forEach(slot => {
-          pickedQuantities[slot.id] = {
-            product: slot.product,
-            added:   slot.added   || 0,
-            spoilt:  slot.spoilt  || 0,
-            damaged: slot.damaged || 0,
-          };
-          postRestockSOH[slot.id] = {
-            id:         slot.id,
-            product:    slot.product,
-            currentSOH: slot.sohAfter || 0,
-            added:      slot.added    || 0,
-          };
-          totalPicked += (slot.added || 0);
-        });
-
-        // Calculate variance per slot (what driver said vs what DEX said was sold)
-        const variance = {};
-        const preSlots = recoData.preRestockSlots || recoData.preRestockSOH || {};
-        slots.forEach(slot => {
-          const pre       = preSlots[slot.id];
-          const soldByDex = pre ? (pre.vendsSinceLastRead || 0) : 0;
-          const picked    = slot.added || 0;
-          const preSOH    = pre ? Math.max(0, (pre.currentSOH || 0)) : 0;
-          const postSOH   = preSOH + picked;
-          variance[slot.id] = {
-            soldByDex,
-            picked,
-            preSOH,
-            postSOH,
-            variance: (slot.sohAfter || 0) - postSOH,
-          };
-        });
-
-        // Update the reconciliation record to complete
-        const update = {
-          status:            'complete',
-          completedAt:       new Date().toISOString(),
-          pickedQuantities,
-          postRestockSOH,
-          totalPicked,
-          variance,
-          cashCollected:     STOPS[machineId]?.cash || 0,
-          bagNumber:         bagNumbers[machineId]  || null,
-        };
-
-        fbDb.ref('vynd/reconciliation/' + machineId + '/' + recoKey)
-          .update(update)
-          .then(() => {
-            console.log('Reconciliation completed for', machineId);
-            // Update SOH in Firebase — new SOH = preRestockSOH + picked
-            // This becomes the new baseline for future DEX dials
-            const sohUpdates = {};
-            slots.forEach(slot => {
-              const preSlot   = recoData.preRestockSlots && recoData.preRestockSlots[slot.id];
-              const preSOH    = preSlot && preSlot.currentSOH !== null ? preSlot.currentSOH : 0;
-              const picked    = slot.added || 0;
-              const newSOH    = preSOH + picked;
-              // Write new SOH to dexReadings/last so Cloud Run picks it up
-              sohUpdates['vynd/dexReadings/' + machineId + '/last/slots/' + slot.id + '/currentSOH'] = newSOH;
-            });
-            return fbDb.ref().update(sohUpdates);
-          })
-          .then(() => console.log('SOH updated in Firebase for', machineId))
-          .catch(e => console.warn('Reco update failed', e));
-
-      }).catch(e => console.warn('Reco lookup failed', e));
+    // Update SOH in Firebase — new SOH = preSOH + picked (becomes baseline for next DEX dial)
+    const sohUpdates = {};
+    slots.forEach(slot => {
+      const newSOH = (slot.sohAfter || 0) + (slot.added || 0);
+      sohUpdates['vynd/dexReadings/' + machineId + '/last/slots/' + slot.id + '/currentSOH'] = slot.sohAfter || 0;
+    });
+    if (Object.keys(sohUpdates).length) {
+      await fbDb.ref().update(sohUpdates);
+    }
 
   } catch(e) {
     console.warn('completeReconciliation error', e);

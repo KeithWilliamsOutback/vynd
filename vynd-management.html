@@ -1721,7 +1721,7 @@ tr.clickable:hover td{background:var(--bg)}
         </div>
         <div style="overflow-x:auto">
           <table>
-            <thead><tr><th>Slot</th><th>Product</th><th>Price</th><th>SOH before</th><th>Sold (DEX)</th><th>Picked</th><th>Spoilt</th><th>Removed</th><th>SOH after</th><th>Variance</th></tr></thead>
+            <thead><tr><th>Slot</th><th>Product</th><th>Price</th><th>SOH before</th><th>Sold (DEX)</th><th>Filled</th><th>SOH after</th><th>Variance</th></tr></thead>
             <tbody id="recon-detail-body"></tbody>
           </table>
         </div>
@@ -2394,6 +2394,13 @@ tr.clickable:hover td{background:var(--bg)}
                 <div style="font-size:11px;color:var(--muted)">Remove pick export records older than 30 days</div>
               </div>
               <button class="btn btn-sm btn-secondary" onclick="cleanupPickExports()" id="cleanup-exports-btn">🗑 Clean up</button>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 14px">
+              <div>
+                <div style="font-size:12px;font-weight:600">Fix planogram par/capacity in Firebase</div>
+                <div style="font-size:11px;color:var(--muted)">Push correct par & capacity from in-memory planograms to Firebase (fixes slots showing par=10)</div>
+              </div>
+              <button class="btn btn-sm btn-secondary" onclick="repairPlanogramValues()" id="repair-pog-btn">🔧 Repair</button>
             </div>
             <div style="display:flex;align-items:center;justify-content:space-between;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 14px">
               <div>
@@ -6663,87 +6670,91 @@ function showReconDetail(machineId, key) {
   const panel  = document.getElementById('recon-detail-panel');
   const date   = record.createdAt ? new Date(record.createdAt).toLocaleString('en-AU') : '—';
   const meta   = MACHINE_META[machineId] || { name: machineId };
+  const isPending = record.status === 'pending';
 
   document.getElementById('recon-detail-title').textContent =
-    `${machineId} — ${record.status === 'pending' ? 'Pending restock' : 'Completed restock'}`;
+    `${machineId} — ${isPending ? '⏳ Pending restock' : '✓ Completed restock'}`;
   document.getElementById('recon-detail-sub').textContent =
-    `${meta.name} · ${date} · ${record.totalSoldSinceLast || 0} units sold since last fill`;
+    `${meta.name || machineId} · ${date} · ${record.totalSoldSinceLast || 0} units sold since last fill`;
 
-  // Load bag number from run record if not already in recon record
+  // Load bag number from run record if not already present
   if (!record.bagNumber && record.runId && fbReady && fbDb) {
     fbDb.ref('vynd/runs/' + record.runId + '/bagNumbers/' + machineId).once('value').then(snap => {
       const bagNum = snap.val();
       if (bagNum) {
         record.bagNumber = bagNum;
-        // Update displayed bag number
         const bagEl = document.getElementById('recon-bag-' + key);
         if (bagEl) bagEl.textContent = bagNum;
       }
     }).catch(() => {});
   }
 
-  // Build slot rows
+  // Data sources — server writes preRestockSlots, postRestockSlots, fillData
   const preSlots  = record.preRestockSlots  || {};
   const postSlots = record.postRestockSlots || {};
-  const picked    = record.pickedQuantities || {};
-  const variance  = record.variance         || {};
+  const fillData  = record.fillData         || {};
 
-  const slotIds = Object.keys(preSlots).sort((a,b) =>
+  // Slot IDs — use pre as primary, fill in from post if needed
+  const allSlotIds = new Set([
+    ...Object.keys(preSlots),
+    ...Object.keys(postSlots),
+  ]);
+  const slotIds = [...allSlotIds].sort((a,b) =>
     String(a).localeCompare(String(b), undefined, {numeric:true})
   );
 
   const tbody = document.getElementById('recon-detail-body');
   if (!slotIds.length) {
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px">No slot data available</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:20px">No slot data — waiting for restock dial</td></tr>';
   } else {
+    let totalAdded = 0;
+    let totalSpoilt = 0;
     tbody.innerHTML = slotIds.map(id => {
-      const pre    = preSlots[id]  || {};
-      const post   = postSlots[id] || {};
-      const pick   = picked[id]    || {};
-      const vari   = variance[id]  || {};
+      const pre   = preSlots[id]  || {};
+      const post  = postSlots[id] || {};
 
-      const preSOH   = pre.currentSOH !== null && pre.currentSOH !== undefined ? pre.currentSOH : '—';
-      const sold     = pre.vendsSinceLastRead || vari.soldByDex || 0;
-      const addedQty = pick.added || 0;
-      const postSOH  = post.currentSOH !== undefined ? post.currentSOH : (record.status === 'pending' ? '—' : '—');
-      const variVal  = vari.variance !== undefined ? vari.variance : '—';
-      const price    = pre.priceDollars ? '$' + parseFloat(pre.priceDollars).toFixed(2) : '—';
-      const product  = pick.product || pre.product || 'Empty';
+      const product = pre.product || post.product || '—';
+      if (product === 'Empty' || product === '—') return '';
 
-      const variColor = variVal === '—' ? 'var(--muted)'
-        : variVal === 0 ? 'var(--accent)'
-        : variVal > 0 ? 'var(--warn)' : 'var(--danger)';
+      const price   = pre.priceDollars ? '$' + parseFloat(pre.priceDollars).toFixed(2) : '—';
+      const preSOH  = pre.currentSOH  != null ? pre.currentSOH  : '—';
+      const postSOH = post.currentSOH != null ? post.currentSOH : (isPending ? '⏳' : '—');
+      const sold    = pre.vendsSinceLastRead || 0;
+      const added   = fillData[id] != null ? fillData[id] : (post.addedQty || 0);
+      totalAdded += added;
+
+      // Variance: what we expect postSOH to be vs what DEX reported
+      // Expected = preSOH - sold + added
+      let variCell = '—';
+      let variColor = 'var(--muted)';
+      if (!isPending && preSOH !== '—' && postSOH !== '—' && postSOH !== '⏳') {
+        const expected = Math.max(0, preSOH - sold) + added;
+        const vari = postSOH - expected;
+        variCell = (vari >= 0 ? '+' : '') + vari;
+        variColor = vari === 0 ? 'var(--accent)' : vari > 0 ? 'var(--warn)' : 'var(--danger)';
+      }
 
       return `<tr>
         <td class="text-mono" style="font-weight:700">${id}</td>
         <td style="font-size:12px">${product}</td>
         <td class="text-mono">${price}</td>
         <td class="text-mono">${preSOH}</td>
-        <td class="text-mono">${sold}</td>
-        <td class="text-mono">${addedQty > 0 ? addedQty : (record.status === 'pending' ? '—' : '0')}</td>
-        <td class="text-mono" style="color:var(--warn)">${pick.spoilt > 0 ? pick.spoilt : '—'}</td>
-        <td class="text-mono" style="color:var(--muted)">${pick.damaged > 0 ? pick.damaged : '—'}</td>
+        <td class="text-mono" style="color:var(--warn)">${sold > 0 ? sold : '—'}</td>
+        <td class="text-mono" style="color:var(--accent);font-weight:600">${added > 0 ? '+' + added : (isPending ? '⏳' : '—')}</td>
         <td class="text-mono">${postSOH}</td>
-        <td class="text-mono" style="font-weight:700;color:${variColor}">${variVal === '—' ? '—' : (variVal > 0 ? '+' : '') + variVal}</td>
+        <td class="text-mono" style="font-weight:700;color:${variColor}">${variCell}</td>
       </tr>`;
-    }).join('');
+    }).filter(Boolean).join('');
   }
 
-  // Summary cards
-  const totalSold   = record.totalSoldSinceLast || 0;
-  const totalRev    = record.totalRevSinceLast  || 0;
-  const totalPicked = record.totalPicked        || 0;
-  const cash        = record.cashCollected      || 0;
+  // Recalculate totals from actual data
+  const totalSold = record.totalSoldSinceLast || 0;
+  const totalRev  = record.totalRevSinceLast  || 0;
+  const totalAdded = Object.values(fillData).reduce((a, v) => a + (v || 0), 0);
 
-  // Get machine payment type
-  const machineStats   = (typeof MACHINE_STATS !== 'undefined' && MACHINE_STATS[machineId]) ? MACHINE_STATS[machineId] : {};
-  const machinePayType  = machineStats.cashType || OPERATIONAL_SETTINGS.defaultPaymentType || 'mixed';
+  const machinePayType = MACHINE_STATS[machineId]?.cashType || MACHINE_META[machineId]?.cashType || 'cash';
   const isCashless     = machinePayType === 'cashless';
-  const hasCash        = machinePayType !== 'cashless';
-
-  // Calculate totals including spoilt/removed
-  const totalSpoilt  = Object.values(picked).reduce((a,s) => a + (s.spoilt||0), 0);
-  const totalDamaged = Object.values(picked).reduce((a,s) => a + (s.damaged||0), 0);
+  const hasCash        = !isCashless;
 
   document.getElementById('recon-detail-summary').innerHTML = `
     <div class="card" style="padding:12px;text-align:center">
@@ -6755,17 +6766,20 @@ function showReconDetail(machineId, key) {
       <div style="font-size:11px;color:var(--muted);margin-top:2px">Revenue since last fill</div>
     </div>
     <div class="card" style="padding:12px;text-align:center">
-      <div style="font-size:22px;font-weight:700;color:var(--purple)">${totalPicked}</div>
-      <div style="font-size:11px;color:var(--muted);margin-top:2px">Units picked</div>
+      <div style="font-size:22px;font-weight:700;color:var(--info)">${totalAdded > 0 ? '+' + totalAdded : isPending ? '⏳' : '0'}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:2px">Units filled</div>
     </div>
     <div class="card" style="padding:12px;text-align:center">
-      <div style="font-size:22px;font-weight:700;color:var(--warn)">${totalSpoilt + totalDamaged}</div>
-      <div style="font-size:11px;color:var(--muted);margin-top:2px">Spoilt / removed</div>
+      <div style="font-size:18px;font-weight:700;color:${isPending ? 'var(--warn)' : 'var(--accent)'}">
+        ${isPending ? '⏳ Pending' : '✓ Complete'}
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:2px">Restock status</div>
+      ${isPending ? `<button class="btn btn-sm btn-secondary" style="margin-top:8px;font-size:10px" onclick="markReconComplete('${machineId}','${key}')">Mark complete</button>` : ''}
     </div>
     ${hasCash ? `
     <div class="card" style="padding:12px;grid-column:1/-1;margin-top:4px">
       <div style="font-size:13px;font-weight:600;margin-bottom:12px">💰 Cash reconciliation
-        <span class="pill ${isCashless ? 'gray' : 'green'}" style="font-size:10px;margin-left:8px">${machinePayType}</span>
+        <span class="pill green" style="font-size:10px;margin-left:8px">${machinePayType}</span>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:12px;align-items:end">
         <div>
@@ -6788,7 +6802,7 @@ function showReconDetail(machineId, key) {
         </div>
       </div>
       ${record.cashCounted ? `
-      <div style="margin-top:12px;padding:10px;background:var(--bg);border-radius:var(--r-sm);display:flex;gap:20px">
+      <div style="margin-top:12px;padding:10px;background:var(--bg);border-radius:var(--r-sm);display:flex;gap:20px;flex-wrap:wrap">
         <div style="font-size:13px">Expected: <strong>$${(totalRev/100).toFixed(2)}</strong></div>
         <div style="font-size:13px">Counted: <strong>$${parseFloat(record.cashCounted).toFixed(2)}</strong></div>
         <div style="font-size:13px;font-weight:700;color:${Math.abs(parseFloat(record.cashCounted) - totalRev/100) < 0.01 ? 'var(--accent)' : 'var(--danger)'}">
@@ -6797,14 +6811,25 @@ function showReconDetail(machineId, key) {
       </div>` : ''}
     </div>` : `
     <div class="card" style="padding:12px;grid-column:1/-1;margin-top:4px;text-align:center;color:var(--muted)">
-      <span class="pill gray" style="font-size:11px">Cashless only — no cash to reconcile</span>
-      <div style="font-size:12px;margin-top:8px">Cashless sales: <strong>$${(totalRev/100).toFixed(2)}</strong> (reportable only)</div>
-      <div style="font-size:11px;color:var(--muted);margin-top:4px">Future: reconcile against Windcave settlement statement</div>
+      <span class="pill gray" style="font-size:11px">Cashless — no cash to reconcile</span>
+      <div style="font-size:12px;margin-top:8px">Cashless sales: <strong>$${(totalRev/100).toFixed(2)}</strong></div>
     </div>`}
   `;
 
   panel.style.display = '';
   panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+async function markReconComplete(machineId, key) {
+  if (!fbReady || !fbDb) { showToast('Not connected'); return; }
+  try {
+    await fbDb.ref('vynd/reconciliation/' + machineId + '/' + key + '/status').set('complete');
+    const record = allReconRecords.find(r => r.machineId === machineId && r.key === key);
+    if (record) record.status = 'complete';
+    showToast('Marked complete ✓');
+    renderReconTable();
+    showReconDetail(machineId, key);
+  } catch(e) { showToast('Error: ' + e.message); }
 }
 
 function saveCashCounted(machineId, key, value) {
@@ -7248,16 +7273,21 @@ async function buildPickList(routeId, runsForDate) {
     if (!slots || slots.length === 0) {
       const fbSlots = fbPogSlots[mid];
       if (!fbSlots) return;
-      slots = Object.entries(fbSlots).map(([id, s]) => ({
-        id,
-        product:    s.product    || 'Empty',
-        barcode:    s.barcode    || '',
-        par:        s.par        || 10,
-        capacity:   s.capacity   || 10,
-        currentSOH: s.currentSOH ?? s.current ?? 0,
-        cost:       s.cost       || 0,
-        price:      s.price      || s.priceDollars || 0,
-      }));
+      slots = Object.entries(fbSlots).map(([id, s]) => {
+        // Cross-reference in-memory planogram for correct par/capacity
+        const memSlot = PLANOGRAMS[mid]?.slots?.find(ms => ms.id === id);
+        return {
+          id,
+          product:    s.product    || memSlot?.product  || 'Empty',
+          barcode:    s.barcode    || memSlot?.barcode   || '',
+          par:        s.par        || memSlot?.par       || 0,
+          capacity:   s.capacity   || memSlot?.capacity  || s.par || memSlot?.par || 0,
+          currentSOH: s.currentSOH ?? s.current ?? memSlot?.currentSOH ?? 0,
+          cost:       s.cost       || memSlot?.cost      || 0,
+          price:      s.price      || s.priceDollars     || memSlot?.price || 0,
+          overflow:   s.overflow   || memSlot?.overflow  || false,
+        };
+      });
     }
 
     const productMap = {};
@@ -7269,10 +7299,15 @@ async function buildPickList(routeId, runsForDate) {
       // Live SOH — Firebase DEX/planogram first, fallback to in-memory
       // DEX currentSOH can be null if machine hasn't had baseline set yet
       const dexSOH  = liveSOH[mid]?.[slot.id];
-      const pogSOH  = slot.currentSOH ?? slot.current;  // planogram baseline (manually set)
+      const pogSOH  = slot.currentSOH ?? slot.current;
       const currentSOH = (dexSOH != null) ? dexSOH : (pogSOH != null ? pogSOH : 0);
-      const par      = slot.par || 10;
-      const capacity = slot.capacity || par;
+
+      // Use in-memory par/capacity if Firebase has 0 or missing values
+      const memSlot  = PLANOGRAMS[mid]?.slots?.find(ms => ms.id === slot.id);
+      const par      = slot.par      || memSlot?.par      || 0;
+      const capacity = slot.capacity || memSlot?.capacity || par;
+
+      if (par === 0) return; // no par set — skip slot
 
       // Product settings (min pick, override par)
       const prodData       = getProductData(product);
@@ -13024,6 +13059,51 @@ try {
 // ══════════════════════════════════════
 // FIREBASE MAINTENANCE
 // ══════════════════════════════════════
+
+async function repairPlanogramValues() {
+  if (!fbReady || !fbDb) { showToast('Not connected to Firebase'); return; }
+  const btn = document.getElementById('repair-pog-btn');
+  if (btn) btn.textContent = 'Repairing…';
+
+  const updates = {};
+  let fixCount = 0;
+
+  Object.entries(PLANOGRAMS).forEach(([mid, pog]) => {
+    if (!pog || !pog.slots) return;
+    pog.slots.forEach(slot => {
+      if (!slot.par && !slot.capacity) return; // nothing to write
+      const base = 'vynd/planograms/' + mid + '/slots/' + slot.id;
+      // Only update if par or capacity is set in memory
+      if (slot.par)      { updates[base + '/par']      = slot.par;      fixCount++; }
+      if (slot.capacity) { updates[base + '/capacity']  = slot.capacity; }
+      if (slot.product)  { updates[base + '/product']   = slot.product; }
+      if (slot.barcode)  { updates[base + '/barcode']   = slot.barcode; }
+      if (slot.price)    { updates[base + '/price']     = slot.price; }
+    });
+  });
+
+  if (!Object.keys(updates).length) {
+    showCleanupResult('No planogram data to repair', 'danger');
+    if (btn) btn.textContent = '🔧 Repair';
+    return;
+  }
+
+  try {
+    // Firebase has a 1000 key limit per update — batch if needed
+    const keys = Object.keys(updates);
+    const batchSize = 500;
+    for (let i = 0; i < keys.length; i += batchSize) {
+      const batch = {};
+      keys.slice(i, i + batchSize).forEach(k => { batch[k] = updates[k]; });
+      await fbDb.ref().update(batch);
+    }
+    showCleanupResult(`✓ Repaired ${fixCount} slot par/capacity values across ${Object.keys(PLANOGRAMS).length} machines`, 'accent');
+    if (btn) btn.textContent = '🔧 Repair';
+  } catch(e) {
+    showToast('Error: ' + e.message);
+    if (btn) btn.textContent = '🔧 Repair';
+  }
+}
 
 async function cleanupCancelledRuns() {
   if (!fbReady || !fbDb) { showToast('Not connected to Firebase'); return; }

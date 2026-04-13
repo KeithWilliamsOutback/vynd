@@ -2677,42 +2677,25 @@ tr.clickable:hover td{background:var(--bg)}
     <!-- CASH & CASHLESS -->
     <div class="mdetail-tab-pane" id="mtab-cash">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-        <div style="font-size:13px;font-weight:600">Payment breakdown — last DEX read</div>
+        <div style="font-size:13px;font-weight:600">Payment breakdown — since last fill</div>
         <button class="btn btn-secondary btn-sm" onclick="renderMachineCash()">↻ Refresh</button>
       </div>
-
-      <!-- Payment split -->
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px" id="md-payment-split">
-        <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center">
-          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Cash sales</div>
-          <div style="font-family:'DM Mono',monospace;font-size:20px;font-weight:700;color:var(--accent)" id="md-cash-sales">—</div>
+      <div id="md-cash-since-fill" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px">
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px;text-align:center">
+          <div style="font-size:22px;font-weight:700;color:var(--accent)" id="md-fill-revenue">—</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">Revenue (DEX vends)</div>
         </div>
-        <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center">
-          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Cashless 1</div>
-          <div style="font-family:'DM Mono',monospace;font-size:20px;font-weight:700;color:var(--info)" id="md-cashless1-sales">—</div>
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px;text-align:center">
+          <div style="font-size:22px;font-weight:700;color:var(--text)" id="md-fill-vends">—</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">Units filled</div>
         </div>
-        <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center">
-          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Cashless 2</div>
-          <div style="font-family:'DM Mono',monospace;font-size:20px;font-weight:700;color:#a78bfa" id="md-cashless2-sales">—</div>
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px;text-align:center">
+          <div style="font-size:16px;font-weight:700;color:var(--muted)" id="md-fill-date">—</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">Last fill date</div>
         </div>
       </div>
-
-      <!-- Cash detail -->
-      <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Cash detail (since last reset)</div>
-      <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:14px">
-        <div id="md-cash-detail" style="display:flex;flex-direction:column"></div>
-      </div>
-
-      <!-- Cashless detail -->
-      <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Cashless detail (since last reset)</div>
-      <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:14px">
-        <div id="md-cashless-detail" style="display:flex;flex-direction:column"></div>
-      </div>
-
-      <!-- Mixed payments -->
-      <div id="md-mixed-payments" style="display:none">
-        <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Mixed payments (cash + cashless)</div>
-        <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px" id="md-mixed-detail"></div>
+      <div style="font-size:11px;color:var(--muted);text-align:center;padding:8px;background:var(--bg);border-radius:6px">
+        ℹ DEX cumulative totals (since machine reset) available in the full reconciliation records
       </div>
     </div>
 
@@ -12129,6 +12112,38 @@ async function renderMachineCash() {
 
   if (!fbReady || !fbDb) { setEl('md-cash-sales','No Firebase'); return; }
 
+  // Load since-last-fill from most recent complete reconciliation record
+  try {
+    // Get last 10 records and find most recent complete (avoids needing status index)
+    const recoSnap = await fbDb.ref('vynd/reconciliation/' + mid)
+      .orderByChild('createdAt').limitToLast(10).once('value');
+    if (recoSnap.exists()) {
+      const records = [];
+      recoSnap.forEach(c => { records.push(c.val()); });
+      // Find most recent complete record
+      const lastReco = records.reverse().find(r => r.status === 'complete');
+      if (lastReco) {
+        const rev      = lastReco.totalRevSinceLast   || 0;
+        const sold     = lastReco.totalSoldSinceLast  || 0;
+        // Units filled = sum of fillData (what was physically put in the machine)
+        const fillData = lastReco.fillData || {};
+        const filled   = Object.values(fillData).reduce((a, v) => a + (v || 0), 0);
+        const date     = lastReco.createdAt ? new Date(lastReco.createdAt).toLocaleDateString('en-AU',{day:'numeric',month:'short'}) : '—';
+        setEl('md-fill-revenue', rev > 0 ? '$' + (rev/100).toFixed(2) : sold > 0 ? '$' + (sold * 3).toFixed(2) : '$0.00');
+        setEl('md-fill-vends',   filled > 0 ? filled + ' units filled' : sold + ' sold');
+        setEl('md-fill-date',    date);
+      } else {
+        setEl('md-fill-revenue', 'No fills yet');
+        setEl('md-fill-vends', '—');
+        setEl('md-fill-date', '—');
+      }
+    } else {
+      setEl('md-fill-revenue', 'No fills yet');
+      setEl('md-fill-vends', '—');
+      setEl('md-fill-date', '—');
+    }
+  } catch(e) { console.warn('Cash tab reco load:', e.message); }
+
   const snap = await fbDb.ref('vynd/dexReadings/' + mid + '/last').once('value');
   const data = snap.val();
   if (!data) { setEl('md-cash-sales','—'); return; }
@@ -12626,10 +12641,188 @@ function switchMTab(tab, el) {
   if (el) el.classList.add('active');
   const pane = document.getElementById('mtab-' + tab);
   if (pane) pane.classList.add('active');
-  if (tab === 'audit')  renderMachineAuditLog();
-  if (tab === 'faults') renderFaultLog();
-  if (tab === 'events') renderMachineEvents();
-  if (tab === 'cash')   renderMachineCash();
+  if (tab === 'audit')   renderMachineAuditLog();
+  if (tab === 'faults')  renderFaultLog();
+  if (tab === 'events')  renderMachineEvents();
+  if (tab === 'cash')    renderMachineCash();
+  if (tab === 'history') renderServiceHistory();
+  if (tab === 'stock')   renderStockSnapshot();
+}
+
+// ── Stock Snapshot ──
+async function renderStockSnapshot() {
+  const mid  = document.getElementById('md-id')?.textContent?.trim();
+  const list = document.getElementById('md-stock-list');
+  if (!mid || !list) return;
+
+  list.innerHTML = '<div style="padding:24px;text-align:center;color:var(--muted)">Loading stock levels…</div>';
+
+  if (!fbReady || !fbDb) {
+    list.innerHTML = '<div style="padding:24px;text-align:center;color:var(--muted)">Connect to Firebase</div>';
+    return;
+  }
+
+  try {
+    const [pogSnap, dexSnap] = await Promise.all([
+      fbDb.ref('vynd/planograms/' + mid + '/slots').once('value'),
+      fbDb.ref('vynd/dexReadings/' + mid + '/last/slots').once('value'),
+    ]);
+
+    const pog = pogSnap.val() || {};
+    const dex = dexSnap.val() || {};
+
+    // Merge: planogram defines product/par/cap, DEX gives live SOH
+    const slots = Object.entries(pog)
+      .filter(([id, p]) => !p.overflow && p.product && p.product !== 'Empty')
+      .map(([id, p]) => {
+        const d       = dex[id] || {};
+        const soh     = d.currentSOH != null ? d.currentSOH : (p.currentSOH ?? p.current ?? 0);
+        const par     = p.par      || 0;
+        const cap     = p.capacity || par;
+        const pct     = cap > 0 ? Math.round((soh / cap) * 100) : 0;
+        const vends   = d.vendsSinceLastRead || 0;
+        return { id, product: p.product, soh, par, cap, pct, vends, price: p.price || 0 };
+      })
+      .sort((a, b) => String(a.id).localeCompare(String(b.id), undefined, { numeric: true }));
+
+    if (!slots.length) {
+      list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)">No planogram data — set up planogram first</div>';
+      return;
+    }
+
+    // Summary stats
+    const critical = slots.filter(s => s.pct < 25).length;
+    const low      = slots.filter(s => s.pct >= 25 && s.pct < 50).length;
+    const ok       = slots.filter(s => s.pct >= 50).length;
+
+    list.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px">
+        <div style="background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.3);border-radius:8px;padding:12px;text-align:center">
+          <div style="font-size:22px;font-weight:700;color:var(--danger)">${critical}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">Critical (&lt;25%)</div>
+        </div>
+        <div style="background:rgba(251,146,60,.1);border:1px solid rgba(251,146,60,.3);border-radius:8px;padding:12px;text-align:center">
+          <div style="font-size:22px;font-weight:700;color:var(--warn)">${low}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">Low (25–50%)</div>
+        </div>
+        <div style="background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.3);border-radius:8px;padding:12px;text-align:center">
+          <div style="font-size:22px;font-weight:700;color:var(--accent)">${ok}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">OK (&gt;50%)</div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${slots.map(s => {
+          const barColor = s.pct < 25 ? 'var(--danger)' : s.pct < 50 ? 'var(--warn)' : 'var(--accent)';
+          return `<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 14px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+              <div style="display:flex;align-items:center;gap:8px">
+                <span style="font-size:11px;font-weight:700;font-family:'DM Mono',monospace;color:var(--muted);min-width:28px">${s.id}</span>
+                <span style="font-size:13px;font-weight:600">${s.product}</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:10px">
+                ${s.vends > 0 ? `<span style="font-size:11px;color:var(--muted)">${s.vends} sold</span>` : ''}
+                <span style="font-size:13px;font-weight:700;color:${barColor}">${s.soh}/${s.cap}</span>
+                <span style="font-size:11px;color:${barColor};min-width:32px;text-align:right">${s.pct}%</span>
+              </div>
+            </div>
+            <div style="height:5px;background:var(--border);border-radius:99px">
+              <div style="height:5px;background:${barColor};border-radius:99px;width:${Math.min(s.pct,100)}%;transition:width .3s"></div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>`;
+  } catch(e) {
+    list.innerHTML = `<div style="padding:24px;text-align:center;color:var(--muted)">Error: ${e.message}</div>`;
+  }
+}
+
+// ── Service History ──
+async function renderServiceHistory() {
+  const mid = document.getElementById('md-id')?.textContent?.trim();
+  const list = document.getElementById('md-history-list');
+  if (!mid || !list) return;
+
+  list.innerHTML = '<div style="padding:24px;text-align:center;color:var(--muted)">Loading service history…</div>';
+
+  if (!fbReady || !fbDb) {
+    list.innerHTML = '<div style="padding:24px;text-align:center;color:var(--muted)">Connect to Firebase to see service history</div>';
+    return;
+  }
+
+  try {
+    // Load reconciliation records (restock dials = service events)
+    const recoSnap = await fbDb.ref('vynd/reconciliation/' + mid)
+      .orderByChild('createdAt').limitToLast(20).once('value');
+
+    const records = [];
+    recoSnap.forEach(child => { records.push({ key: child.key, ...child.val() }); });
+    records.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    if (!records.length) {
+      list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)"><div style="font-size:28px;margin-bottom:8px">📋</div><div style="font-weight:600">No service history yet</div><div style="font-size:12px;margin-top:4px">Records appear after each restock dial</div></div>';
+      return;
+    }
+
+    list.innerHTML = records.map(r => {
+      const date       = r.createdAt ? new Date(r.createdAt) : null;
+      const dateStr    = date ? date.toLocaleDateString('en-AU', {day:'numeric', month:'short', year:'numeric'}) : '—';
+      const timeStr    = date ? date.toLocaleTimeString('en-AU', {hour:'2-digit', minute:'2-digit'}) : '';
+      const isPending  = r.status === 'pending';
+      const fillData   = r.fillData   || {};
+      const preSlots   = r.preRestockSlots || {};
+      const totalFilled = Object.values(fillData).reduce((a, v) => a + (v || 0), 0);
+      const totalSold   = r.totalSoldSinceLast || 0;
+      const revenue     = r.totalRevSinceLast  || 0;
+
+      // Count variance issues
+      const postSlots = r.postRestockSlots || {};
+      let varIssues = 0;
+      Object.keys(preSlots).forEach(id => {
+        const pre  = preSlots[id]  || {};
+        const post = postSlots[id] || {};
+        const filled = fillData[id] || 0;
+        if (pre.currentSOH != null && post.currentSOH != null) {
+          const expected = Math.max(0, pre.currentSOH - (pre.vendsSinceLastRead || 0)) + filled;
+          if (Math.abs(post.currentSOH - expected) > 0) varIssues++;
+        }
+      });
+
+      const statusPill = isPending
+        ? '<span class="pill orange" style="font-size:10px">\u23f3 Pending</span>'
+        : '<span class="pill green" style="font-size:10px"><span class="pill-dot"></span>Complete</span>';
+
+      const varPill = varIssues > 0
+        ? `<span class="pill orange" style="font-size:10px">${varIssues} variance</span>`
+        : (!isPending ? '<span class="pill gray" style="font-size:10px">\u2713 No variance</span>' : '');
+
+      return `<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:14px;margin-bottom:10px;cursor:pointer"
+        onclick="navTo('reconciliation'); setTimeout(() => { const rec = allReconRecords.find(r => r.machineId==='${mid}' && r.key==='${r.key}'); if(rec) showReconDetail('${mid}','${r.key}'); else setTimeout(()=>showReconDetail('${mid}','${r.key}'),1200); }, 600)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div style="font-size:13px;font-weight:600">${dateStr} <span style="color:var(--muted);font-weight:400">${timeStr}</span></div>
+          <div style="display:flex;gap:6px;align-items:center">${statusPill} ${varPill}</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+          <div style="text-align:center;background:var(--bg);border-radius:6px;padding:8px">
+            <div style="font-size:16px;font-weight:700;color:var(--accent)">${totalSold}</div>
+            <div style="font-size:10px;color:var(--muted)">Sold (DEX)</div>
+          </div>
+          <div style="text-align:center;background:var(--bg);border-radius:6px;padding:8px">
+            <div style="font-size:16px;font-weight:700;color:var(--info)">${isPending ? '\u23f3' : ('+' + totalFilled)}</div>
+            <div style="font-size:10px;color:var(--muted)">Units filled</div>
+          </div>
+          <div style="text-align:center;background:var(--bg);border-radius:6px;padding:8px">
+            <div style="font-size:16px;font-weight:700;color:var(--accent)">$${(revenue/100).toFixed(2)}</div>
+            <div style="font-size:10px;color:var(--muted)">Revenue</div>
+          </div>
+        </div>
+        ${r.bagNumber ? `<div style="font-size:11px;color:var(--muted);margin-top:8px">\ud83c\udff7 Bag: ${r.bagNumber}</div>` : ''}
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;text-align:right">Tap to view full detail \u2192</div>
+      </div>`;
+    }).join('');
+
+  } catch(e) {
+    list.innerHTML = `<div style="padding:24px;text-align:center;color:var(--muted)">Error: ${e.message}</div>`;
+  }
 }
 
 // ── Fault log ──

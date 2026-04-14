@@ -1866,17 +1866,17 @@ tr.clickable:hover td{background:var(--bg)}
       <!-- DRIVER SHEETS TAB -->
       <div id="picking-tab-sheets" style="display:none">
         <div class="card" style="margin-bottom:20px">
-          <div style="font-weight:700;font-size:13px;margin-bottom:12px">Generate driver sheets</div>
-          <div style="font-size:12px;color:var(--muted);margin-bottom:16px">After pick confirmation, generate per-machine sheets showing confirmed quantities per slot. These pre-populate the driver app.</div>
+          <div style="font-weight:700;font-size:13px;margin-bottom:4px">Driver sheets</div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:16px">One printable PDF page per machine showing confirmed pick quantities. Available after importing an adjusted pick sheet.</div>
           <div class="form-group" style="margin-bottom:12px">
             <div class="form-label">Route</div>
-            <select class="form-select" id="sheet-route-sel">
+            <select class="form-select" id="sheet-route-sel" onchange="checkDriverSheetReady()">
               <option value="">— All routes —</option>
             </select>
           </div>
+          <div id="driver-sheet-status" style="font-size:12px;padding:8px 12px;border-radius:6px;margin-bottom:12px;display:none"></div>
           <div style="display:flex;gap:8px">
-            <button class="btn btn-primary" onclick="generateDriverSheets()">📋 Generate sheets</button>
-            <button class="btn btn-secondary" onclick="exportDriverSheetCSV()">⬇ Export CSV</button>
+            <button class="btn btn-primary" id="btn-generate-sheets" onclick="generateDriverSheets()" disabled style="opacity:.45;cursor:not-allowed">📋 Print PDF sheets</button>
           </div>
         </div>
         <div id="driver-sheets-wrap"></div>
@@ -7406,6 +7406,18 @@ function switchPickingTab(tab, btn) {
   });
   document.querySelectorAll('#page-picking .settings-tab').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
+  // Populate route dropdown and check for confirmed picks when sheets tab opens
+  if (tab === 'sheets') {
+    const sel = document.getElementById('sheet-route-sel');
+    if (sel && sel.options.length <= 1) {
+      Object.entries(ROUTES).forEach(([rid, r]) => {
+        const opt = document.createElement('option');
+        opt.value = rid; opt.textContent = r.label || rid;
+        sel.appendChild(opt);
+      });
+    }
+    checkDriverSheetReady();
+  }
 }
 
 let pickRunsCache = {}; // date → array of runs from Firebase
@@ -8069,6 +8081,8 @@ function confirmPickImport() {
         machineId: mid, pickDate: date, routeId: pickRouteId,
         status: 'confirmed', createdAt: new Date().toISOString(),
         lines: rows.map(r => ({
+          slotId: r.slotId || r.machineSlot || (r.slots && r.slots[0]) || null,
+          slots:  r.slots || [],
           product: r.product, barcode: r.barcode,
           required: r.required, confirmed: r.confirmedQty,
           variance: r.variance,
@@ -8121,20 +8135,57 @@ function reExportAdjustedCSV() {
 }
 
 
-function generateDriverSheets() {
+// ── Check whether confirmed picks exist for the current date/route ──────────
+async function checkDriverSheetReady() {
+  const btn    = document.getElementById('btn-generate-sheets');
+  const status = document.getElementById('driver-sheet-status');
   const routeId = document.getElementById('sheet-route-sel')?.value || '';
   const date    = pickDate || new Date().toLocaleDateString('en-CA');
-  const wrap    = document.getElementById('driver-sheets-wrap');
-  if (!wrap) return;
+  if (!btn) return;
 
   if (!fbReady || !fbDb) {
-    wrap.innerHTML = '<div style="color:var(--muted);padding:20px">Connect to Firebase to load confirmed pick data</div>';
+    status.style.display = '';
+    status.style.background = 'rgba(217,119,6,.1)';
+    status.style.color = 'var(--warn)';
+    status.textContent = '⚠ Not connected to Firebase';
+    btn.disabled = true; btn.style.opacity = '.45'; btn.style.cursor = 'not-allowed';
     return;
   }
 
   const machines = routeId
-    ? (ROUTES[routeId]?.stops || []).map((s, i) => ({ ...s, serviceOrder: i+1, driver: ROUTES[routeId].driver }))
-    : Object.entries(ROUTES).flatMap(([rid, r]) => r.stops.map((s, i) => ({ ...s, serviceOrder: i+1, driver: r.driver, routeId: rid })));
+    ? (ROUTES[routeId]?.stops || []).map(s => s.id)
+    : Object.values(ROUTES).flatMap(r => r.stops.map(s => s.id));
+
+  const snaps = await Promise.all(machines.map(mid =>
+    fbDb.ref('vynd/confirmedPicks/' + mid + '/' + date).once('value')
+  ));
+  const confirmed = snaps.filter(s => s.exists()).length;
+
+  if (confirmed === 0) {
+    status.style.display = '';
+    status.style.background = 'rgba(220,38,38,.08)';
+    status.style.color = 'var(--danger)';
+    status.textContent = '✕ No confirmed pick data for ' + date + ' — import an adjusted sheet first';
+    btn.disabled = true; btn.style.opacity = '.45'; btn.style.cursor = 'not-allowed';
+  } else {
+    status.style.display = '';
+    status.style.background = 'rgba(74,222,128,.08)';
+    status.style.color = 'var(--accent)';
+    status.textContent = '✓ ' + confirmed + ' of ' + machines.length + ' machine' + (machines.length!==1?'s':'') + ' have confirmed picks for ' + new Date(date+'T12:00:00').toLocaleDateString('en-AU',{day:'2-digit',month:'short',year:'numeric'});
+    btn.disabled = false; btn.style.opacity = '1'; btn.style.cursor = 'pointer';
+  }
+}
+
+function generateDriverSheets() {
+  const routeId = document.getElementById('sheet-route-sel')?.value || '';
+  const date    = pickDate || new Date().toLocaleDateString('en-CA');
+  const dateLabel = new Date(date + 'T12:00:00').toLocaleDateString('en-AU', {weekday:'long',day:'numeric',month:'long',year:'numeric'});
+
+  if (!fbReady || !fbDb) { showToast('Not connected to Firebase'); return; }
+
+  const machines = routeId
+    ? (ROUTES[routeId]?.stops || []).map((s, i) => ({ ...s, serviceOrder: i+1, routeLabel: ROUTES[routeId].label }))
+    : Object.entries(ROUTES).flatMap(([rid, r]) => r.stops.map((s, i) => ({ ...s, serviceOrder: i+1, routeLabel: r.label })));
 
   const promises = machines.map(stop =>
     fbDb.ref('vynd/confirmedPicks/' + stop.id + '/' + date).once('value')
@@ -8142,40 +8193,114 @@ function generateDriverSheets() {
   );
 
   Promise.all(promises).then(results => {
-    if (!results.some(r => r.pick)) {
-      wrap.innerHTML = '<div class="card" style="text-align:center;padding:32px;color:var(--muted)">No confirmed pick data for this date. Import adjustments first.</div>';
-      return;
-    }
+    const withData = results.filter(r => r.pick);
+    if (!withData.length) { showToast('No confirmed picks found for this date'); return; }
 
-    wrap.innerHTML = results.filter(r => r.pick).map(({ stop, pick }) => {
+    // Build one print page per machine
+    const pages = withData.map(({ stop, pick }, pageIdx) => {
+      const meta     = MACHINE_META[stop.id] || {};
+      const custName = meta.customer ? (CUSTOMERS[meta.customer]?.name || meta.customer) : '—';
+      const location = meta.name || stop.name || stop.id;
+      const subLoc   = meta.subLocation || stop.addr || '';
+      const driver   = pick.routeId ? (ROUTE_DRIVERS[pick.routeId] ? (Object.values(USERS||{}).find(u=>u.id===ROUTE_DRIVERS[pick.routeId])?.name || pick.routeId) : '—') : '—';
+
+      // Lines come from pick.lines (barcode-level) — group by slot from confirmedPicks
+      // Fall back to pick.slots if that's what was written
+      const lines = pick.lines || [];
       const slots = pick.slots || {};
-      const rows  = Object.entries(slots).map(([slotId, s]) => `
-        <tr>
-          <td class="text-mono" style="font-weight:700;font-size:12px">${slotId}</td>
-          <td style="font-size:12px">${s.product || '—'}</td>
-          <td class="text-mono" style="font-size:11px;color:var(--muted)">${s.barcode || '—'}</td>
-          <td class="text-mono" style="font-weight:700;color:var(--accent);font-size:14px">${s.confirmedQty}</td>
-        </tr>`).join('');
 
-      return `<div class="card" style="margin-bottom:16px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-          <div>
-            <div style="font-size:14px;font-weight:700">${stop.id} — ${stop.name}</div>
-            <div style="font-size:12px;color:var(--muted);margin-top:2px">Stop ${stop.serviceOrder} · ${stop.driver} · ${date}</div>
+      // Build rows — prefer lines array (has barcode + product + confirmed qty)
+      let rows = '';
+      if (lines.length) {
+        rows = lines.map(l => `
+          <tr>
+            <td style="font-weight:700;font-family:monospace">${(l.slots && l.slots.length ? l.slots.join(', ') : l.slotId) || '—'}</td>
+            <td>${l.product || '—'}</td>
+            <td style="font-size:11px;color:#666">${l.required ?? '—'}</td>
+            <td style="font-size:11px;color:#e05">${l.shortSupply > 0 ? l.shortSupply : '—'}</td>
+            <td style="font-weight:800;font-size:16px;color:#16a34a;text-align:center">${l.confirmed ?? l.confirmedQty ?? '—'}</td>
+            <td style="text-align:center">□</td>
+          </tr>`).join('');
+      } else {
+        rows = Object.entries(slots).map(([slotId, s]) => `
+          <tr>
+            <td style="font-weight:700;font-family:monospace">${slotId}</td>
+            <td>${s.product || '—'}</td>
+            <td style="font-size:11px;color:#666">—</td>
+            <td style="font-size:11px;color:#e05">—</td>
+            <td style="font-weight:800;font-size:16px;color:#16a34a;text-align:center">${s.confirmedQty ?? '—'}</td>
+            <td style="text-align:center">□</td>
+          </tr>`).join('');
+      }
+
+      const isLast = pageIdx === withData.length - 1;
+      return `
+        <div style="page-break-after:${isLast ? 'avoid' : 'always'};padding:24px;font-family:Arial,sans-serif;color:#111;max-width:800px;margin:0 auto">
+
+          <!-- Header -->
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #111">
+            <div>
+              <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#666;margin-bottom:4px">VYND · Driver Fill Sheet</div>
+              <div style="font-size:20px;font-weight:800">${location}</div>
+              ${subLoc ? `<div style="font-size:13px;color:#555;margin-top:2px">${subLoc}</div>` : ''}
+              <div style="font-size:12px;color:#555;margin-top:4px">${custName}</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:13px;font-weight:700">${dateLabel}</div>
+              <div style="font-size:12px;color:#555;margin-top:2px">Stop ${stop.serviceOrder} · ${stop.routeLabel}</div>
+              <div style="font-size:12px;color:#555">Machine: <strong>${stop.id}</strong></div>
+              <div style="font-size:12px;color:#555">Driver: <strong>${driver}</strong></div>
+            </div>
           </div>
-          <span class="pill green" style="font-size:11px">✓ Pick confirmed</span>
-        </div>
-        <table>
-          <thead><tr><th>Slot</th><th>Product</th><th>Barcode</th><th>Qty to fill</th></tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </div>`;
-    }).join('');
-  });
-}
 
-function exportDriverSheetCSV() {
-  showToast('Coming soon — generate sheets first');
+          <!-- Table -->
+          <table style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead>
+              <tr style="background:#f1f5f9">
+                <th style="padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #cbd5e1">Lane</th>
+                <th style="padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #cbd5e1">Product</th>
+                <th style="padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #cbd5e1">Required</th>
+                <th style="padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #cbd5e1;color:#e05">Short</th>
+                <th style="padding:8px 10px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #cbd5e1;color:#16a34a">Fill Qty</th>
+                <th style="padding:8px 10px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #cbd5e1">✓</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows}
+            </tbody>
+          </table>
+
+          <!-- Footer -->
+          <div style="margin-top:20px;display:flex;justify-content:space-between;font-size:11px;color:#888;border-top:1px solid #e2e8f0;padding-top:10px">
+            <div>Printed: ${new Date().toLocaleString('en-AU')}</div>
+            <div style="display:flex;gap:40px">
+              <div>Cash collected: ____________</div>
+              <div>Driver sign-off: ____________</div>
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+
+    // Open print window
+    const win = window.open('', '_blank');
+    win.document.write(`<!DOCTYPE html>
+<html><head><title>VYND Driver Sheets — ${dateLabel}</title>
+<style>
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:#fff; }
+  table { border-collapse:collapse; }
+  tr:nth-child(even) { background:#f8fafc; }
+  td { padding:8px 10px; border-bottom:1px solid #e2e8f0; vertical-align:middle; }
+  @media print {
+    @page { margin:10mm; size:A4; }
+    body { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  }
+</style>
+</head><body>${pages}</body></html>`);
+    win.document.close();
+    // Give images/fonts a moment then trigger print
+    setTimeout(() => { win.focus(); win.print(); }, 400);
+  });
 }
 
 function downloadFile(filename, content, type) {

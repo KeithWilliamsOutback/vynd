@@ -4192,7 +4192,25 @@ async function loadTodaysRuns(forDate) {
   if (hd) hd.textContent = dateLabel;
 
   const showCompleted = panel._showCompleted || false;
-  const visible = showCompleted ? active : pending.length ? pending : active;
+  // Default: hide completed runs, show only pending/scheduled
+  const visible = showCompleted ? active : pending;
+  // If nothing to show (all complete, toggle off) — hide panel but show toggle
+  if (!visible.length && !showCompleted) {
+    panel.style.display = '';
+    list.innerHTML = '<div style="font-size:11px;color:var(--muted);text-align:center;padding:6px">All runs complete for today</div>';
+    const existingToggle = document.getElementById('runs-show-completed-btn');
+    if (existingToggle) existingToggle.remove();
+    if (completed.length > 0) {
+      const btn = document.createElement('button');
+      btn.id = 'runs-show-completed-btn';
+      btn.className = 'btn btn-secondary btn-sm';
+      btn.style.cssText = 'margin-top:6px;width:100%;font-size:11px';
+      btn.textContent = `Show completed (${completed.length})`;
+      btn.onclick = () => { panel._showCompleted = true; loadTodaysRuns(forDate); };
+      list.after(btn);
+    }
+    return;
+  }
 
   list.innerHTML = visible.map(r => {
     const bagNums    = r.bagNumbers ? Object.entries(r.bagNumbers).map(([mid, num]) => `🏷 ${mid}: ${num}`).join(' · ') : '';
@@ -4222,8 +4240,11 @@ async function loadTodaysRuns(forDate) {
     btn.style.cssText = 'margin-top:6px;width:100%;font-size:11px';
     btn.textContent = showCompleted
       ? `Hide completed (${completed.length})`
-      : `Show completed runs (${completed.length})`;
-    btn.onclick = () => { panel._showCompleted = !panel._showCompleted; loadTodaysRuns(forDate); };
+      : `Show completed (${completed.length})`;
+    btn.onclick = () => {
+      panel._showCompleted = !panel._showCompleted;
+      loadTodaysRuns(forDate);
+    };
     list.after(btn);
   }
 }
@@ -5591,6 +5612,43 @@ function initFirebasePortal() {
       refreshDriverSelectors();
     });
 
+    // Load saved machine meta (cashType, settings) overriding in-memory defaults
+    fbDb.ref('vynd/machineMeta').once('value').then(snap => {
+      const data = snap.val();
+      if (!data) return;
+      Object.entries(data).forEach(([mid, meta]) => {
+        if (MACHINE_META[mid]) Object.assign(MACHINE_META[mid], meta);
+        if (MACHINE_STATS[mid] && meta.cashType) MACHINE_STATS[mid].cashType = meta.cashType;
+      });
+    }).catch(() => {});
+
+    // Load lastFill date and fill count from reconciliation records
+    const machineIds = Object.keys(MACHINE_META);
+    machineIds.forEach(mid => {
+      fbDb.ref('vynd/reconciliation/' + mid)
+        .orderByChild('createdAt').limitToLast(20).once('value')
+        .then(snap => {
+          if (!snap.exists()) return;
+          const records = [];
+          snap.forEach(c => { const v = c.val(); if (v.status === 'complete') records.push(v); });
+          if (!records.length) return;
+          // Sort newest first
+          records.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+          const latest = records[0];
+          const lastFillDate = latest.createdAt
+            ? new Date(latest.createdAt).toLocaleDateString('en-AU', {day:'numeric', month:'short', year:'numeric'})
+            : '—';
+          if (!MACHINE_STATS[mid]) MACHINE_STATS[mid] = {};
+          MACHINE_STATS[mid].lastFill  = lastFillDate;
+          MACHINE_STATS[mid].fillCount = records.length;
+          // Refresh machines table if it's visible
+          const tbody = document.getElementById('machines-table-body');
+          if (tbody && document.getElementById('page-machines')?.classList.contains('active')) {
+            renderMachinesTable();
+          }
+        }).catch(() => {});
+    });
+
     // Real-time listener on runs — auto-refresh pick preview when runs are added/changed/cancelled
     fbDb.ref('vynd/runs').on('value', () => {
       // Only refresh if picking page is currently open
@@ -6659,9 +6717,14 @@ function renderReconTable() {
     const totalPicked = r.totalPicked || 0;
     const isPending  = r.status === 'pending';
 
+    const machineCashType = MACHINE_STATS[r.machineId]?.cashType || MACHINE_META[r.machineId]?.cashType || 'cash';
+    const needsCash = machineCashType !== 'cashless' && !isPending && !r.cashCounted;
+
     const statusPill = isPending
       ? '<span class="pill orange">⏳ Pending fill</span>'
-      : '<span class="pill green"><span class="pill-dot"></span>Complete</span>';
+      : needsCash
+        ? '<span class="pill green"><span class="pill-dot"></span>Complete</span> <span class="pill orange" style="font-size:10px">💰 Cash needed</span>'
+        : '<span class="pill green"><span class="pill-dot"></span>Complete</span>';
 
     const revDisplay = soldRev > 0
       ? '$' + (soldRev/100).toFixed(2)
@@ -6777,6 +6840,18 @@ function showReconDetail(machineId, key) {
   const isCashless     = machinePayType === 'cashless';
   const hasCash        = !isCashless;
 
+  // Auto-mark cashless machines complete (no cash reconciliation needed)
+  if (isCashless && !isPending && fbReady && fbDb) {
+    fbDb.ref('vynd/reconciliation/' + machineId + '/' + key + '/cashlessClosed').set(true).catch(() => {});
+  }
+
+  // Cash pill shown in summary
+  const cashNeededPill = hasCash && !isPending && !record.cashCounted
+    ? '<span class="pill orange" style="font-size:10px;margin-left:8px">💰 Cash needed</span>'
+    : hasCash && record.cashCounted
+      ? '<span class="pill green" style="font-size:10px;margin-left:8px">💰 Cash entered</span>'
+      : '';
+
   document.getElementById('recon-detail-summary').innerHTML = `
     <div class="card" style="padding:12px;text-align:center">
       <div style="font-size:22px;font-weight:700;color:var(--accent)">${totalSold}</div>
@@ -6795,6 +6870,7 @@ function showReconDetail(machineId, key) {
         ${isPending ? '⏳ Pending' : '✓ Complete'}
       </div>
       <div style="font-size:11px;color:var(--muted);margin-top:2px">Restock status</div>
+      ${cashNeededPill ? `<div style="margin-top:6px">${cashNeededPill}</div>` : ''}
       ${isPending ? `<button class="btn btn-sm btn-secondary" style="margin-top:8px;font-size:10px" onclick="markReconComplete('${machineId}','${key}')">Mark complete</button>` : ''}
     </div>
     ${hasCash ? `

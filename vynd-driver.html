@@ -496,6 +496,11 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
       <span class="flag-text"><strong>Cashless machine</strong> — no cash collection or coin mech required.</span>
     </div>
 
+    <div id="cash-collection-reminder" class="flag-row" style="display:none;background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.25);border-radius:8px;padding:10px 14px;margin-bottom:8px">
+      <span class="flag-icon">💰</span>
+      <span class="flag-text"><strong>Cash machine</strong> — collect cash bag and scan bag number below.</span>
+    </div>
+
     <div id="fault-alert" class="flag-row warn" style="display:none">
       <span class="flag-icon">🔧</span>
       <span class="flag-text"><strong>Coin jam reported</strong> — check coin mech on arrival. Reset if cleared.</span>
@@ -1833,6 +1838,10 @@ async function showStop(machineId) {
     cashLabel.textContent = isMixed ? 'Est. cash (cash sales)' : 'Est. cash';
     cashlessBanner.style.display = 'none';
   }
+
+  // Cash collection reminder for cash/mixed machines
+  const cashReminder = document.getElementById('cash-collection-reminder');
+  if (cashReminder) cashReminder.style.display = hasCash ? 'flex' : 'none';
 
   // Bag number section — only show if individual bags pref is on AND machine has cash
   const bagSection  = document.getElementById('stop-bag-section');
@@ -5244,8 +5253,14 @@ function applyDriverFbConfig() {
     loadDriverProfileFromFirebase();
     populateDriverDropdown();
     loadGlobalOpSettings();
+    fbDb.ref('vynd/machineMeta').once('value').then(snap => {
+      const data = snap.val();
+      if (!data) return;
+      Object.entries(data).forEach(([mid, meta]) => {
+        if (MACHINE_META_DRIVER[mid] && meta.cashType) MACHINE_META_DRIVER[mid].cashType = meta.cashType;
+      });
+    }).catch(() => {});
     loadProductsFromFirebase().then(() => loadProductImages().then(() => {
-      // Rebuild stock pick now that images are available
       if (document.getElementById('stock-machine-list')) buildStockPick();
     }));
     // Close config panel
@@ -5310,6 +5325,16 @@ function initFirebase() {
     loadDriverProfileFromFirebase();
     populateDriverDropdown();
     loadGlobalOpSettings();
+    // Load cashType overrides from Firebase machineMeta (portal can change these)
+    fbDb.ref('vynd/machineMeta').once('value').then(snap => {
+      const data = snap.val();
+      if (!data) return;
+      Object.entries(data).forEach(([mid, meta]) => {
+        if (MACHINE_META_DRIVER[mid] && meta.cashType) {
+          MACHINE_META_DRIVER[mid].cashType = meta.cashType;
+        }
+      });
+    }).catch(() => {});
     loadProductsFromFirebase().then(() => loadProductImages().then(() => {
       if (document.getElementById('stock-machine-list')?.children.length > 0) buildStockPick();
     }));
@@ -5795,7 +5820,16 @@ async function completeReconciliation(machineId, slots) {
       await fbDb.ref('vynd/reconciliation/' + machineId + '/' + recoKey).update(update);
       await fbDb.ref('vynd/pendingRestock/' + machineId).remove();
       await fbDb.ref('vynd/completedStops/' + machineId).remove();
-      console.log('Back-filled recon for', machineId, 'key:', recoKey);
+
+      // Write post-restock SOH to all three Firebase paths
+      const backFillSOH = {};
+      Object.entries(postRestockSlots).forEach(([slotId, slot]) => {
+        backFillSOH['vynd/dexReadings/' + machineId + '/last/slots/' + slotId + '/currentSOH'] = slot.currentSOH;
+        backFillSOH['vynd/planograms/'  + machineId + '/slots/' + slotId + '/currentSOH']      = slot.currentSOH;
+        backFillSOH['vynd/machines/'    + machineId + '/dex/slots/' + slotId + '/currentSOH']  = slot.currentSOH;
+      });
+      if (Object.keys(backFillSOH).length) await fbDb.ref().update(backFillSOH);
+      console.log('Back-filled recon + SOH for', machineId, 'key:', recoKey);
 
     } else {
       // Normal path — driver marked complete before restock dial
@@ -5824,11 +5858,18 @@ async function completeReconciliation(machineId, slots) {
       }
     }
 
-    // Update SOH in Firebase — new SOH = preSOH + picked (becomes baseline for next DEX dial)
+    // Update SOH in Firebase — new SOH = current SOH + units added by driver
+    // Write to all three paths so planogram page, pick list, and driver app all see it
     const sohUpdates = {};
     slots.forEach(slot => {
-      const newSOH = (slot.sohAfter || 0) + (slot.added || 0);
-      sohUpdates['vynd/dexReadings/' + machineId + '/last/slots/' + slot.id + '/currentSOH'] = slot.sohAfter || 0;
+      const added  = stopSlotState[slot.id]?.added || slot.added || 0;
+      const preSOH = slot.current != null ? slot.current : (slot.sohAfter || 0);
+      const newSOH = Math.max(0, preSOH + added);
+      if (added > 0 || preSOH > 0) {
+        sohUpdates['vynd/dexReadings/' + machineId + '/last/slots/' + slot.id + '/currentSOH'] = newSOH;
+        sohUpdates['vynd/planograms/'  + machineId + '/slots/' + slot.id + '/currentSOH']      = newSOH;
+        sohUpdates['vynd/machines/'    + machineId + '/dex/slots/' + slot.id + '/currentSOH']  = newSOH;
+      }
     });
     if (Object.keys(sohUpdates).length) {
       await fbDb.ref().update(sohUpdates);

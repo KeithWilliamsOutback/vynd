@@ -323,7 +323,8 @@ tr.clickable:hover td{background:var(--bg)}
 .muc-tile-val{font-family:'DM Mono',monospace;font-size:16px;font-weight:700;line-height:1.2}
 .muc-tile-lbl{font-size:9px;color:var(--muted);margin-top:2px;text-transform:uppercase;letter-spacing:.3px}
 .muc-flag-strip{display:flex;gap:4px;flex-wrap:wrap;margin-top:8px}
-.sortable-ghost{opacity:.4;background:var(--accent-bg)!important;border-color:var(--accent)!important};background:#1e293b;color:#f8fafc;font-size:11px;padding:6px 10px;border-radius:6px;white-space:nowrap;z-index:9999;pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,.3);display:none}
+.sortable-ghost{opacity:.4;background:var(--accent-bg)!important;border-color:var(--accent)!important}
+#vynd-tip{position:fixed;background:#1e293b;color:#f8fafc;font-size:11px;padding:8px 12px;border-radius:8px;white-space:normal;min-width:140px;max-width:240px;z-index:9999;pointer-events:none;box-shadow:0 4px 16px rgba(0,0,0,.35);display:none;line-height:1.5}
 .vynd-tip::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:#1e293b}
 .muc-addr{font-size:11px;color:var(--muted);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sort-mode-bar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
@@ -744,7 +745,15 @@ tr.clickable:hover td{background:var(--bg)}
         <button class="filter-btn on" onclick="setCustFilter('all',this)">All</button>
         <button class="filter-btn" onclick="setCustFilter('active',this)">Active</button>
         <button class="filter-btn" onclick="setCustFilter('inactive',this)">Inactive</button>
-        <div style="margin-left:auto">
+        <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+          <div style="display:flex;border:1px solid var(--border);border-radius:6px;overflow:hidden">
+            <button id="cust-view-tile" onclick="setCustView('tile')" title="Tile view" style="padding:5px 9px;background:var(--accent);border:none;cursor:pointer;color:#fff;display:flex;align-items:center">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><rect x="0" y="0" width="6" height="6" rx="1"/><rect x="8" y="0" width="6" height="6" rx="1"/><rect x="0" y="8" width="6" height="6" rx="1"/><rect x="8" y="8" width="6" height="6" rx="1"/></svg>
+            </button>
+            <button id="cust-view-list" onclick="setCustView('list')" title="List view" style="padding:5px 9px;background:var(--surface);border:none;border-left:1px solid var(--border);cursor:pointer;color:var(--muted);display:flex;align-items:center">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><rect x="0" y="1" width="14" height="2" rx="1"/><rect x="0" y="6" width="14" height="2" rx="1"/><rect x="0" y="11" width="14" height="2" rx="1"/></svg>
+            </button>
+          </div>
           <button class="btn btn-primary btn-sm" onclick="openCustomerModal()">+ Add customer</button>
         </div>
       </div>
@@ -891,7 +900,15 @@ tr.clickable:hover td{background:var(--bg)}
         <button class="filter-btn on" id="loc-status-all"   onclick="setLocFilter('all',this)">All</button>
         <button class="filter-btn"   id="loc-status-active" onclick="setLocFilter('active',this)">Active</button>
         <button class="filter-btn"   id="loc-status-urgent" onclick="setLocFilter('urgent',this)">Needs attention</button>
-        <div style="margin-left:auto">
+        <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+          <div style="display:flex;border:1px solid var(--border);border-radius:6px;overflow:hidden">
+            <button id="loc-view-tile" onclick="setLocView('tile')" title="Tile view" style="padding:5px 9px;background:var(--accent);border:none;cursor:pointer;color:#fff;display:flex;align-items:center">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><rect x="0" y="0" width="6" height="6" rx="1"/><rect x="8" y="0" width="6" height="6" rx="1"/><rect x="0" y="8" width="6" height="6" rx="1"/><rect x="8" y="8" width="6" height="6" rx="1"/></svg>
+            </button>
+            <button id="loc-view-list" onclick="setLocView('list')" title="List view" style="padding:5px 9px;background:var(--surface);border:none;border-left:1px solid var(--border);cursor:pointer;color:var(--muted);display:flex;align-items:center">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><rect x="0" y="1" width="14" height="2" rx="1"/><rect x="0" y="6" width="14" height="2" rx="1"/><rect x="0" y="11" width="14" height="2" rx="1"/></svg>
+            </button>
+          </div>
           <button class="btn btn-primary btn-sm" onclick="openLocationModal()">+ Add location</button>
         </div>
       </div>
@@ -3541,14 +3558,21 @@ function calcMachineMetrics(mid) {
   const slots     = (pog?.slots || []).map(s => ({
     current:  s.current !== undefined ? s.current : (s.currentSOH || 0),
     capacity: s.capacity || 10,
+    par:      s.par || 0,
     dexVends: s.dexVends || 0,
   }));
 
   if (!slots.length) return { pctEmpty:0, soldOut:0, predictiveDays:99, days:0, isOverdue:false, urgency:0 };
 
-  const totalCap  = slots.reduce((a,s) => a + s.capacity, 0);
-  const totalCur  = slots.reduce((a,s) => a + s.current,  0);
-  const pctEmpty  = totalCap ? Math.round((1 - totalCur / totalCap) * 100) : 0;
+  const totalPar  = slots.reduce((a,s) => a + s.par, 0);
+  const totalCur  = slots.reduce((a,s) => a + s.current, 0);
+  // Par-based: how short of par target. SOH above par counts as 0% empty.
+  // Falls back to capacity-based if par not set.
+  const pctEmpty  = totalPar > 0
+    ? Math.round(Math.max(0, (totalPar - totalCur) / totalPar) * 100)
+    : slots.reduce((a,s) => a + s.capacity, 0) > 0
+      ? Math.round((1 - totalCur / slots.reduce((a,s) => a + s.capacity, 0)) * 100)
+      : 0;
   const soldOut   = slots.filter(s => s.current === 0).length;
 
   let minDaysLeft = Infinity;
@@ -3776,13 +3800,28 @@ function selectRoute(routeId) {
       if (c && c.isLegacy) c.calculatedAt = null; // force Firebase refresh for legacy entries
     });
     Promise.all(machIds.map(mid => calcMachineUrgency(mid).catch(() => null)))
-      .then(() => { renderMachineList(); autoFlagUrgentMachines(); });
+      .then(() => {
+        // Urgency cache now has real daysSinceRestock — invalidate route interval
+        // so buildRouteIntervalFromLegacy re-runs with actual fill dates
+        delete routeIntervalCache[routeId];
+        return loadRouteIntervalData(routeId);
+      })
+      .then(() => {
+        updateRunIntervalInfo(routeId);
+        renderMachineList();
+        autoFlagUrgentMachines();
+      });
   }
 }
 
 function autoFlagUrgentMachines() {
   const route = ROUTES[currentRouteId];
   if (!route) return;
+
+  // Clear any previously auto-flagged machines so a fresh Firebase pass
+  // doesn't leave stale legacy selections in place
+  route.stops.forEach(stop => selectedMachines.delete(stop.id));
+
   let flaggedCount = 0;
   route.stops.forEach(stop => {
     const u = machineUrgencyCache[stop.id];
@@ -3792,6 +3831,8 @@ function autoFlagUrgentMachines() {
     renderMachineList();
     showToast('⚡ ' + flaggedCount + ' machine' + (flaggedCount>1?'s':'') + ' auto-flagged for review');
     showFlagReviewBanner(flaggedCount);
+  } else {
+    document.getElementById('flag-review-banner')?.remove();
   }
   updateSelectionSummary();
 }
@@ -3868,8 +3909,9 @@ function renderMachineList() {
   });
 
   list.innerHTML = machines.map(m => {
+    const mid = m.id;  // declared first — used throughout
     const live = m.live, legacy = m.legacy;
-    const sel  = selectedMachines.has(m.id);
+    const sel  = selectedMachines.has(mid);
     const score   = live?.score ?? legacy?.urgency ?? 0;
     const urg     = getUrgencyLevel(score);
     const pctEmpty  = live?.pctEmpty ?? legacy?.pctEmpty ?? 0;
@@ -3879,11 +3921,20 @@ function renderMachineList() {
     const isOverdue = daysSince !== null && daysSince >= maxRestock;
     const autoFlag  = triggers.length > 0;
     const soldOutProducts = live?.productAnalysis?.filter(p=>p.allEmpty).map(p=>p.product) ?? [];
+    // Low/partial stock products for % empty tooltip
+    const emptyBreakdown = live?.productAnalysis
+      ? live.productAnalysis
+          .filter(p => p.anyEmpty || p.totalSOH < (p.lanes * 3))
+          .sort((a,b) => a.totalSOH - b.totalSOH)
+          .map(p => p.product + (p.allEmpty ? ' — SOLD OUT' : ' — ' + p.totalSOH + ' left'))
+      : [];
+    // Store in window lookup keyed by sanitised machine ID for tooltip access
+    const _mk = mid.replace(/[^a-z0-9]/gi,'_');
+    window['murSoldOutProds_' + _mk] = soldOutProducts;
+    window['murEmptyProds_'   + _mk] = emptyBreakdown;
     const minDays = live?.productAnalysis?.filter(p=>!p.allEmpty&&p.daysLeft<999).reduce((mn,p)=>Math.min(mn,p.daysLeft),999) ?? (legacy?.predictiveDays ?? 999);
     const predLabel = soldOut > 0 ? 'Sold out now' : minDays < 999 ? 'Sellout in ' + Math.round(minDays) + 'd' : 'No sellout predicted';
     const predColor = soldOut > 0 || minDays <= 1 ? 'var(--danger)' : minDays <= 3 ? 'var(--warn)' : minDays <= 7 ? 'var(--info)' : 'var(--muted)';
-
-    const mid = m.id;
 
     // Metric values
     const minDaysLeft = live?.productAnalysis?.filter(p=>!p.allEmpty&&p.daysLeft<999)
@@ -3932,16 +3983,22 @@ function renderMachineList() {
 
       // Metric grid — 5 tiles
       '<div class="muc-metric-grid">' +
-        '<div class="muc-metric-tile"' + (soldOutProducts.length > 0 ? ' onmouseenter="showTip(event,\'' + soldOutProducts.join(', ') + '\')" onmouseleave="hideTip()"' : '') + '>' +
-          '<div class="muc-tile-val" style="color:' + soldOutColor + '">' + soldOut + (soldOutProducts.length>0?'<span style=\"font-size:9px;margin-left:2px;opacity:.6\">ℹ</span>':'') + '</div>' +
+        '<div class="muc-metric-tile muc-tip-cell"' +
+          (soldOutProducts.length > 0
+            ? ' onmouseenter="_tipCell(event,\'Sold out\',murSoldOutProds_' + mid.replace(/[^a-z0-9]/gi,'_') + ')" onmouseleave="hideTip()"'
+            : '') + '>' +
+          '<div class="muc-tile-val" style="color:' + soldOutColor + '">' + soldOut + (soldOutProducts.length>0?'<span style="font-size:9px;margin-left:2px;opacity:.6">ℹ</span>':'') + '</div>' +
           '<div class="muc-tile-lbl">Sold out</div>' +
         '</div>' +
         '<div class="muc-metric-tile">' +
           '<div class="muc-tile-val" style="color:' + daysColor + '">' + daysDisplay + '</div>' +
           '<div class="muc-tile-lbl">Days left</div>' +
         '</div>' +
-        '<div class="muc-metric-tile">' +
-          '<div class="muc-tile-val" style="color:' + emptyColor + '">' + pctEmpty + '%</div>' +
+        '<div class="muc-metric-tile muc-tip-cell"' +
+          (pctEmpty > 0
+            ? ' onmouseenter="_tipCell(event,\'Capacity empty\',murEmptyProds_' + mid.replace(/[^a-z0-9]/gi,'_') + ')" onmouseleave="hideTip()"'
+            : '') + '>' +
+          '<div class="muc-tile-val" style="color:' + emptyColor + '">' + pctEmpty + '%' + (pctEmpty > 0 ? '<span style="font-size:9px;margin-left:2px;opacity:.6">ℹ</span>' : '') + '</div>' +
           '<div class="muc-tile-lbl">Empty</div>' +
         '</div>' +
         '<div class="muc-metric-tile">' +
@@ -4049,7 +4106,9 @@ function updateRunIntervalInfo(routeId) {
   info.style.display = '';
   avgEl.textContent  = interval.avgInterval + ' days';
   const daysTo = daysUntilDate(interval.nextPredicted);
-  nextEl.textContent = interval.nextPredicted + ' (' + (daysTo <= 0 ? 'today' : 'in ' + daysTo + 'd') + ')';
+  const _npDate = new Date(interval.nextPredicted + 'T12:00:00'); // noon avoids timezone date-shift
+  const _npLabel = _npDate.toLocaleDateString('en-AU', {day:'2-digit', month:'2-digit', year:'numeric'});
+  nextEl.textContent = _npLabel + ' (' + (daysTo <= 0 ? 'today' : 'in ' + daysTo + 'd') + ')';
   nextEl.style.color = daysTo <= 2 ? 'var(--warn)' : 'var(--accent)';
   if (noteEl) noteEl.textContent = interval.isLegacy
     ? '⚠ Estimated from route schedule — will refine as runs are completed'
@@ -4333,7 +4392,32 @@ function buildRouteIntervalFromLegacy(routeId) {
   const dayCount = dayNames.filter(d => daysStr.includes(d)).length || 1;
   const interval = Math.round(7 / dayCount);
   const today    = new Date();
-  const lastDate = new Date(today.getTime() - interval * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+  // Try to anchor on the most recent real restock date from the urgency cache
+  // so "next predicted" reflects actual last fill rather than always landing on today.
+  let lastDate = null;
+  if (route.stops) {
+    let mostRecentRestockMs = null;
+    route.stops.forEach(stop => {
+      const u = machineUrgencyCache[stop.id];
+      if (u && u.daysSinceRestock !== null && u.daysSinceRestock !== undefined) {
+        const restockMs = today.getTime() - u.daysSinceRestock * 24 * 60 * 60 * 1000;
+        if (mostRecentRestockMs === null || restockMs > mostRecentRestockMs) {
+          mostRecentRestockMs = restockMs;
+        }
+      }
+    });
+    if (mostRecentRestockMs !== null) {
+      lastDate = new Date(mostRecentRestockMs).toISOString().split('T')[0];
+    }
+  }
+
+  // Fallback: assume last fill was one interval ago (will show "Today" — acceptable
+  // when there truly is no fill history at all)
+  if (!lastDate) {
+    lastDate = new Date(today.getTime() - interval * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  }
+
   routeIntervalCache[routeId] = {
     avgInterval: interval, lastDate,
     nextPredicted: predictNextDate(lastDate, interval),
@@ -4359,7 +4443,9 @@ function predictNextDate(lastDateStr, intervalDays) {
 
 function daysUntilDate(dateStr) {
   const today = new Date(); today.setHours(0,0,0,0);
-  return Math.round((new Date(dateStr) - today) / (24 * 60 * 60 * 1000));
+  // Parse at noon local time to avoid UTC midnight rolling back a day in AEST (+10)
+  const target = new Date(dateStr + 'T12:00:00');
+  return Math.round((target - today) / (24 * 60 * 60 * 1000));
 }
 
 async function loadAllRouteIntervals() {
@@ -7239,6 +7325,21 @@ function saveOperationalSettings() {
   const marginAmberEl = document.getElementById('margin-amber');
   if (marginAmberEl) OPERATIONAL_SETTINGS.marginAmber = parseInt(marginAmberEl.value) || 50;
   localStorage.setItem('vynd_operational_settings', JSON.stringify(OPERATIONAL_SETTINGS));
+
+  // Invalidate urgency cache so new settings take effect immediately
+  // (cache has a 5-min TTL — without this, routing page shows stale calculations)
+  Object.keys(machineUrgencyCache).forEach(mid => {
+    if (machineUrgencyCache[mid]) machineUrgencyCache[mid].calculatedAt = null;
+  });
+
+  // If routing page is open, re-render machine list with new settings
+  const routingPage = document.getElementById('page-routing');
+  if (routingPage && routingPage.style.display !== 'none') {
+    setTimeout(() => {
+      if (typeof renderRouteDetail === 'function') renderRouteDetail();
+    }, 100);
+  }
+
   // Sync to Firebase so driver app can read it
   if (fbReady && fbDb) {
     fbDb.ref('vynd/settings/operational').set(OPERATIONAL_SETTINGS)
@@ -8610,9 +8711,16 @@ async function calcMachineUrgency(machineId) {
   );
   const atRiskProducts = productAnalysis.filter(p => !p.allEmpty && p.willSellOut);
 
-  // Machine % empty
-  const emptySlots  = slots.filter(s => (s.currentSOH || 0) === 0).length;
-  const pctEmpty    = slots.length > 0 ? Math.round((emptySlots / slots.length) * 100) : 0;
+  // Machine % empty — based on par (how short of par target, not physical capacity)
+  // SOH above par counts as 0% empty for that slot.
+  // Falls back to slot-count method if par not set on planogram.
+  const totalPar  = slots.reduce((a, s) => a + (s.par || 0), 0);
+  const totalSOH  = slots.reduce((a, s) => a + Math.min(s.currentSOH || 0, s.par || s.currentSOH || 0), 0);
+  const pctEmpty = totalPar > 0
+    ? Math.round(((totalPar - totalSOH) / totalPar) * 100)
+    : slots.length > 0
+      ? Math.round((slots.filter(s => (s.currentSOH || 0) === 0).length / slots.length) * 100)
+      : 0;
 
   // Days since last restock
   let daysSinceRestock = null;
@@ -9732,6 +9840,17 @@ let LOCATIONS = {
 };
 
 let locStatusFilter  = 'all';
+let locView = localStorage.getItem('vynd_locView') || 'tile';
+
+function setLocView(v) {
+  locView = v;
+  localStorage.setItem('vynd_locView', v);
+  const tileBtn = document.getElementById('loc-view-tile');
+  const listBtn = document.getElementById('loc-view-list');
+  if (tileBtn) { tileBtn.style.background = v==='tile' ? 'var(--accent)' : 'var(--surface)'; tileBtn.style.color = v==='tile' ? '#fff' : 'var(--muted)'; }
+  if (listBtn) { listBtn.style.background = v==='list' ? 'var(--accent)' : 'var(--surface)'; listBtn.style.color = v==='list' ? '#fff' : 'var(--muted)'; }
+  renderLocationsPage();
+}
 let editingLocationId = null;
 
 function initLocationsPage() {
@@ -9819,61 +9938,113 @@ function renderLocationsPage() {
   setEl('loc-count-urgent',    urgentCount);
   setEl('loc-count-customers', customerCount);
 
-  // Render cards
-  if (!locs.length) {
-    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:60px;color:var(--muted)">No locations found</div>';
-    return;
-  }
+  // Sync toggle button states
+  const lvTile = document.getElementById('loc-view-tile');
+  const lvList = document.getElementById('loc-view-list');
+  if (lvTile) { lvTile.style.background = locView==='tile' ? 'var(--accent)' : 'var(--surface)'; lvTile.style.color = locView==='tile' ? '#fff' : 'var(--muted)'; }
+  if (lvList) { lvList.style.background = locView==='list' ? 'var(--accent)' : 'var(--surface)'; lvList.style.color = locView==='list' ? '#fff' : 'var(--muted)'; }
 
   const statusPill = { active:'green', inactive:'gray', pending:'orange' };
   const statusLabel = { active:'Active', inactive:'Inactive', pending:'Pending' };
 
-  grid.innerHTML = locs.map(loc => {
-    const machines   = locMachines[loc.id] || [];
-    const urgent     = machines.filter(mid => (machineUrgencyCache[mid]?.score ?? 0) >= 60).length;
-    const attention  = machines.filter(mid => { const s = machineUrgencyCache[mid]?.score ?? 0; return s >= 30 && s < 60; }).length;
-    const borderCol  = urgent > 0 ? 'var(--danger)' : attention > 0 ? 'var(--warn)' : 'var(--border)';
-    const custName   = CUSTOMERS[loc.customer]?.name || loc.customer || loc.name || '—';
-    const initials   = custName.split(' ').filter(w=>w).map(w => w[0]).join('').toUpperCase().slice(0,2) || '?';
+  // Render cards
+  if (!locs.length) {
+    grid.style.display = 'grid';
+    grid.style.gridTemplateColumns = 'repeat(auto-fill,minmax(340px,1fr))';
+    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:60px;color:var(--muted)">No locations found</div>';
+    return;
+  }
 
-    return `<div style="background:var(--card);border:1.5px solid ${borderCol};border-radius:10px;padding:16px;cursor:pointer;transition:all .15s"
-      onclick="openLocationPanel('${loc.id}')"
-      onmouseover="this.style.boxShadow='var(--shadow-md)'"
-      onmouseout="this.style.boxShadow=''">
+  if (locView === 'list') {
+    grid.style.display = 'block';
+    grid.style.gridTemplateColumns = '';
+    grid.innerHTML = `
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead>
+          <tr style="border-bottom:2px solid var(--border);text-align:left">
+            <th style="padding:8px 12px;font-weight:600;color:var(--muted);font-size:11px;text-transform:uppercase;white-space:nowrap">Location</th>
+            <th style="padding:8px 12px;font-weight:600;color:var(--muted);font-size:11px;text-transform:uppercase;white-space:nowrap">Customer</th>
+            <th style="padding:8px 12px;font-weight:600;color:var(--muted);font-size:11px;text-transform:uppercase;white-space:nowrap">Address</th>
+            <th style="padding:8px 12px;font-weight:600;color:var(--muted);font-size:11px;text-transform:uppercase;white-space:nowrap;text-align:center">Machines</th>
+            <th style="padding:8px 12px;font-weight:600;color:var(--muted);font-size:11px;text-transform:uppercase;white-space:nowrap;text-align:center">Critical</th>
+            <th style="padding:8px 12px;font-weight:600;color:var(--muted);font-size:11px;text-transform:uppercase;white-space:nowrap;text-align:center">Attention</th>
+            <th style="padding:8px 12px;font-weight:600;color:var(--muted);font-size:11px;text-transform:uppercase;white-space:nowrap">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${locs.map((loc, i) => {
+            const machines  = locMachines[loc.id] || [];
+            const urgent    = machines.filter(mid => (machineUrgencyCache[mid]?.score ?? 0) >= 60).length;
+            const attention = machines.filter(mid => { const s = machineUrgencyCache[mid]?.score ?? 0; return s >= 30 && s < 60; }).length;
+            const custName  = CUSTOMERS[loc.customer]?.name || loc.customer || '—';
+            const rowBg     = i % 2 === 0 ? 'var(--surface)' : 'var(--card)';
+            const urgentCol = urgent > 0 ? 'var(--danger)' : 'var(--muted)';
+            const attnCol   = attention > 0 ? 'var(--warn)' : 'var(--muted)';
+            return `<tr style="background:${rowBg};border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s"
+              onclick="openLocationPanel('${loc.id}')"
+              onmouseover="this.style.background='var(--accent-bg)'"
+              onmouseout="this.style.background='${rowBg}'">
+              <td style="padding:10px 12px;font-weight:600;white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis">${loc.name}</td>
+              <td style="padding:10px 12px;color:var(--muted);white-space:nowrap;max-width:180px;overflow:hidden;text-overflow:ellipsis">${custName}</td>
+              <td style="padding:10px 12px;color:var(--muted);font-size:12px;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${loc.address || '—'}</td>
+              <td style="padding:10px 12px;text-align:center;font-family:'DM Mono',monospace;font-weight:700;color:var(--accent)">${machines.length}</td>
+              <td style="padding:10px 12px;text-align:center;font-family:'DM Mono',monospace;font-weight:700;color:${urgentCol}">${urgent || '—'}</td>
+              <td style="padding:10px 12px;text-align:center;font-family:'DM Mono',monospace;font-weight:700;color:${attnCol}">${attention || '—'}</td>
+              <td style="padding:10px 12px"><span class="pill ${statusPill[loc.status]||'gray'}" style="font-size:10px">${statusLabel[loc.status]||loc.status||'—'}</span></td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>`;
+  } else {
+    grid.style.display = 'grid';
+    grid.style.gridTemplateColumns = 'repeat(auto-fill,minmax(340px,1fr))';
+    grid.innerHTML = locs.map(loc => {
+      const machines   = locMachines[loc.id] || [];
+      const urgent     = machines.filter(mid => (machineUrgencyCache[mid]?.score ?? 0) >= 60).length;
+      const attention  = machines.filter(mid => { const s = machineUrgencyCache[mid]?.score ?? 0; return s >= 30 && s < 60; }).length;
+      const borderCol  = urgent > 0 ? 'var(--danger)' : attention > 0 ? 'var(--warn)' : 'var(--border)';
+      const custName   = CUSTOMERS[loc.customer]?.name || loc.customer || loc.name || '—';
+      const initials   = custName.split(' ').filter(w=>w).map(w => w[0]).join('').toUpperCase().slice(0,2) || '?';
 
-      <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:12px">
-        <div style="width:38px;height:38px;border-radius:8px;background:var(--accent-bg);border:1px solid var(--accent-border);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--accent);flex-shrink:0">${initials}</div>
-        <div style="flex:1;min-width:0">
-          <div style="font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${loc.name}</div>
-          <div style="font-size:12px;color:var(--muted);margin-top:1px">${custName}</div>
+      return `<div style="background:var(--card);border:1.5px solid ${borderCol};border-radius:10px;padding:16px;cursor:pointer;transition:all .15s"
+        onclick="openLocationPanel('${loc.id}')"
+        onmouseover="this.style.boxShadow='var(--shadow-md)'"
+        onmouseout="this.style.boxShadow=''">
+
+        <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:12px">
+          <div style="width:38px;height:38px;border-radius:8px;background:var(--accent-bg);border:1px solid var(--accent-border);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--accent);flex-shrink:0">${initials}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${loc.name}</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:1px">${custName}</div>
+          </div>
+          <span class="pill ${statusPill[loc.status]||'gray'}" style="font-size:10px;flex-shrink:0">${statusLabel[loc.status]||loc.status}</span>
         </div>
-        <span class="pill ${statusPill[loc.status]||'gray'}" style="font-size:10px;flex-shrink:0">${statusLabel[loc.status]||loc.status}</span>
-      </div>
 
-      <div style="font-size:11px;color:var(--muted);margin-bottom:12px;display:flex;align-items:center;gap:4px">
-        📍 ${loc.address}
-      </div>
-
-      ${loc.hours ? `<div style="font-size:11px;color:var(--muted);margin-bottom:12px">🕐 ${loc.hours}</div>` : ''}
-
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:12px">
-        <div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px;text-align:center">
-          <div style="font-family:'DM Mono',monospace;font-size:16px;font-weight:700;color:var(--accent)">${machines.length}</div>
-          <div style="font-size:9px;color:var(--muted);text-transform:uppercase">Machines</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:12px;display:flex;align-items:center;gap:4px">
+          📍 ${loc.address}
         </div>
-        <div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px;text-align:center">
-          <div style="font-family:'DM Mono',monospace;font-size:16px;font-weight:700;color:${urgent>0?'var(--danger)':'var(--muted)'}">${urgent}</div>
-          <div style="font-size:9px;color:var(--muted);text-transform:uppercase">Critical</div>
-        </div>
-        <div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px;text-align:center">
-          <div style="font-family:'DM Mono',monospace;font-size:16px;font-weight:700;color:${attention>0?'var(--warn)':'var(--muted)'}">${attention}</div>
-          <div style="font-size:9px;color:var(--muted);text-transform:uppercase">Attention</div>
-        </div>
-      </div>
 
-      ${loc.accessNotes ? `<div style="font-size:11px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--muted)">🔑 ${loc.accessNotes}</div>` : ''}
-    </div>`;
-  }).join('');
+        ${loc.hours ? `<div style="font-size:11px;color:var(--muted);margin-bottom:12px">🕐 ${loc.hours}</div>` : ''}
+
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:12px">
+          <div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px;text-align:center">
+            <div style="font-family:'DM Mono',monospace;font-size:16px;font-weight:700;color:var(--accent)">${machines.length}</div>
+            <div style="font-size:9px;color:var(--muted);text-transform:uppercase">Machines</div>
+          </div>
+          <div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px;text-align:center">
+            <div style="font-family:'DM Mono',monospace;font-size:16px;font-weight:700;color:${urgent>0?'var(--danger)':'var(--muted)'}">${urgent}</div>
+            <div style="font-size:9px;color:var(--muted);text-transform:uppercase">Critical</div>
+          </div>
+          <div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px;text-align:center">
+            <div style="font-family:'DM Mono',monospace;font-size:16px;font-weight:700;color:${attention>0?'var(--warn)':'var(--muted)'}">${attention}</div>
+            <div style="font-size:9px;color:var(--muted);text-transform:uppercase">Attention</div>
+          </div>
+        </div>
+
+        ${loc.accessNotes ? `<div style="font-size:11px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--muted)">🔑 ${loc.accessNotes}</div>` : ''}
+      </div>`;
+    }).join('');
+  }
 }
 
 function openLocationPanel(locId) {
@@ -10701,28 +10872,18 @@ let CUSTOMERS = {
   '123456': { 'id':'123456', 'name':'z Lease Machines', 'industry':'Commercial', 'category':'Not Specified', 'customerType':'Commercial', 'contactName':'Keith Williams', 'contactEmail':'keith@inlanddistributors.com.au', 'commType':'pct-net', 'commRate':0, 'status':'active', 'source':'import' },
 };
 
-let custView = 'card'; // 'card' | 'list'
-let locView  = 'card'; // 'card' | 'list'
+let custStatusFilter  = 'all';
+let custView = localStorage.getItem('vynd_custView') || 'tile';
 
-function setCustView(view) {
-  custView = view;
-  const cardBtn = document.getElementById('cust-view-card');
+function setCustView(v) {
+  custView = v;
+  localStorage.setItem('vynd_custView', v);
+  const tileBtn = document.getElementById('cust-view-tile');
   const listBtn = document.getElementById('cust-view-list');
-  if (cardBtn) { cardBtn.style.background = view==='card' ? 'var(--accent)' : 'var(--surface)'; cardBtn.style.color = view==='card' ? '#fff' : 'var(--muted)'; }
-  if (listBtn) { listBtn.style.background = view==='list' ? 'var(--accent)' : 'var(--surface)'; listBtn.style.color = view==='list' ? '#fff' : 'var(--muted)'; }
+  if (tileBtn) { tileBtn.style.background = v==='tile' ? 'var(--accent)' : 'var(--surface)'; tileBtn.style.color = v==='tile' ? '#fff' : 'var(--muted)'; }
+  if (listBtn) { listBtn.style.background = v==='list' ? 'var(--accent)' : 'var(--surface)'; listBtn.style.color = v==='list' ? '#fff' : 'var(--muted)'; }
   renderCustomersPage();
 }
-
-function setLocView(view) {
-  locView = view;
-  const cardBtn = document.getElementById('loc-view-card');
-  const listBtn = document.getElementById('loc-view-list');
-  if (cardBtn) { cardBtn.style.background = view==='card' ? 'var(--accent)' : 'var(--surface)'; cardBtn.style.color = view==='card' ? '#fff' : 'var(--muted)'; }
-  if (listBtn) { listBtn.style.background = view==='list' ? 'var(--accent)' : 'var(--surface)'; listBtn.style.color = view==='list' ? '#fff' : 'var(--muted)'; }
-  renderLocationsPage();
-}
-
-let custStatusFilter  = 'all';
 let editingCustomerId = null;
 
 // ══════════════════════════════════════
@@ -10828,67 +10989,125 @@ function renderCustomersPage() {
   setEl('cust-count-locations', Object.values(custLocationCount).reduce((a,v)=>a+v,0));
   setEl('cust-count-machines',  Object.values(custMachineCount).reduce((a,v)=>a+v,0));
 
+  // Sync toggle button states
+  const cvTile = document.getElementById('cust-view-tile');
+  const cvList = document.getElementById('cust-view-list');
+  if (cvTile) { cvTile.style.background = custView==='tile' ? 'var(--accent)' : 'var(--surface)'; cvTile.style.color = custView==='tile' ? '#fff' : 'var(--muted)'; }
+  if (cvList) { cvList.style.background = custView==='list' ? 'var(--accent)' : 'var(--surface)'; cvList.style.color = custView==='list' ? '#fff' : 'var(--muted)'; }
+
   if (!custs.length) {
+    grid.style.display = 'grid';
+    grid.style.gridTemplateColumns = 'repeat(auto-fill,minmax(360px,1fr))';
     grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:60px;color:var(--muted)">No customers found</div>';
     return;
   }
 
-  const commLabel = { none:'No commission', 'pct-net':'% net', 'pct-gross':'% gross', flat:'Flat fee' };
-  const commPill  = (c) => {
+  const commPill = (c) => {
     if (c.commType === 'none') return '<span class="pill gray" style="font-size:10px">No commission</span>';
     if (c.commType === 'flat') return '<span class="pill purple" style="font-size:10px">$' + c.commRate + '/mo</span>';
     return '<span class="pill purple" style="font-size:10px">' + c.commRate + '% ' + (c.commType === 'pct-net' ? 'net' : 'gross') + '</span>';
   };
-  const statusPill = { active:'green', inactive:'gray', prospect:'blue' };
+  const commText = (c) => {
+    if (!c.commType || c.commType === 'none') return '—';
+    if (c.commType === 'flat') return '$' + c.commRate + '/mo';
+    return c.commRate + '% ' + (c.commType === 'pct-net' ? 'net' : 'gross');
+  };
+  const statusPill  = { active:'green', inactive:'gray', prospect:'blue' };
   const statusLabel = { active:'Active', inactive:'Inactive', prospect:'Prospect' };
 
-  grid.innerHTML = custs.map(c => {
-    const locs     = custLocationCount[c.id] || 0;
-    const machines = custMachineCount[c.id]  || 0;
-    const initials = c.name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
-    const contractEndDate = c.contractEnd ? new Date(c.contractEnd) : null;
-    const today    = new Date();
-    const daysToExpiry = contractEndDate ? Math.round((contractEndDate-today)/(24*60*60*1000)) : null;
-    const expiryBorder = daysToExpiry !== null && daysToExpiry < 90 ? 'var(--warn)' : 'var(--border)';
-    const expiryNote   = daysToExpiry !== null && daysToExpiry < 90
-      ? '<div style="font-size:11px;color:var(--warn);margin-top:6px">⚠ Contract expires in ' + daysToExpiry + ' days</div>'
-      : (c.contractEnd ? '<div style="font-size:11px;color:var(--muted);margin-top:4px">Contract until ' + new Date(c.contractEnd).toLocaleDateString('en-AU',{month:'short',year:'numeric'}) + '</div>' : '');
+  if (custView === 'list') {
+    grid.style.display = 'block';
+    grid.style.gridTemplateColumns = '';
+    grid.innerHTML = `
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead>
+          <tr style="border-bottom:2px solid var(--border);text-align:left">
+            <th style="padding:8px 12px;font-weight:600;color:var(--muted);font-size:11px;text-transform:uppercase;white-space:nowrap">Customer</th>
+            <th style="padding:8px 12px;font-weight:600;color:var(--muted);font-size:11px;text-transform:uppercase;white-space:nowrap">Contact</th>
+            <th style="padding:8px 12px;font-weight:600;color:var(--muted);font-size:11px;text-transform:uppercase;white-space:nowrap">Industry</th>
+            <th style="padding:8px 12px;font-weight:600;color:var(--muted);font-size:11px;text-transform:uppercase;white-space:nowrap;text-align:center">Locations</th>
+            <th style="padding:8px 12px;font-weight:600;color:var(--muted);font-size:11px;text-transform:uppercase;white-space:nowrap;text-align:center">Machines</th>
+            <th style="padding:8px 12px;font-weight:600;color:var(--muted);font-size:11px;text-transform:uppercase;white-space:nowrap">Commission</th>
+            <th style="padding:8px 12px;font-weight:600;color:var(--muted);font-size:11px;text-transform:uppercase;white-space:nowrap">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${custs.map((c, i) => {
+            const locs     = custLocationCount[c.id] || 0;
+            const machines = custMachineCount[c.id]  || 0;
+            const today    = new Date();
+            const daysToExpiry = c.contractEnd ? Math.round((new Date(c.contractEnd)-today)/(24*60*60*1000)) : null;
+            const expiryWarn   = daysToExpiry !== null && daysToExpiry < 90;
+            const rowBg = i % 2 === 0 ? 'var(--surface)' : 'var(--card)';
+            return `<tr style="background:${rowBg};border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s${expiryWarn?';border-left:3px solid var(--warn)':''}"
+              onclick="openCustomerPanel('${c.id}')"
+              onmouseover="this.style.background='var(--accent-bg)'"
+              onmouseout="this.style.background='${rowBg}'">
+              <td style="padding:10px 12px">
+                <div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px">${c.name}</div>
+                ${c.abn ? `<div style="font-size:11px;color:var(--muted);font-family:'DM Mono',monospace">ABN ${c.abn}</div>` : ''}
+              </td>
+              <td style="padding:10px 12px;color:var(--muted);white-space:nowrap">${c.contactName || '—'}${c.contactTitle ? '<br><span style="font-size:11px">'+c.contactTitle+'</span>' : ''}</td>
+              <td style="padding:10px 12px;color:var(--muted);white-space:nowrap">${c.industry || '—'}</td>
+              <td style="padding:10px 12px;text-align:center;font-family:'DM Mono',monospace;font-weight:700;color:var(--accent)">${locs}</td>
+              <td style="padding:10px 12px;text-align:center;font-family:'DM Mono',monospace;font-weight:700;color:var(--accent)">${machines}</td>
+              <td style="padding:10px 12px;white-space:nowrap;color:var(--muted)">${commText(c)}</td>
+              <td style="padding:10px 12px"><span class="pill ${statusPill[c.status]||'gray'}" style="font-size:10px">${statusLabel[c.status]||c.status||'—'}</span></td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>`;
+  } else {
+    grid.style.display = 'grid';
+    grid.style.gridTemplateColumns = 'repeat(auto-fill,minmax(360px,1fr))';
+    grid.innerHTML = custs.map(c => {
+      const locs     = custLocationCount[c.id] || 0;
+      const machines = custMachineCount[c.id]  || 0;
+      const initials = c.name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+      const contractEndDate = c.contractEnd ? new Date(c.contractEnd) : null;
+      const today    = new Date();
+      const daysToExpiry = contractEndDate ? Math.round((contractEndDate-today)/(24*60*60*1000)) : null;
+      const expiryBorder = daysToExpiry !== null && daysToExpiry < 90 ? 'var(--warn)' : 'var(--border)';
+      const expiryNote   = daysToExpiry !== null && daysToExpiry < 90
+        ? '<div style="font-size:11px;color:var(--warn);margin-top:6px">⚠ Contract expires in ' + daysToExpiry + ' days</div>'
+        : (c.contractEnd ? '<div style="font-size:11px;color:var(--muted);margin-top:4px">Contract until ' + new Date(c.contractEnd).toLocaleDateString('en-AU',{month:'short',year:'numeric'}) + '</div>' : '');
 
-    return '<div style="background:var(--card);border:1.5px solid ' + expiryBorder + ';border-radius:10px;padding:16px;cursor:pointer;transition:all .15s"' +
-      ' onclick="openCustomerPanel(\'' + c.id + '\')"' +
-      ' onmouseover="this.style.boxShadow=\'var(--shadow-md)\'"' +
-      ' onmouseout="this.style.boxShadow=\'\'">' +
+      return '<div style="background:var(--card);border:1.5px solid ' + expiryBorder + ';border-radius:10px;padding:16px;cursor:pointer;transition:all .15s"' +
+        ' onclick="openCustomerPanel(\'' + c.id + '\')"' +
+        ' onmouseover="this.style.boxShadow=\'var(--shadow-md)\'"' +
+        ' onmouseout="this.style.boxShadow=\'\'">' +
 
-      '<div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:12px">' +
-        '<div style="width:42px;height:42px;border-radius:8px;background:var(--accent-bg);border:1px solid var(--accent-border);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:var(--accent);flex-shrink:0">' + initials + '</div>' +
-        '<div style="flex:1;min-width:0">' +
-          '<div style="font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + c.name + '</div>' +
-          '<div style="font-size:11px;color:var(--muted);margin-top:1px">' + (c.industry || '') + (c.website ? '  ·  ' + c.website : '') + '</div>' +
+        '<div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:12px">' +
+          '<div style="width:42px;height:42px;border-radius:8px;background:var(--accent-bg);border:1px solid var(--accent-border);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:var(--accent);flex-shrink:0">' + initials + '</div>' +
+          '<div style="flex:1;min-width:0">' +
+            '<div style="font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + c.name + '</div>' +
+            '<div style="font-size:11px;color:var(--muted);margin-top:1px">' + (c.industry || '') + (c.website ? '  ·  ' + c.website : '') + '</div>' +
+          '</div>' +
+          '<span class="pill ' + (statusPill[c.status]||'gray') + '" style="font-size:10px;flex-shrink:0">' + (statusLabel[c.status]||c.status) + '</span>' +
         '</div>' +
-        '<span class="pill ' + (statusPill[c.status]||'gray') + '" style="font-size:10px;flex-shrink:0">' + (statusLabel[c.status]||c.status) + '</span>' +
-      '</div>' +
 
-      (c.contactName ? '<div style="font-size:12px;margin-bottom:10px">👤 <strong>' + c.contactName + '</strong>' + (c.contactTitle ? ' · ' + c.contactTitle : '') + '</div>' : '') +
+        (c.contactName ? '<div style="font-size:12px;margin-bottom:10px">👤 <strong>' + c.contactName + '</strong>' + (c.contactTitle ? ' · ' + c.contactTitle : '') + '</div>' : '') +
 
-      '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px">' +
-        '<div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px;text-align:center">' +
-          '<div style="font-family:\'DM Mono\',monospace;font-size:16px;font-weight:700;color:var(--accent)">' + locs + '</div>' +
-          '<div style="font-size:9px;color:var(--muted);text-transform:uppercase">Locations</div>' +
+        '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px">' +
+          '<div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px;text-align:center">' +
+            '<div style="font-family:\'DM Mono\',monospace;font-size:16px;font-weight:700;color:var(--accent)">' + locs + '</div>' +
+            '<div style="font-size:9px;color:var(--muted);text-transform:uppercase">Locations</div>' +
+          '</div>' +
+          '<div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px;text-align:center">' +
+            '<div style="font-family:\'DM Mono\',monospace;font-size:16px;font-weight:700;color:var(--accent)">' + machines + '</div>' +
+            '<div style="font-size:9px;color:var(--muted);text-transform:uppercase">Machines</div>' +
+          '</div>' +
+          '<div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px;text-align:center">' +
+            commPill(c) +
+            '<div style="font-size:9px;color:var(--muted);text-transform:uppercase;margin-top:2px">Commission</div>' +
+          '</div>' +
         '</div>' +
-        '<div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px;text-align:center">' +
-          '<div style="font-family:\'DM Mono\',monospace;font-size:16px;font-weight:700;color:var(--accent)">' + machines + '</div>' +
-          '<div style="font-size:9px;color:var(--muted);text-transform:uppercase">Machines</div>' +
-        '</div>' +
-        '<div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px;text-align:center">' +
-          commPill(c) +
-          '<div style="font-size:9px;color:var(--muted);text-transform:uppercase;margin-top:2px">Commission</div>' +
-        '</div>' +
-      '</div>' +
 
-      expiryNote +
-      (c.notes ? '<div style="font-size:11px;color:var(--muted);background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;margin-top:6px">' + c.notes + '</div>' : '') +
-    '</div>';
-  }).join('');
+        expiryNote +
+        (c.notes ? '<div style="font-size:11px;color:var(--muted);background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;margin-top:6px">' + c.notes + '</div>' : '') +
+      '</div>';
+    }).join('');
+  }
 }
 
 function openCustomerPanel(custId) {
@@ -11210,30 +11429,68 @@ function getCommissionPeriod() {
 }
 
 // Get revenue per machine from Firebase dexHistory for period
+// Sums totalRevenueSinceLastRead deltas for readings within the date range —
+// NOT the lifetime cumulative DEX counter (totalRevenueCents).
 async function getRevenueByMachine(startDate, endDate) {
-  const machineRevenue = {}; // mid → { grossCents, netCents }
+  const machineRevenue = {}; // mid → { grossCents, netCents, readingCount }
 
   if (!fbReady || !fbDb) {
-    // Use demo data from MACHINE_STATS
+    // Offline fallback — no period filtering possible
     Object.entries(MACHINE_STATS).forEach(([mid, stats]) => {
       const grossCents = Math.round((stats.revenue || 0) * 100);
-      machineRevenue[mid] = { grossCents, netCents: Math.round(grossCents / 1.1) };
+      machineRevenue[mid] = { grossCents, netCents: Math.round(grossCents / 1.1), readingCount: 0 };
     });
     return machineRevenue;
   }
 
   try {
-    const snap = await fbDb.ref('vynd/dexReadings').once('value');
+    const startMs = startDate.getTime();
+    const endMs   = endDate.getTime() + (24*60*60*1000) - 1; // inclusive of end day
+
+    const snap = await fbDb.ref('vynd/dexHistory').once('value');
     snap.forEach(machSnap => {
-      const mid  = machSnap.key;
-      const last = machSnap.child('last').val();
-      if (!last) return;
-      const grossCents = last.totalRevenueCents || 0;
-      // Net = gross / 1.1 (remove GST) — simplified for now
-      machineRevenue[mid] = {
-        grossCents,
-        netCents: Math.round(grossCents / 1.1),
-      };
+      const mid = machSnap.key;
+      let grossCents = 0;
+      let readingCount = 0;
+
+      // Collect all readings with timestamps first, then sort chronologically.
+      // The FIRST ever dial for a machine has totalRevenueSinceLastRead = full lifetime
+      // DEX cumulative (because there was no previous reading in Firebase to diff against).
+      // We must skip it — all subsequent dials have accurate per-period deltas.
+      const readings = [];
+      machSnap.forEach(readingSnap => {
+        const r = readingSnap.val();
+        if (!r) return;
+        const ts = r.receivedAt ? new Date(r.receivedAt).getTime()
+                 : r.transmitTime ? new Date(r.transmitTime).getTime()
+                 : null;
+        if (ts !== null) readings.push({ ts, delta: r.totalRevenueSinceLastRead || 0, isFirstDial: r.isFirstDial || false });
+      });
+
+      // Sort ascending so index 0 is the very first dial ever
+      readings.sort((a, b) => a.ts - b.ts);
+
+      // Determine which entry is the "first dial" — prefer the explicit flag (new server.js),
+      // fall back to sort-order index 0 (older entries without the flag).
+      const hasExplicitFlag = readings.some(r => r.isFirstDial === true);
+
+      readings.forEach((r, idx) => {
+        // Skip the first ever dial — its delta = full lifetime cumulative, not a real period delta
+        const skip = hasExplicitFlag ? r.isFirstDial : idx === 0;
+        if (skip) return;
+        // Skip readings outside the selected period
+        if (r.ts < startMs || r.ts > endMs) return;
+        grossCents += r.delta;
+        readingCount++;
+      });
+
+      if (grossCents > 0 || readingCount > 0) {
+        machineRevenue[mid] = {
+          grossCents,
+          netCents: Math.round(grossCents / 1.1), // remove GST
+          readingCount,
+        };
+      }
     });
   } catch(e) {
     console.warn('Commission: Firebase revenue fetch failed', e.message);
@@ -11411,7 +11668,7 @@ async function renderCommissionPage() {
         let commCents  = 0;
         if (cust?.commType === 'pct-net')   commCents = Math.round(rev.netCents * (cust.commRate/100));
         if (cust?.commType === 'pct-gross') commCents = Math.round(rev.grossCents * (cust.commRate/100));
-        return { mid, name: meta.name || mid, custName, grossCents: rev.grossCents, commCents, netAfterComm: rev.grossCents - commCents };
+        return { mid, name: meta.name || mid, custName, grossCents: rev.grossCents, commCents, netAfterComm: rev.grossCents - commCents, readingCount: rev.readingCount || 0 };
       })
       .filter(m => m.grossCents > 0)
       .sort((a,b) => b.grossCents - a.grossCents);
@@ -11422,7 +11679,7 @@ async function renderCommissionPage() {
           <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:700;background:var(--bg);border:1px solid var(--border);padding:1px 5px;border-radius:3px;flex-shrink:0">${m.mid}</span>
           <div style="flex:1;min-width:0">
             <div style="font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m.name}</div>
-            <div style="font-size:10px;color:var(--muted)">${m.custName}</div>
+            <div style="font-size:10px;color:var(--muted)">${m.custName} · ${m.readingCount} dial${m.readingCount!==1?'s':''}</div>
           </div>
           <div style="text-align:right;flex-shrink:0">
             <div style="font-family:'DM Mono',monospace;font-size:12px;font-weight:700">${fmtDollars(m.grossCents)}</div>
@@ -13323,13 +13580,27 @@ function initDragDrop() {
 }
 
 // ── Tooltip ──
-function showTip(e, text) {
+// _tipCell — called from inline onmouseenter; looks up product array by window key name
+function _tipCell(e, label, productsRef) {
+  const products = typeof productsRef === 'string' ? window[productsRef] : productsRef;
+  showTip(e, label, products && products.length ? products : null);
+}
+
+function showTip(e, text, products) {
   const tip = document.getElementById('vynd-tip');
-  if (!tip || !text) return;
-  tip.textContent = text;
+  if (!tip) return;
+  if (products && products.length) {
+    // Rich product list tooltip
+    tip.innerHTML =
+      '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:rgba(255,255,255,.5);margin-bottom:5px">' + text + '</div>' +
+      products.map(p => '<div style="display:flex;align-items:center;gap:5px;padding:2px 0"><span style="color:var(--danger);font-size:11px">●</span><span style="font-size:12px">' + p + '</span></div>').join('');
+  } else if (text) {
+    tip.innerHTML = '<span style="font-size:12px">' + text + '</span>';
+  } else { return; }
   tip.style.display = 'block';
+  // Position above cursor
   const r = tip.getBoundingClientRect();
-  tip.style.left = Math.max(8, e.clientX - r.width/2) + 'px';
+  tip.style.left = Math.max(8, Math.min(e.clientX - r.width/2, window.innerWidth - r.width - 8)) + 'px';
   tip.style.top  = (e.clientY - r.height - 14) + 'px';
 }
 function hideTip() {

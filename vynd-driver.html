@@ -1718,9 +1718,22 @@ function refreshStopDex(machineId, onDone) {
       }
     }
 
-    if (dex.dexReason === '1' && restockRow && restockEl) {
+    function applyRestockDisplay(date) {
+      if (!restockRow || !restockEl) return;
       restockRow.style.display = '';
-      restockEl.textContent = dexTime ? '✓ ' + formatAgo(dexTime) + ' · ' + formatDate(dexTime) : '✓ received';
+      if (date) {
+        const diffMins = (Date.now() - date.getTime()) / 60000;
+        const col = diffMins <= 20 ? 'var(--accent)' : 'var(--warn)';
+        restockEl.textContent = '✓ ' + formatAgo(date) + ' · ' + formatTime(date);
+        restockEl.style.color = col;
+      } else {
+        restockEl.textContent = '✓ received';
+        restockEl.style.color = 'var(--muted)';
+      }
+    }
+
+    if (dex.dexReason === '1' && restockRow && restockEl) {
+      applyRestockDisplay(dexTime);
       if (onDone) onDone();
     } else if (restockRow) {
       fbDb.ref('vynd/dexHistory/' + machineId)
@@ -1730,8 +1743,7 @@ function refreshStopDex(machineId, onDone) {
             hSnap.forEach(c => { lastRestock = c.val(); });
             if (lastRestock && restockRow && restockEl) {
               const rd = parseDexDate(lastRestock.transmitTime || lastRestock.createdAt);
-              restockRow.style.display = '';
-              restockEl.textContent = rd ? '✓ ' + formatAgo(rd) + ' · ' + formatDate(rd) : '✓ received';
+              applyRestockDisplay(rd);
             }
           }
           if (onDone) onDone();
@@ -2379,12 +2391,12 @@ function fgConfirm(slotId, par, capacity, current) {
       spoilt:  stopSlotState[sl.id]?.spoilt  || 0,
       damaged: stopSlotState[sl.id]?.damaged || 0,
     }));
-    fbDb.ref('vynd/completedStops/' + currentStopId).set({
+    fbWrite('vynd/completedStops/' + currentStopId, {
       machineId:   currentStopId,
       completedAt: new Date().toISOString(),
       runId:       currentRunData ? currentRunData.key : null,
       slots:       allSlots,
-    }).catch(e => console.warn('Fill write failed:', e.message));
+    });
   }
 }
 
@@ -5485,6 +5497,7 @@ function applyDriverFbConfig() {
     }
     updateSyncStatus();
     showToast('☁ Firebase connected ✓');
+    offlineQueueFlush(); // flush any writes queued while offline
     loadDriverProfileFromFirebase();
     populateDriverDropdown();
     loadGlobalOpSettings().then(() => {
@@ -5521,6 +5534,20 @@ function initFirebase() {
     fbDb    = firebase.database();
     fbReady = true;
     console.log('Firebase connected: vynd-pilot');
+
+    // Monitor connectivity — flush queue the moment connection is restored
+    fbDb.ref('.info/connected').on('value', snap => {
+      if (snap.val() === true) {
+        offlineQueueFlush();
+        updateSyncStatus();
+      } else {
+        // Show offline indicator
+        const dot   = document.getElementById('topbar-sync-dot');
+        const label = document.getElementById('topbar-sync-label');
+        if (dot)   dot.style.background = 'var(--danger)';
+        if (label) label.textContent    = 'Offline';
+      }
+    });
 
     // Real-time listener for portal → driver sync
     fbDb.ref('vynd/' + SYNC_FROM_KEY).on('value', snap => {
@@ -5910,19 +5937,16 @@ function syncStopOnComplete(mid) {
     };
     existing.sentAt = new Date().toISOString();
     // Write fill data to Firebase so server applies it on restock dial
-    if (fbDb) {
-      fbDb.ref('vynd/completedStops/' + mid).set({
-        machineId:   mid,
-        completedAt: new Date().toISOString(),
-        runId:       currentRunData ? currentRunData.key : null,
-        slots,
-      }).catch(e => console.warn('Could not write fill data:', e.message));
-      // Write bag number to run record so portal can see it
-      const bag = bagNumbers[mid];
-      if (bag && currentRunData && currentRunData.key) {
-        fbDb.ref('vynd/runs/' + currentRunData.key + '/bagNumbers/' + mid).set(bag)
-          .catch(e => console.warn('Could not write bag number:', e.message));
-      }
+    // Use fbWrite so these queue offline and flush on reconnect
+    fbWrite('vynd/completedStops/' + mid, {
+      machineId:   mid,
+      completedAt: new Date().toISOString(),
+      runId:       currentRunData ? currentRunData.key : null,
+      slots,
+    });
+    const bag = bagNumbers[mid];
+    if (bag && currentRunData && currentRunData.key) {
+      fbWrite('vynd/runs/' + currentRunData.key + '/bagNumbers/' + mid, bag);
     }
 
     store.set(SYNC_TO_KEY, JSON.stringify(existing));
@@ -6129,6 +6153,94 @@ renderLocations();
 initCash();
 initRouteBagCard();
 loadGlobalOpSettings();
+
+// ══════════════════════════════════════
+// OFFLINE WRITE QUEUE
+// ══════════════════════════════════════
+// Any Firebase write that fails while offline is stored here and
+// flushed automatically when connectivity returns.
+// Zero impact on normal operation — queue only activates on failure.
+
+const OFFLINE_QUEUE_KEY = 'vynd_offline_queue';
+
+function offlineQueueLoad() {
+  try { return JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || '[]'); }
+  catch(e) { return []; }
+}
+
+function offlineQueueSave(queue) {
+  try { localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue)); }
+  catch(e) { console.warn('Offline queue save failed:', e.message); }
+}
+
+function offlineQueueAdd(path, data, method) {
+  // method: 'set' | 'update' | 'push'
+  const queue = offlineQueueLoad();
+  queue.push({ path, data, method: method || 'set', ts: Date.now() });
+  offlineQueueSave(queue);
+  updateOfflineQueueBadge();
+  console.log('Queued offline write:', path);
+}
+
+async function offlineQueueFlush() {
+  if (!fbReady || !fbDb) return;
+  const queue = offlineQueueLoad();
+  if (!queue.length) return;
+
+  console.log('Flushing', queue.length, 'offline writes...');
+  const failed = [];
+
+  for (const item of queue) {
+    try {
+      const ref = fbDb.ref(item.path);
+      if (item.method === 'update') await ref.update(item.data);
+      else if (item.method === 'push') await ref.push(item.data);
+      else await ref.set(item.data);
+      console.log('Flushed:', item.path);
+    } catch(e) {
+      console.warn('Flush failed for', item.path, e.message);
+      failed.push(item); // keep failed items in queue
+    }
+  }
+
+  offlineQueueSave(failed);
+  updateOfflineQueueBadge();
+
+  if (failed.length === 0 && queue.length > 0) {
+    showToast('☁ ' + queue.length + ' offline write' + (queue.length > 1 ? 's' : '') + ' synced ✓');
+  } else if (failed.length > 0) {
+    showToast('⚠ ' + failed.length + ' write' + (failed.length > 1 ? 's' : '') + ' still pending');
+  }
+}
+
+function updateOfflineQueueBadge() {
+  const queue = offlineQueueLoad();
+  const dot   = document.getElementById('topbar-sync-dot');
+  const label = document.getElementById('topbar-sync-label');
+  if (!queue.length) return;
+  // Show pending count on sync icon
+  if (dot)   dot.style.background = 'var(--warn)';
+  if (label) label.textContent    = queue.length + ' pending';
+}
+
+// Wrapper — use instead of fbDb.ref(path).set(data) for critical writes
+// Returns a promise. On failure, queues for retry and resolves (doesn't reject)
+async function fbWrite(path, data, method) {
+  method = method || 'set';
+  if (!fbReady || !fbDb) {
+    offlineQueueAdd(path, data, method);
+    return;
+  }
+  try {
+    const ref = fbDb.ref(path);
+    if (method === 'update') await ref.update(data);
+    else if (method === 'push') await ref.push(data);
+    else await ref.set(data);
+  } catch(e) {
+    console.warn('Write failed, queuing:', path, e.message);
+    offlineQueueAdd(path, data, method);
+  }
+}
 
 // Load cached product images immediately (works offline)
 try {

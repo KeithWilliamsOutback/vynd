@@ -1867,7 +1867,7 @@ tr.clickable:hover td{background:var(--bg)}
       <div id="picking-tab-sheets" style="display:none">
         <div class="card" style="margin-bottom:20px">
           <div style="font-weight:700;font-size:13px;margin-bottom:4px">Driver sheets</div>
-          <div style="font-size:12px;color:var(--muted);margin-bottom:16px">One printable PDF page per machine showing confirmed pick quantities. Available after importing an adjusted pick sheet.</div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:16px">One printable A4 page per machine. Shows each lane that needs filling with current SOH, par level, and fill quantity — same as the driver app fill guide, filtered to lanes below par only.</div>
           <div class="form-group" style="margin-bottom:12px">
             <div class="form-label">Route</div>
             <select class="form-select" id="sheet-route-sel" onchange="checkDriverSheetReady()">
@@ -2167,13 +2167,13 @@ tr.clickable:hover td{background:var(--bg)}
                 <div class="form-label" style="margin-bottom:4px">📷 Machine photo frequency</div>
                 <div style="font-size:11px;color:var(--muted);margin-bottom:12px">Require a machine photo every N fills. Also triggers when prices change.</div>
                 <div style="display:flex;gap:6px;flex-wrap:wrap" id="photo-freq-btns">
-                  <button class="freq-portal-btn active" data-val="1" onclick="setPortalPhotoFreq(1,this)">Every fill</button>
+                  <button class="freq-portal-btn" data-val="1" onclick="setPortalPhotoFreq(1,this)">Every fill</button>
                   <button class="freq-portal-btn" data-val="2" onclick="setPortalPhotoFreq(2,this)">Every 2nd</button>
                   <button class="freq-portal-btn" data-val="5" onclick="setPortalPhotoFreq(5,this)">Every 5th</button>
                   <button class="freq-portal-btn" data-val="10" onclick="setPortalPhotoFreq(10,this)">Every 10th</button>
                   <button class="freq-portal-btn" data-val="0" onclick="setPortalPhotoFreq(0,this)">Off</button>
                 </div>
-                <input type="hidden" id="photo-frequency" value="1">
+                <input type="hidden" id="photo-frequency" value="">
               </div>
 
               <!-- Audit frequency -->
@@ -2183,11 +2183,11 @@ tr.clickable:hover td{background:var(--bg)}
                 <div style="display:flex;gap:6px;flex-wrap:wrap" id="audit-freq-btns">
                   <button class="freq-portal-btn" data-val="1" onclick="setPortalAuditFreq(1,this)">Every fill</button>
                   <button class="freq-portal-btn" data-val="2" onclick="setPortalAuditFreq(2,this)">Every 2nd</button>
-                  <button class="freq-portal-btn active" data-val="5" onclick="setPortalAuditFreq(5,this)">Every 5th</button>
+                  <button class="freq-portal-btn" data-val="5" onclick="setPortalAuditFreq(5,this)">Every 5th</button>
                   <button class="freq-portal-btn" data-val="10" onclick="setPortalAuditFreq(10,this)">Every 10th</button>
                   <button class="freq-portal-btn" data-val="0" onclick="setPortalAuditFreq(0,this)">Off</button>
                 </div>
-                <input type="hidden" id="audit-frequency" value="5">
+                <input type="hidden" id="audit-frequency" value="">
               </div>
 
             </div>
@@ -2241,7 +2241,7 @@ tr.clickable:hover td{background:var(--bg)}
                   <div style="flex:1;text-align:center">
                     <span id="dcr-window-val" style="font-family:'DM Mono',monospace;font-size:22px;font-weight:700;color:var(--accent)">30</span>
                     <span style="font-size:12px;color:var(--muted);margin-left:4px">days</span>
-                    <input type="hidden" id="dcr-window" value="30">
+                    <input type="hidden" id="dcr-window" value="">
                   </div>
                   <button onclick="stepInput('dcr-window',7)" style="width:32px;height:32px;border:1px solid var(--border);border-radius:6px;background:var(--surface);cursor:pointer;font-size:16px;font-weight:700;color:var(--accent)">+</button>
                 </div>
@@ -2256,7 +2256,7 @@ tr.clickable:hover td{background:var(--bg)}
                   <div style="flex:1;text-align:center">
                     <span id="forward-days-val" style="font-family:'DM Mono',monospace;font-size:22px;font-weight:700;color:var(--accent)">5</span>
                     <span style="font-size:12px;color:var(--muted);margin-left:4px">days</span>
-                    <input type="hidden" id="forward-days" value="5">
+                    <input type="hidden" id="forward-days" value="">
                   </div>
                   <button onclick="stepInput('forward-days',1)" style="width:32px;height:32px;border:1px solid var(--border);border-radius:6px;background:var(--surface);cursor:pointer;font-size:16px;font-weight:700;color:var(--accent)">+</button>
                 </div>
@@ -2271,7 +2271,7 @@ tr.clickable:hover td{background:var(--bg)}
                   <div style="flex:1;text-align:center">
                     <span id="empty-threshold-val" style="font-family:'DM Mono',monospace;font-size:22px;font-weight:700;color:var(--accent)">25</span>
                     <span style="font-size:12px;color:var(--muted);margin-left:4px">%</span>
-                    <input type="hidden" id="empty-threshold" value="25">
+                    <input type="hidden" id="empty-threshold" value="">
                   </div>
                   <button onclick="stepInput('empty-threshold',5)" style="width:32px;height:32px;border:1px solid var(--border);border-radius:6px;background:var(--surface);cursor:pointer;font-size:16px;font-weight:700;color:var(--accent)">+</button>
                 </div>
@@ -7066,6 +7066,21 @@ function loadOperationalSettings() {
   applyOperationalSettingsToUI();
 }
 
+// Apply saved settings immediately on page load (before Firebase connects)
+// so buttons reflect the correct saved state right away
+(function() {
+  try {
+    const saved = localStorage.getItem('vynd_operational_settings');
+    if (saved) OPERATIONAL_SETTINGS = { ...OPERATIONAL_SETTINGS, ...JSON.parse(saved) };
+  } catch(e) {}
+  // Defer UI apply until DOM is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', applyOperationalSettingsToUI);
+  } else {
+    applyOperationalSettingsToUI();
+  }
+})();
+
 function switchSettingsTab(tab, btn) {
   ['operations','cloud','users','data'].forEach(t => {
     const el = document.getElementById('settings-tab-' + t);
@@ -7298,32 +7313,24 @@ function setPortalAuditFreq(val, btn) {
 function saveOperationalSettings() {
   const bagVal = document.getElementById('cash-bag-mode-value');
   if (bagVal) OPERATIONAL_SETTINGS.cashBagMode = bagVal.value;
-  const slider = document.getElementById('float-threshold');
-  if (slider) OPERATIONAL_SETTINGS.floatThreshold = parseInt(slider.value);
-  const payType = document.getElementById('default-payment-type');
-  if (payType) OPERATIONAL_SETTINGS.defaultPaymentType = payType.value;
-  const varThresh = document.getElementById('variance-threshold');
-  if (varThresh) OPERATIONAL_SETTINGS.varianceThreshold = parseFloat(varThresh.value) || 5;
-  const fillTime = document.getElementById('fill-time');
-  if (fillTime) OPERATIONAL_SETTINGS.fillTime = parseInt(fillTime.value) || 15;
-  const maxRestock = document.getElementById('max-restock-days');
-  if (maxRestock) OPERATIONAL_SETTINGS.maxRestockDays = parseInt(maxRestock.value) || 42;
-  const dcrWindow = document.getElementById('dcr-window');
-  if (dcrWindow) OPERATIONAL_SETTINGS.dcrWindow = parseInt(dcrWindow.value) || 30;
-  const forwardDays = document.getElementById('forward-days');
-  if (forwardDays) OPERATIONAL_SETTINGS.forwardDays = parseInt(forwardDays.value) || 5;
-  const emptyThresh = document.getElementById('empty-threshold');
-  if (emptyThresh) OPERATIONAL_SETTINGS.emptyThreshold = parseInt(emptyThresh.value) || 25;
-  const soldOutModeEl = document.getElementById('soldout-mode-value');
-  if (soldOutModeEl) OPERATIONAL_SETTINGS.soldOutMode = soldOutModeEl.value || 'product';
-  const photoFreqEl = document.getElementById('photo-frequency');
-  if (photoFreqEl) OPERATIONAL_SETTINGS.photoFrequency = parseInt(photoFreqEl.value) || 1;
-  const auditFreqEl = document.getElementById('audit-frequency');
-  if (auditFreqEl) OPERATIONAL_SETTINGS.auditFrequency = parseInt(auditFreqEl.value) || 5;
-  const marginGreenEl = document.getElementById('margin-green');
-  if (marginGreenEl) OPERATIONAL_SETTINGS.marginGreen = parseInt(marginGreenEl.value) || 60;
-  const marginAmberEl = document.getElementById('margin-amber');
-  if (marginAmberEl) OPERATIONAL_SETTINGS.marginAmber = parseInt(marginAmberEl.value) || 50;
+  // Only read from DOM elements that exist — use safe parseInt with isNaN guard
+  // Frequency buttons set OPERATIONAL_SETTINGS directly, so no DOM read needed for those
+  function safeInt(id, fallback) { const el = document.getElementById(id); if (!el) return null; const v = parseInt(el.value); return isNaN(v) ? null : v; }
+  function safeFloat(id, fallback) { const el = document.getElementById(id); if (!el) return null; const v = parseFloat(el.value); return isNaN(v) ? null : v; }
+  function safeStr(id) { const el = document.getElementById(id); return el ? el.value || null : null; }
+  const _slider = safeInt('float-threshold');        if (_slider    !== null) OPERATIONAL_SETTINGS.floatThreshold     = _slider;
+  const _payType = safeStr('default-payment-type');  if (_payType   !== null) OPERATIONAL_SETTINGS.defaultPaymentType = _payType;
+  const _varTh = safeFloat('variance-threshold');    if (_varTh     !== null) OPERATIONAL_SETTINGS.varianceThreshold  = _varTh;
+  const _fillT = safeInt('fill-time');               if (_fillT     !== null) OPERATIONAL_SETTINGS.fillTime           = _fillT;
+  const _maxR  = safeInt('max-restock-days');        if (_maxR      !== null) OPERATIONAL_SETTINGS.maxRestockDays     = _maxR;
+  const _dcrW  = safeInt('dcr-window');              if (_dcrW      !== null) OPERATIONAL_SETTINGS.dcrWindow          = _dcrW;
+  const _fwd   = safeInt('forward-days');            if (_fwd       !== null) OPERATIONAL_SETTINGS.forwardDays        = _fwd;
+  const _emTh  = safeInt('empty-threshold');         if (_emTh      !== null) OPERATIONAL_SETTINGS.emptyThreshold     = _emTh;
+  const _soMode = safeStr('soldout-mode-value');     if (_soMode    !== null) OPERATIONAL_SETTINGS.soldOutMode        = _soMode;
+  const _pf    = safeInt('photo-frequency');         if (_pf        !== null) OPERATIONAL_SETTINGS.photoFrequency     = _pf;
+  const _af    = safeInt('audit-frequency');         if (_af        !== null) OPERATIONAL_SETTINGS.auditFrequency     = _af;
+  const _mg    = safeInt('margin-green');            if (_mg        !== null) OPERATIONAL_SETTINGS.marginGreen        = _mg;
+  const _ma    = safeInt('margin-amber');            if (_ma        !== null) OPERATIONAL_SETTINGS.marginAmber        = _ma;
   localStorage.setItem('vynd_operational_settings', JSON.stringify(OPERATIONAL_SETTINGS));
 
   // Invalidate urgency cache so new settings take effect immediately
@@ -8135,172 +8142,259 @@ function reExportAdjustedCSV() {
 }
 
 
-// ── Check whether confirmed picks exist for the current date/route ──────────
+// ── Check whether a pick export exists for the current date/route ──────────
 async function checkDriverSheetReady() {
-  const btn    = document.getElementById('btn-generate-sheets');
-  const status = document.getElementById('driver-sheet-status');
-  const routeId = document.getElementById('sheet-route-sel')?.value || '';
+  const btn     = document.getElementById('btn-generate-sheets');
+  const status  = document.getElementById('driver-sheet-status');
+  const routeId = document.getElementById('sheet-route-sel')?.value || pickRouteId || '';
   const date    = pickDate || new Date().toLocaleDateString('en-CA');
+  const dateLabel = new Date(date + 'T12:00:00').toLocaleDateString('en-AU', {day:'2-digit',month:'short',year:'numeric'});
   if (!btn) return;
 
+  const setStatus = (bg, col, msg, enabled) => {
+    status.style.display = ''; status.style.background = bg; status.style.color = col;
+    status.textContent = msg;
+    btn.disabled = !enabled; btn.style.opacity = enabled ? '1' : '.45';
+    btn.style.cursor = enabled ? 'pointer' : 'not-allowed';
+  };
+
   if (!fbReady || !fbDb) {
-    status.style.display = '';
-    status.style.background = 'rgba(217,119,6,.1)';
-    status.style.color = 'var(--warn)';
-    status.textContent = '⚠ Not connected to Firebase';
-    btn.disabled = true; btn.style.opacity = '.45'; btn.style.cursor = 'not-allowed';
+    setStatus('rgba(217,119,6,.1)', 'var(--warn)', '⚠ Not connected to Firebase', false);
     return;
   }
 
-  const machines = routeId
-    ? (ROUTES[routeId]?.stops || []).map(s => s.id)
-    : Object.values(ROUTES).flatMap(r => r.stops.map(s => s.id));
+  // Look for a pick export for this date + route
+  const dateKey  = date.replace(/-/g,'');
+  const exportKey = dateKey + '_' + (routeId || 'all');
+  const altKey    = dateKey + '_all';
 
-  const snaps = await Promise.all(machines.map(mid =>
-    fbDb.ref('vynd/confirmedPicks/' + mid + '/' + date).once('value')
-  ));
-  const confirmed = snaps.filter(s => s.exists()).length;
+  try {
+    // Search all exports for today (any route key) — same logic as generateDriverSheets
+    const rangeSnap = await fbDb.ref('vynd/pickExports')
+      .orderByKey().startAt(dateKey).endAt(dateKey + '\uffff').once('value');
+    let exportData = null;
+    if (rangeSnap.exists()) {
+      const all = rangeSnap.val();
+      exportData = all[exportKey] || all[altKey] || Object.values(all)[0] || null;
+    }
 
-  if (confirmed === 0) {
-    status.style.display = '';
-    status.style.background = 'rgba(220,38,38,.08)';
-    status.style.color = 'var(--danger)';
-    status.textContent = '✕ No confirmed pick data for ' + date + ' — import an adjusted sheet first';
-    btn.disabled = true; btn.style.opacity = '.45'; btn.style.cursor = 'not-allowed';
-  } else {
-    status.style.display = '';
-    status.style.background = 'rgba(74,222,128,.08)';
-    status.style.color = 'var(--accent)';
-    status.textContent = '✓ ' + confirmed + ' of ' + machines.length + ' machine' + (machines.length!==1?'s':'') + ' have confirmed picks for ' + new Date(date+'T12:00:00').toLocaleDateString('en-AU',{day:'2-digit',month:'short',year:'numeric'});
-    btn.disabled = false; btn.style.opacity = '1'; btn.style.cursor = 'pointer';
+    if (!exportData || !exportData.lockedLines?.length) {
+      setStatus('rgba(220,38,38,.08)', 'var(--danger)',
+        '✕ No pick export found for ' + dateLabel + ' — export a pick list first, then return here to print sheets', false);
+      return;
+    }
+
+    const machineIds = [...new Set(exportData.lockedLines.map(l => l.machineId))];
+    const hasAdj     = exportData.adjustedAt ? ' · adjusted ' + new Date(exportData.adjustedAt).toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit'}) : '';
+    const exportedAt = new Date(exportData.exportedAt).toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit'});
+
+    setStatus('rgba(74,222,128,.08)', 'var(--accent)',
+      '✓ Pick export found for ' + dateLabel + ' · ' + machineIds.length + ' machine' + (machineIds.length!==1?'s':'') +
+      ' · exported ' + exportedAt + hasAdj, true);
+  } catch(e) {
+    setStatus('rgba(217,119,6,.1)', 'var(--warn)', '⚠ Could not check pick export: ' + e.message, false);
   }
 }
 
-function generateDriverSheets() {
-  const routeId = document.getElementById('sheet-route-sel')?.value || '';
-  const date    = pickDate || new Date().toLocaleDateString('en-CA');
+async function generateDriverSheets() {
+  const routeId   = document.getElementById('sheet-route-sel')?.value || pickRouteId || '';
+  const date      = pickDate || new Date().toLocaleDateString('en-CA');
   const dateLabel = new Date(date + 'T12:00:00').toLocaleDateString('en-AU', {weekday:'long',day:'numeric',month:'long',year:'numeric'});
 
   if (!fbReady || !fbDb) { showToast('Not connected to Firebase'); return; }
 
-  const machines = routeId
-    ? (ROUTES[routeId]?.stops || []).map((s, i) => ({ ...s, serviceOrder: i+1, routeLabel: ROUTES[routeId].label }))
-    : Object.entries(ROUTES).flatMap(([rid, r]) => r.stops.map((s, i) => ({ ...s, serviceOrder: i+1, routeLabel: r.label })));
+  // ── 1. Find the pick export for this date ───────────────────────────────
+  // Search all exports for today (any route key) — don't rely on a single key match
+  const dateKey = date.replace(/-/g,'');
+  const exportSnap = await fbDb.ref('vynd/pickExports')
+    .orderByKey().startAt(dateKey).endAt(dateKey + '￿').once('value').catch(() => null);
 
-  const promises = machines.map(stop =>
-    fbDb.ref('vynd/confirmedPicks/' + stop.id + '/' + date).once('value')
-      .then(snap => ({ stop, pick: snap.val() }))
-  );
+  let exportData = null;
+  if (exportSnap && exportSnap.exists()) {
+    // Prefer route-specific export, then 'all', then whatever exists
+    const all = exportSnap.val();
+    const routeKey = dateKey + '_' + routeId;
+    const allKey   = dateKey + '_all';
+    exportData = all[routeKey] || all[allKey] || Object.values(all)[0] || null;
+  }
 
-  Promise.all(promises).then(results => {
-    const withData = results.filter(r => r.pick);
-    if (!withData.length) { showToast('No confirmed picks found for this date'); return; }
+  if (!exportData || !exportData.lockedLines?.length) {
+    showToast('No pick export found for ' + dateLabel + ' — export a pick list first');
+    return;
+  }
 
-    // Build one print page per machine
-    const pages = withData.map(({ stop, pick }, pageIdx) => {
-      const meta     = MACHINE_META[stop.id] || {};
-      const custName = meta.customer ? (CUSTOMERS[meta.customer]?.name || meta.customer) : '—';
-      const location = meta.name || stop.name || stop.id;
-      const subLoc   = meta.subLocation || stop.addr || '';
-      const driver   = pick.routeId ? (ROUTE_DRIVERS[pick.routeId] ? (Object.values(USERS||{}).find(u=>u.id===ROUTE_DRIVERS[pick.routeId])?.name || pick.routeId) : '—') : '—';
+  try {
+    const lockedLines = exportData.lockedLines || [];
 
-      // Lines come from pick.lines (barcode-level) — group by slot from confirmedPicks
-      // Fall back to pick.slots if that's what was written
-      const lines = pick.lines || [];
-      const slots = pick.slots || {};
+    // Build per-machine short supply map: mid → product → adjustedQty
+    const shortSupplyMap = {};
+    lockedLines.forEach(l => {
+      if (!shortSupplyMap[l.machineId]) shortSupplyMap[l.machineId] = {};
+      shortSupplyMap[l.machineId][l.product] = Math.max(0, l.pickQty - (l.shortSupply || 0));
+    });
 
-      // Build rows — prefer lines array (has barcode + product + confirmed qty)
-      let rows = '';
-      if (lines.length) {
-        rows = lines.map(l => `
-          <tr>
-            <td style="font-weight:700;font-family:monospace">${(l.slots && l.slots.length ? l.slots.join(', ') : l.slotId) || '—'}</td>
-            <td>${l.product || '—'}</td>
-            <td style="font-size:11px;color:#666">${l.required ?? '—'}</td>
-            <td style="font-size:11px;color:#e05">${l.shortSupply > 0 ? l.shortSupply : '—'}</td>
-            <td style="font-weight:800;font-size:16px;color:#16a34a;text-align:center">${l.confirmed ?? l.confirmedQty ?? '—'}</td>
-            <td style="text-align:center">□</td>
-          </tr>`).join('');
-      } else {
-        rows = Object.entries(slots).map(([slotId, s]) => `
-          <tr>
-            <td style="font-weight:700;font-family:monospace">${slotId}</td>
-            <td>${s.product || '—'}</td>
-            <td style="font-size:11px;color:#666">—</td>
-            <td style="font-size:11px;color:#e05">—</td>
-            <td style="font-weight:800;font-size:16px;color:#16a34a;text-align:center">${s.confirmedQty ?? '—'}</td>
-            <td style="text-align:center">□</td>
-          </tr>`).join('');
-      }
+    // Machines: ONLY those in the pick export — no fallback
+    const pickedMachineIds = [...new Set(lockedLines.map(l => l.machineId))];
+    const routeStops = routeId
+      ? (ROUTES[routeId]?.stops || []).map((s, i) => ({ ...s, serviceOrder: i+1, routeLabel: ROUTES[routeId].label }))
+      : Object.entries(ROUTES).flatMap(([rid, r]) => r.stops.map((s, i) => ({ ...s, serviceOrder: i+1, routeLabel: r.label })));
 
-      const isLast = pageIdx === withData.length - 1;
-      return `
-        <div style="page-break-after:${isLast ? 'avoid' : 'always'};padding:24px;font-family:Arial,sans-serif;color:#111;max-width:800px;margin:0 auto">
+    const machines = routeStops.filter(s => pickedMachineIds.includes(s.id));
+    if (!machines.length) { showToast('No matching machines found in pick export'); return; }
 
-          <!-- Header -->
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #111">
-            <div>
-              <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#666;margin-bottom:4px">VYND · Driver Fill Sheet</div>
-              <div style="font-size:20px;font-weight:800">${location}</div>
-              ${subLoc ? `<div style="font-size:13px;color:#555;margin-top:2px">${subLoc}</div>` : ''}
-              <div style="font-size:12px;color:#555;margin-top:4px">${custName}</div>
+    // ── 2. Load DEX + planogram for each machine ──────────────────────────
+    const results = await Promise.all(machines.map(stop => Promise.all([
+      fbDb.ref('vynd/dexReadings/' + stop.id + '/last/slots').once('value'),
+      fbDb.ref('vynd/planograms/'  + stop.id + '/slots').once('value'),
+    ]).then(([dexSnap, pogSnap]) => ({
+      stop,
+      dex: dexSnap.val() || {},
+      pog: pogSnap.val() || {},
+      shortSupply: { ...shortSupplyMap[stop.id] || {} }, // copy so multi-lane distribution is per-machine
+    }))));
+
+    // ── 3. Build print pages ──────────────────────────────────────────────
+    const pages = results.map(({ stop, dex, pog, shortSupply }, pageIdx) => {
+      const meta      = MACHINE_META[stop.id] || {};
+      const custName  = meta.customer ? (CUSTOMERS[meta.customer]?.name || meta.customer) : '—';
+      const location  = meta.name || stop.name || stop.id;
+      const subLoc    = meta.subLocation || meta.subLoc || stop.addr || '';
+      const driverKey = Object.entries(ROUTES).find(([, r]) => (r.stops||[]).some(s=>s.id===stop.id))?.[0];
+      const driverName = driverKey && ROUTE_DRIVERS[driverKey]
+        ? (Object.values(USERS||{}).find(u=>u.id===ROUTE_DRIVERS[driverKey])?.name || ROUTE_DRIVERS[driverKey])
+        : '—';
+
+      // Merge DEX + planogram per slot
+      const allSlotIds = new Set([...Object.keys(dex), ...Object.keys(pog)]);
+      const slots = [...allSlotIds].map(id => {
+        const d        = dex[id] || {};
+        const p        = pog[id] || {};
+        const product  = p.product  || d.product  || null;
+        const par      = p.par      !== undefined ? p.par      : (d.par      || 0);
+        const capacity = p.capacity !== undefined ? p.capacity : (d.capacity || par || 12);
+        const soh      = d.currentSOH !== null && d.currentSOH !== undefined ? d.currentSOH : (p.currentSOH || 0);
+        const dexVends = d.vendsSinceLastRead || 0;
+        return { id, product, par, capacity, soh, dexVends };
+      }).filter(s => s.product && s.par > 0);
+
+      // ── Filter and calculate fill qty per lane ───────────────────────────
+      // 1. Product must be in the pick export for this machine (min pick handled by
+      //    the pick system — if it wasn't picked, it won't be in shortSupplyMap)
+      // 2. Lane must be below par
+      // 3. Apply short supply: use what the warehouse actually packed, not full need
+      const fillSlots = slots.map(s => {
+        const need = Math.max(0, s.par - s.soh);
+        if (need <= 0) return null;
+
+        // If product wasn't picked for this machine → exclude from sheet
+        if (shortSupply[s.product] === undefined) return null;
+
+        // Apply short supply adjustment — distribute across lanes of same product
+        const fillQty = Math.min(need, shortSupply[s.product]);
+        shortSupply[s.product] = Math.max(0, shortSupply[s.product] - fillQty);
+        if (fillQty <= 0) return null;
+
+        return { ...s, fillQty };
+      }).filter(Boolean).sort((a, b) => String(a.id).localeCompare(String(b.id), undefined, {numeric:true}));
+
+      if (!fillSlots.length) return null;
+
+      const totalUnits = fillSlots.reduce((a, s) => a + s.fillQty, 0);
+      const hasShortSupply = fillSlots.some(s => s.fillQty < Math.max(0, s.par - s.soh));
+
+      const rows = fillSlots.map((s, i) => {
+        const pct      = s.capacity > 0 ? s.soh / s.capacity : 0;
+        const barW     = Math.round(pct * 100);
+        const barCol   = pct > .5 ? '#16a34a' : pct > .2 ? '#d97706' : '#dc2626';
+        const rowBg    = i % 2 === 0 ? '#fff' : '#f8fafc';
+        const fullNeed = Math.max(0, s.par - s.soh);
+        const isShort  = s.fillQty < fullNeed;
+        return `<tr style="background:${rowBg}">
+          <td style="font-family:monospace;font-weight:800;font-size:14px;width:60px">${s.id}</td>
+          <td style="font-size:13px;font-weight:500">${s.product}</td>
+          <td style="text-align:center;width:55px">
+            <div style="font-family:monospace;font-size:12px;color:#555">${s.soh}</div>
+            <div style="height:4px;border-radius:2px;background:#e2e8f0;margin-top:3px;overflow:hidden">
+              <div style="height:100%;width:${barW}%;background:${barCol};border-radius:2px"></div>
             </div>
-            <div style="text-align:right">
-              <div style="font-size:13px;font-weight:700">${dateLabel}</div>
-              <div style="font-size:12px;color:#555;margin-top:2px">Stop ${stop.serviceOrder} · ${stop.routeLabel}</div>
-              <div style="font-size:12px;color:#555">Machine: <strong>${stop.id}</strong></div>
-              <div style="font-size:12px;color:#555">Driver: <strong>${driver}</strong></div>
+          </td>
+          <td style="text-align:center;font-family:monospace;font-size:12px;color:#555;width:45px">${s.par}</td>
+          <td style="text-align:center;width:80px">
+            <div style="font-family:monospace;font-weight:900;font-size:22px;color:${isShort?'#d97706':'#16a34a'};line-height:1">${s.fillQty}</div>
+            ${isShort ? `<div style="font-size:9px;color:#d97706;font-weight:700">SHORT (need ${fullNeed})</div>` : '<div style="font-size:9px;color:#999;text-transform:uppercase;letter-spacing:.3px">to fill</div>'}
+          </td>
+          <td style="text-align:center;width:36px;font-size:18px">□</td>
+        </tr>`;
+      }).join('');
+
+      const isLast = pageIdx === results.length - 1;
+      return `
+        <div style="page-break-after:${isLast?'avoid':'always'};padding:20px 24px;font-family:Arial,sans-serif;color:#111;max-width:800px;margin:0 auto">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:10px;border-bottom:3px solid #111;margin-bottom:14px">
+            <div>
+              <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#888;margin-bottom:3px">VYND · Driver Fill Sheet</div>
+              <div style="font-size:22px;font-weight:900;line-height:1.1">${location}</div>
+              ${subLoc ? `<div style="font-size:13px;color:#555;margin-top:3px">${subLoc}</div>` : ''}
+              <div style="font-size:12px;color:#555;margin-top:3px">${custName}</div>
+            </div>
+            <div style="text-align:right;flex-shrink:0;margin-left:16px">
+              <div style="font-size:14px;font-weight:700">${dateLabel}</div>
+              <div style="font-size:11px;color:#555;margin-top:3px">Stop ${stop.serviceOrder} · ${stop.routeLabel}</div>
+              <div style="font-size:11px;color:#555">Machine <strong>${stop.id}</strong></div>
+              <div style="font-size:11px;color:#555">Driver <strong>${driverName}</strong></div>
+              <div style="margin-top:6px;display:inline-block;background:#f1f5f9;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;color:#16a34a">${fillSlots.length} lanes · ${totalUnits} units</div>
+              ${hasShortSupply ? '<div style="margin-top:4px;display:inline-block;background:#fff7ed;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:700;color:#d97706">⚠ Short supply on some lines</div>' : ''}
             </div>
           </div>
-
-          <!-- Table -->
           <table style="width:100%;border-collapse:collapse;font-size:13px">
             <thead>
-              <tr style="background:#f1f5f9">
-                <th style="padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #cbd5e1">Lane</th>
-                <th style="padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #cbd5e1">Product</th>
-                <th style="padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #cbd5e1">Required</th>
-                <th style="padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #cbd5e1;color:#e05">Short</th>
-                <th style="padding:8px 10px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #cbd5e1;color:#16a34a">Fill Qty</th>
-                <th style="padding:8px 10px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #cbd5e1">✓</th>
+              <tr style="background:#f1f5f9;border-bottom:2px solid #cbd5e1">
+                <th style="padding:7px 10px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px">Lane</th>
+                <th style="padding:7px 10px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px">Product</th>
+                <th style="padding:7px 10px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:.5px">SOH</th>
+                <th style="padding:7px 10px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:.5px">Par</th>
+                <th style="padding:7px 10px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#16a34a">Fill</th>
+                <th style="padding:7px 10px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:.5px">✓</th>
               </tr>
             </thead>
-            <tbody>
-              ${rows}
-            </tbody>
+            <tbody>${rows}</tbody>
           </table>
-
-          <!-- Footer -->
-          <div style="margin-top:20px;display:flex;justify-content:space-between;font-size:11px;color:#888;border-top:1px solid #e2e8f0;padding-top:10px">
-            <div>Printed: ${new Date().toLocaleString('en-AU')}</div>
-            <div style="display:flex;gap:40px">
-              <div>Cash collected: ____________</div>
-              <div>Driver sign-off: ____________</div>
+          <div style="margin-top:16px;display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#888;border-top:1px solid #e2e8f0;padding-top:10px">
+            <div>Printed ${new Date().toLocaleString('en-AU')}</div>
+            <div style="display:flex;gap:48px">
+              <div>Cash collected: _______________</div>
+              <div>Driver sign-off: _______________</div>
             </div>
           </div>
         </div>`;
-    }).join('');
+    }).filter(Boolean).join('');
 
-    // Open print window
-    const win = window.open('', '_blank');
-    win.document.write(`<!DOCTYPE html>
-<html><head><title>VYND Driver Sheets — ${dateLabel}</title>
+    if (!pages) { showToast('All picked machines are at par — nothing to fill'); return; }
+
+    // Use Blob URL — avoids file:// cross-origin block when portal runs as local HTML file
+    const html = `<!DOCTYPE html>
+<html><head><title>VYND Driver Fill Sheets — ${dateLabel}</title>
 <style>
-  * { box-sizing:border-box; margin:0; padding:0; }
-  body { background:#fff; }
-  table { border-collapse:collapse; }
-  tr:nth-child(even) { background:#f8fafc; }
-  td { padding:8px 10px; border-bottom:1px solid #e2e8f0; vertical-align:middle; }
-  @media print {
-    @page { margin:10mm; size:A4; }
-    body { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
-  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#fff}
+  td{padding:8px 10px;border-bottom:1px solid #e2e8f0;vertical-align:middle}
+  @media print{@page{margin:10mm;size:A4}body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 </style>
-</head><body>${pages}</body></html>`);
-    win.document.close();
-    // Give images/fonts a moment then trigger print
-    setTimeout(() => { win.focus(); win.print(); }, 400);
-  });
+</head><body>${pages}</body></html>`;
+    const blob = new Blob([html], { type: 'text/html' });
+    const url  = URL.createObjectURL(blob);
+    const win  = window.open(url, '_blank');
+    if (win) {
+      win.addEventListener('load', () => { win.focus(); win.print(); URL.revokeObjectURL(url); });
+    } else {
+      // Popup blocked — offer direct download instead
+      const a = document.createElement('a');
+      a.href = url; a.download = 'vynd-driver-sheets-' + date + '.html';
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 3000);
+      showToast('Popup blocked — file downloaded instead');
+    }
+  } catch(e) { showToast('Error generating sheets: ' + e.message); console.error(e); }
 }
 
 function downloadFile(filename, content, type) {

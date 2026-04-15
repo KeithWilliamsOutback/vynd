@@ -317,6 +317,11 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
 .audit-tray-hd{font-size:10px;font-weight:600;color:var(--muted);letter-spacing:1px;text-transform:uppercase;padding:10px 14px 6px;background:var(--surface);border-bottom:1px solid var(--border)}
 .audit-slot-row{display:grid;grid-template-columns:36px 1fr auto;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--card)}
 .audit-slot-row:last-child{border-bottom:none}
+.fg-audit-inline{margin-top:6px;background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.25);border-radius:8px;padding:8px 10px;display:flex;align-items:center;gap:8px;animation:fadeIn .2s ease}
+.fg-audit-inline.audit-ok{background:rgba(74,222,128,.08);border-color:rgba(74,222,128,.3)}
+.fg-audit-inline.audit-warn-inline{background:rgba(251,146,60,.08);border-color:rgba(251,146,60,.35)}
+.fg-audit-inline.audit-bad{background:rgba(248,113,113,.08);border-color:rgba(248,113,113,.35)}
+@keyframes fadeIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
 .audit-slot-row.audit-variance{background:rgba(248,113,113,.05);border-left:3px solid var(--danger)}
 .audit-slot-row.audit-warn{background:rgba(251,146,60,.05);border-left:3px solid var(--warn)}
 .audit-stepper{display:flex;align-items:center;border:1px solid var(--border2);border-radius:8px;overflow:hidden;flex-shrink:0}
@@ -608,16 +613,15 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
 
     <div id="stop-audit-section" style="display:none">
       <div class="section-hd">SOH audit</div>
-      <div class="flag-row info" style="margin-bottom:-4px">
-        <span class="flag-icon">📋</span>
-        <span class="flag-text" id="stop-audit-hint">Count each slot after filling. DEX-calculated counts are pre-filled — confirm or adjust as needed.</span>
-      </div>
-      <div id="stop-audit-slots" style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden"></div>
       <div id="stop-audit-summary" style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 14px;display:flex;justify-content:space-between;align-items:center">
-        <div style="font-size:13px;font-weight:500">Variance</div>
-        <div id="stop-audit-variance-total" style="font-family:'DM Mono',monospace;font-size:14px;color:var(--accent)">—</div>
+        <div>
+          <div style="font-size:13px;font-weight:500">Total variance</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">Counts recorded inline — adjust any lane above then save</div>
+        </div>
+        <div id="stop-audit-variance-total" style="font-family:'DM Mono',monospace;font-size:18px;font-weight:700;color:var(--accent)">—</div>
       </div>
-      <button class="btn btn-secondary" onclick="saveAudit()" id="stop-audit-save-btn">Save audit</button>
+      <button class="btn btn-primary" onclick="saveAudit()" id="stop-audit-save-btn">✓ Save audit</button>
+      <div id="stop-audit-slots" style="display:none"></div>
     </div>
 
     <button class="btn btn-primary" onclick="completeStop()">Mark stop as complete</button>
@@ -1375,6 +1379,10 @@ function renderHomeStops(stops) {
     else                     tags.push('<span class="pill pill-blue">Pending</span>');
 
     if (hasPogChanges)       tags.push('<span class="pill pill-orange">⚠ Pog change</span>');
+    if (!isDone) {
+      if (auditRequiredForStop(stop.id))  tags.push('<span class="pill pill-blue">📋 Audit</span>');
+      if (photoRequiredForStop(stop.id))  tags.push('<span class="pill pill-blue">📷 Photo</span>');
+    }
     tags.push('<span class="pill pill-gray">' + cashIcon + '</span>');
 
     return '<div class="stop-card-wrap" id="stop-' + stop.id + '-wrap">' +
@@ -1873,6 +1881,8 @@ async function showStop(machineId) {
   currentStopMachineId = machineId;
   initStopPullToRefresh();
   document.getElementById('stop-title').textContent = s.id;
+  // Ensure settings are loaded before checking audit requirement
+  loadGlobalOpSettings().then(() => renderAuditSection(machineId));
   document.getElementById('stop-customer').textContent = s.customer;
   document.getElementById('stop-loc-name').textContent = s.locationName;
   document.getElementById('stop-addr').textContent = s.addr;
@@ -2256,24 +2266,27 @@ function buildPlanogram(s) {
 
     if (hideFilledOn && isFull && !isPrekit) row.classList.add('fg-hidden');
     if (notOnPick) {
-      row.classList.add('fg-hidden');
       row.classList.add('not-on-pick');
+      // Hide unpicked slots UNLESS audit is required — audit needs all lanes visible
+      if (!auditRequiredForStop(currentStopId)) row.classList.add('fg-hidden');
     }
   });
 
   // Attach swipe after DOM is built
   s.slots.forEach(slot => attachFgSwipe(slot.id, slot.par || slot.capacity || 12, slot.capacity || 12, slot.current));
 
-  // Show "Show all" toggle if any slots are hidden due to not being on pick list
-  showUnpickedOn = false;
+  // Show toggle only when audit is NOT required (audit forces all lanes visible)
+  const isAudit = auditRequiredForStop(currentStopId);
+  showUnpickedOn = isAudit; // treat as "show all" mode when auditing
   const unpickedCount = s.slots.filter(sl => stopSlotState[sl.id]?.notOnPick).length;
   const unpickedWrap  = document.getElementById('unpicked-toggle-wrap');
   const unpickedTrack = document.getElementById('unpicked-toggle');
   const unpickedLabel = document.getElementById('unpicked-toggle-lbl');
   if (unpickedWrap) {
-    unpickedWrap.style.display = unpickedCount > 0 ? '' : 'none';
-    if (unpickedTrack) unpickedTrack.classList.remove('on');
-    if (unpickedLabel) unpickedLabel.textContent = 'Show all';
+    // Hide the toggle entirely during audit — "show all" is locked on
+    unpickedWrap.style.display = (unpickedCount > 0 && !isAudit) ? '' : 'none';
+    if (unpickedTrack) unpickedTrack.classList.toggle('on', isAudit);
+    if (unpickedLabel) unpickedLabel.textContent = isAudit ? 'Pick list only' : 'Show all';
   }
 }
 
@@ -2347,6 +2360,15 @@ function fgConfirm(slotId, par, capacity, current) {
   updateSOH(stop);
   showToast(isPrekit ? `🥬 Fresh slot confirmed ✓` : (added > 0 ? `+${added} confirmed ✓` : 'Slot confirmed ✓'));
 
+  // ── Inline audit: if audit required, show count banner on this row ────────
+  if (!isPrekit && auditRequiredForStop(currentStopId)) {
+    if (!auditState[currentStopId]) auditState[currentStopId] = {};
+    // Always set to newSoh at confirm — waste may have been entered before
+    // confirm, so the pre-populated value (set on stop load) would be stale
+    auditState[currentStopId][slotId] = newSoh;
+    showInlineAudit(slotId, newSoh, par, capacity);
+  }
+
   // Write fill data to Firebase immediately on each slot confirm
   // This ensures completedStops has data before the machine dials restock
   if (fbDb && currentStopId && stop) {
@@ -2380,6 +2402,91 @@ function updateSOH(s) {
   set('soh-added',   '+' + totalAdded);
   set('soh-waste',   totalWaste > 0 ? '−' + totalWaste : '0');
   set('soh-closing', (totalCurrent + totalAdded - totalWaste) + '/' + totalCapacity);
+}
+
+// ══════════════════════════════════════
+// INLINE AUDIT (shown per-lane after confirm when audit required)
+// ══════════════════════════════════════
+
+function showInlineAudit(slotId, expectedSoh, par, capacity) {
+  const row = document.querySelector(`.fg-row[data-slot-id="${slotId}"]`);
+  if (!row) return;
+
+  // Remove any existing audit banner on this row
+  const existing = row.querySelector('.fg-audit-inline');
+  if (existing) existing.remove();
+
+  const machineId = currentStopId;
+  const counted   = auditState[machineId]?.[slotId] ?? expectedSoh;
+  const variance  = counted - expectedSoh;
+
+  const banner = document.createElement('div');
+  banner.className = 'fg-audit-inline' + (variance === 0 ? ' audit-ok' : Math.abs(variance) > 2 ? ' audit-bad' : ' audit-warn-inline');
+  banner.id = 'fg-audit-banner-' + slotId;
+  banner.style.cssText = 'margin:4px 12px 8px;';
+
+  banner.innerHTML = `
+    <span style="font-size:15px;flex-shrink:0">📋</span>
+    <div style="flex:1;min-width:0">
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Audit count</div>
+      <div style="font-size:11px;color:var(--muted)">Expected: <strong>${expectedSoh}</strong>${variance !== 0 ? ` · Variance: <strong style="color:${Math.abs(variance)>2?'var(--danger)':'var(--warn)'}">${variance>0?'+':''}${variance}</strong>` : ' · <span style="color:var(--accent)">✓ Matches</span>'}</div>
+    </div>
+    <div style="display:flex;align-items:center;border:1px solid var(--border2);border-radius:8px;overflow:hidden;flex-shrink:0">
+      <button style="width:30px;height:30px;background:var(--surface);border:none;color:var(--text);font-size:17px;cursor:pointer"
+        onclick="adjustInlineAudit('${slotId}',${expectedSoh},${par},${capacity},-1)">−</button>
+      <div id="fg-audit-val-${slotId}" style="width:32px;text-align:center;font-family:'DM Mono',monospace;font-size:13px;font-weight:700;background:var(--surface);border-left:1px solid var(--border2);border-right:1px solid var(--border2);height:30px;line-height:30px">${counted}</div>
+      <button style="width:30px;height:30px;background:var(--surface);border:none;color:var(--text);font-size:17px;cursor:pointer"
+        onclick="adjustInlineAudit('${slotId}',${expectedSoh},${par},${capacity},1)">+</button>
+    </div>`;
+
+  // Insert inside the row, after fg-inner
+  const inner = row.querySelector('.fg-inner');
+  if (inner) inner.after(banner);
+  else row.appendChild(banner);
+}
+
+function adjustInlineAudit(slotId, expectedSoh, par, capacity, delta) {
+  const machineId = currentStopId;
+  if (!auditState[machineId]) auditState[machineId] = {};
+  const cur = auditState[machineId][slotId] ?? expectedSoh;
+  const nv  = Math.max(0, Math.min(capacity, cur + delta));
+  auditState[machineId][slotId] = nv;
+
+  const valEl   = document.getElementById('fg-audit-val-' + slotId);
+  const banner  = document.getElementById('fg-audit-banner-' + slotId);
+  if (valEl) valEl.textContent = nv;
+
+  const variance = nv - expectedSoh;
+  if (banner) {
+    banner.className = 'fg-audit-inline' + (variance === 0 ? ' audit-ok' : Math.abs(variance) > 2 ? ' audit-bad' : ' audit-warn-inline');
+    // Update variance text
+    const desc = banner.querySelector('div > div:last-child');
+    if (desc) desc.innerHTML = `Expected: <strong>${expectedSoh}</strong>${variance !== 0
+      ? ` · Variance: <strong style="color:${Math.abs(variance)>2?'var(--danger)':'var(--warn)'}">${variance>0?'+':''}${variance}</strong>`
+      : ' · <span style="color:var(--accent)">✓ Matches</span>'}`;
+  }
+
+  // Also update the bottom audit section if it's visible
+  const auditValEl = document.getElementById('audit-val-' + slotId);
+  const auditVarEl = document.getElementById('audit-var-' + slotId);
+  const auditRowEl = document.getElementById('audit-row-' + slotId);
+  if (auditValEl) auditValEl.textContent = nv;
+  if (auditVarEl) auditVarEl.textContent = (variance > 0 ? '+' : '') + variance;
+  if (auditRowEl) auditRowEl.className = 'audit-slot-row' + (variance === 0 ? '' : Math.abs(variance) > 2 ? ' audit-variance' : ' audit-warn');
+
+  // Update running variance total in bottom section
+  const stop = STOPS[machineId];
+  if (stop) {
+    let total = 0;
+    stop.slots.forEach(sl => {
+      const addedQty = (stopSlotState[sl.id] || {}).added || 0;
+      const expected = Math.min(sl.current + addedQty, sl.capacity || 12);
+      const counted  = auditState[machineId]?.[sl.id] ?? expected;
+      total += counted - expected;
+    });
+    const totalEl = document.getElementById('stop-audit-variance-total');
+    if (totalEl) { totalEl.textContent = (total > 0 ? '+' : '') + total; totalEl.style.color = total === 0 ? 'var(--accent)' : 'var(--danger)'; }
+  }
 }
 
 // ══════════════════════════════════════
@@ -2506,6 +2613,65 @@ function fgwpAdj(slotId, type, delta) {
   }
 }
 
+// Called whenever waste is recorded AFTER a lane has been confirmed
+// Adjusts the inline audit count down by the waste amount so the audit
+// reflects what's physically in the machine
+function adjustAuditForWaste(slotId, wasteDelta) {
+  if (!auditRequiredForStop(currentStopId)) return;
+  const confirmed = document.getElementById('fg-btn-' + slotId);
+  if (!confirmed || !confirmed.classList.contains('confirmed')) return; // lane not confirmed yet — no adjustment needed
+
+  const machineId = currentStopId;
+  if (!auditState[machineId]) auditState[machineId] = {};
+
+  // Only adjust if an audit entry exists for this slot
+  if (auditState[machineId][slotId] === undefined) return;
+
+  const stop = STOPS[machineId];
+  const slot = stop && stop.slots.find(s => s.id === slotId);
+  if (!slot) return;
+
+  const capacity = slot.capacity || 12;
+  const cur = auditState[machineId][slotId];
+  const nv  = Math.max(0, Math.min(capacity, cur - wasteDelta));
+  auditState[machineId][slotId] = nv;
+
+  // Recalculate expected SOH for this slot (current + added - all waste)
+  const state   = stopSlotState[slotId] || {};
+  const added   = state.added   || 0;
+  const spoilt  = state.spoilt  || 0;
+  const damaged = state.damaged || 0;
+  const expectedSoh = Math.max(0, slot.current + added - spoilt - damaged);
+
+  // Update the inline audit banner
+  const valEl  = document.getElementById('fg-audit-val-' + slotId);
+  const banner = document.getElementById('fg-audit-banner-' + slotId);
+  if (valEl) valEl.textContent = nv;
+  if (banner) {
+    const variance = nv - expectedSoh;
+    banner.className = 'fg-audit-inline' + (variance === 0 ? ' audit-ok' : Math.abs(variance) > 2 ? ' audit-bad' : ' audit-warn-inline');
+    const desc = banner.querySelector('div > div:last-child');
+    if (desc) desc.innerHTML = `Expected: <strong>${expectedSoh}</strong>${variance !== 0
+      ? ` · Variance: <strong style="color:${Math.abs(variance)>2?'var(--danger)':'var(--warn)'}">${variance>0?'+':''}${variance}</strong>`
+      : ' · <span style="color:var(--accent)">✓ Matches</span>'}`;
+  }
+
+  // Update bottom variance total
+  if (stop) {
+    let total = 0;
+    stop.slots.forEach(sl => {
+      const st = stopSlotState[sl.id] || {};
+      const exp = Math.max(0, sl.current + (st.added||0) - (st.spoilt||0) - (st.damaged||0));
+      const counted = auditState[machineId]?.[sl.id] ?? exp;
+      total += counted - exp;
+    });
+    const totalEl = document.getElementById('stop-audit-variance-total');
+    if (totalEl) { totalEl.textContent = (total > 0 ? '+' : '') + total; totalEl.style.color = total === 0 ? 'var(--accent)' : 'var(--danger)'; }
+  }
+
+  showToast('Audit updated for waste ✓');
+}
+
 function fgwpRecord(slotId) {
   const state = fgwpState[slotId] || { spoilt: 0, damaged: 0 };
   if (state.spoilt === 0 && state.damaged === 0) { fgwpClose(slotId); return; }
@@ -2533,6 +2699,8 @@ function fgwpRecord(slotId) {
   fgwpClose(slotId);
   updateSOH(STOPS[currentStopId]);
   updateWasteSummary();
+  // Adjust audit count if lane was already confirmed
+  adjustAuditForWaste(slotId, (state.spoilt || 0) + (state.damaged || 0));
   const parts = [];
   if (state.spoilt  > 0) parts.push(state.spoilt  + ' spoilt');
   if (state.damaged > 0) parts.push(state.damaged + ' damaged');
@@ -2595,6 +2763,8 @@ function confirmWasteSheet() {
   closeWasteSheet();
   updateSOH(STOPS[currentStopId]);
   updateWasteSummary();
+  // Adjust audit count if lane was already confirmed
+  adjustAuditForWaste(wsSlotId, wsQty);
   showToast(`${wsQty} ${wsType} recorded`);
 }
 
@@ -5317,7 +5487,10 @@ function applyDriverFbConfig() {
     showToast('☁ Firebase connected ✓');
     loadDriverProfileFromFirebase();
     populateDriverDropdown();
-    loadGlobalOpSettings();
+    loadGlobalOpSettings().then(() => {
+      // Re-render audit section if a stop is already open when settings arrive
+      if (currentStopId) renderAuditSection(currentStopId);
+    });
     fbDb.ref('vynd/machineMeta').once('value').then(snap => {
       const data = snap.val();
       if (!data) return;
@@ -5389,7 +5562,9 @@ function initFirebase() {
     updateConnStatus(true);
     loadDriverProfileFromFirebase();
     populateDriverDropdown();
-    loadGlobalOpSettings();
+    loadGlobalOpSettings().then(() => {
+      if (currentStopId) renderAuditSection(currentStopId);
+    });
     // Load cashType overrides from Firebase machineMeta (portal can change these)
     fbDb.ref('vynd/machineMeta').once('value').then(snap => {
       const data = snap.val();

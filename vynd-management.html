@@ -1180,6 +1180,23 @@ tr.clickable:hover td{background:var(--bg)}
                 <input class="form-input" id="prod-m-minpick" type="number" min="0" max="100" placeholder="0 = disabled">
               </div>
             </div>
+            <div class="form-row">
+              <div class="form-group">
+                <div class="form-label">Supplier</div>
+                <input class="form-input" id="prod-m-supplier" placeholder="e.g. Coca-Cola Amatil">
+              </div>
+              <div class="form-group">
+                <div class="form-label">Units per carton</div>
+                <input class="form-input" id="prod-m-carton-qty" type="number" placeholder="e.g. 24" min="1">
+              </div>
+            </div>
+            <div style="font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.8px;text-transform:uppercase;margin-bottom:4px">Physical dimensions <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:10px">— for Mushiny AMR</span></div>
+            <div class="form-row">
+              <div class="form-group"><div class="form-label">Weight (kg)</div><input class="form-input" id="prod-m-weight" type="number" placeholder="0.375" step="0.001" min="0"></div>
+              <div class="form-group"><div class="form-label">Length (m)</div><input class="form-input" id="prod-m-length" type="number" placeholder="0.065" step="0.001" min="0"></div>
+              <div class="form-group"><div class="form-label">Width (m)</div><input class="form-input" id="prod-m-width" type="number" placeholder="0.065" step="0.001" min="0"></div>
+              <div class="form-group"><div class="form-label">Height (m)</div><input class="form-input" id="prod-m-height" type="number" placeholder="0.120" step="0.001" min="0"></div>
+            </div>
             <div style="display:flex;flex-direction:column;gap:8px">
               <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r-sm)">
                 <span style="font-size:13px">GST Free</span>
@@ -1779,10 +1796,12 @@ tr.clickable:hover td{background:var(--bg)}
               <div class="form-label">Pick date</div>
               <input class="form-input" type="date" id="pick-date" onchange="updatePickPreview()">
             </div>
-            <div style="display:flex;gap:8px;margin-top:16px">
+            <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">
               <button class="btn btn-primary" onclick="exportPickCSV()">⬇ Export CSV</button>
               <button class="btn btn-secondary" onclick="updatePickPreview()">↻ Preview</button>
             </div>
+            <!-- Mushiny AMR integration controls — only visible when enabled -->
+            <div id="mushiny-picking-controls" style="display:none;margin-top:12px"></div>
           </div>
 
           <div class="card">
@@ -2041,6 +2060,7 @@ tr.clickable:hover td{background:var(--bg)}
         <button class="settings-tab" onclick="switchSettingsTab('cloud',this)">Cloud sync</button>
         <button class="settings-tab" onclick="switchSettingsTab('users',this)">Users</button>
         <button class="settings-tab" onclick="switchSettingsTab('data',this)">Reference data</button>
+        <button class="settings-tab" onclick="switchSettingsTab('mushiny',this)">🤖 Mushiny AMR</button>
       </div>
 
       <!-- Operations tab -->
@@ -2545,6 +2565,95 @@ tr.clickable:hover td{background:var(--bg)}
         </div>
       </div>
 
+      <!-- ═══════════════════════════════
+           MUSHINY AMR INTEGRATION TAB
+           ═══════════════════════════════ -->
+      <div id="settings-tab-mushiny" style="display:none">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+
+          <!-- Connection config -->
+          <div class="card">
+            <div style="font-weight:700;font-size:13px;margin-bottom:4px">🔌 Connection</div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:16px">Mushiny iRES API credentials — provided by Mushiny</div>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <div>
+                <div class="form-label">Base URL</div>
+                <input class="form-input" id="mushiny-base-url" placeholder="https://ires.mushiny.com" style="font-family:'DM Mono',monospace;font-size:12px">
+              </div>
+              <div class="form-row" style="margin-bottom:0">
+                <div class="form-group">
+                  <div class="form-label">Username</div>
+                  <input class="form-input" id="mushiny-username" placeholder="customer" autocomplete="off">
+                </div>
+                <div class="form-group">
+                  <div class="form-label">Password</div>
+                  <input class="form-input" id="mushiny-password" type="password" placeholder="••••••••" autocomplete="off">
+                </div>
+              </div>
+              <div>
+                <div class="form-label">Client No</div>
+                <input class="form-input" id="mushiny-client-no" placeholder="clientNo (provided by Mushiny)">
+              </div>
+              <div>
+                <div class="form-label">Callback base URL <span style="font-weight:400;color:var(--muted)">(your Cloud Run URL)</span></div>
+                <input class="form-input" id="mushiny-callback-url" placeholder="https://dex-receiver-xxx.run.app" style="font-family:'DM Mono',monospace;font-size:12px">
+              </div>
+              <button class="btn btn-secondary" onclick="saveMushinyConfig()">Save configuration</button>
+            </div>
+          </div>
+
+          <!-- Status & controls -->
+          <div class="card">
+            <div style="font-weight:700;font-size:13px;margin-bottom:4px">⚡ Status</div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:16px">Integration health and controls</div>
+            <div style="display:flex;flex-direction:column;gap:12px">
+
+              <!-- Enable toggle -->
+              <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 14px;display:flex;align-items:center;gap:12px">
+                <label class="toggle-sw">
+                  <input type="checkbox" id="mushiny-enabled" onchange="toggleMushinyEnabled(this.checked)">
+                  <span class="toggle-sw-track"></span>
+                </label>
+                <div>
+                  <div style="font-size:13px;font-weight:600">Enable Mushiny AMR picking</div>
+                  <div style="font-size:11px;color:var(--muted);margin-top:2px">When enabled, pick orders can be sent to Mushiny. Existing driver workflow is unaffected.</div>
+                </div>
+              </div>
+
+              <!-- Connection test -->
+              <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 14px">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+                  <div style="font-size:13px;font-weight:600">API connection</div>
+                  <div id="mushiny-conn-status" style="font-size:11px;color:var(--muted)">Not tested</div>
+                </div>
+                <button class="btn btn-secondary btn-sm" onclick="testMushinyConnection()">Test connection</button>
+              </div>
+
+              <!-- Active orders summary -->
+              <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 14px">
+                <div style="font-size:13px;font-weight:600;margin-bottom:6px">Active Mushiny orders</div>
+                <div id="mushiny-orders-summary" style="font-size:12px;color:var(--muted)">—</div>
+                <button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="loadMushinyOrdersSummary()">Refresh</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Product registration -->
+          <div class="card" style="grid-column:1/-1">
+            <div style="font-weight:700;font-size:13px;margin-bottom:4px">📦 Product registration</div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:12px">All products must be registered in Mushiny iRES before they can be included in a pick order. Run this once before go-live and whenever new products are added.</div>
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+              <button class="btn btn-primary" onclick="pushAllProductsToMushiny()">Push all products to Mushiny</button>
+              <button class="btn btn-secondary" onclick="pushAllProductsToMushiny(true)">Push updated only</button>
+              <div id="mushiny-product-push-status" style="font-size:12px;color:var(--muted)"></div>
+            </div>
+            <div id="mushiny-product-push-log" style="margin-top:12px;max-height:160px;overflow-y:auto;font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);display:none"></div>
+          </div>
+
+        </div>
+      </div>
+
+
     </div>
 
   </div><!-- /content -->
@@ -2889,10 +2998,21 @@ tr.clickable:hover td{background:var(--bg)}
       <!-- Pricing & supply -->
       <div style="font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.8px;text-transform:uppercase;margin-bottom:8px">Pricing &amp; supply</div>
       <div class="form-row">
-        <div class="form-group"><div class="form-label">Cost price ($)</div><input class="form-input" type="number" value="1.20" step="0.01"></div>
-        <div class="form-group"><div class="form-label">RRP ($)</div><input class="form-input" type="number" value="3.50" step="0.10"></div>
-        <div class="form-group"><div class="form-label">Supplier</div><input class="form-input" value="Coca-Cola Amatil"></div>
-        <div class="form-group"><div class="form-label">Units per case</div><input class="form-input" type="number" value="24"></div>
+        <div class="form-group"><div class="form-label">Cost price ($)</div><input class="form-input" id="prod-cost" type="number" placeholder="0.00" step="0.01"></div>
+        <div class="form-group"><div class="form-label">RRP ($)</div><input class="form-input" id="prod-rrp" type="number" placeholder="0.00" step="0.10"></div>
+        <div class="form-group"><div class="form-label">Supplier</div><input class="form-input" id="prod-supplier" placeholder="Supplier name"></div>
+        <div class="form-group"><div class="form-label">Units per carton</div><input class="form-input" id="prod-carton-qty" type="number" placeholder="e.g. 24" min="1"></div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Physical dimensions (for Mushiny AMR integration) -->
+      <div style="font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.8px;text-transform:uppercase;margin-bottom:8px">Physical dimensions <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted);font-size:10px">— required for Mushiny AMR picking</span></div>
+      <div class="form-row">
+        <div class="form-group"><div class="form-label">Weight (kg)</div><input class="form-input" id="prod-weight" type="number" placeholder="e.g. 0.375" step="0.001" min="0"></div>
+        <div class="form-group"><div class="form-label">Length (m)</div><input class="form-input" id="prod-length" type="number" placeholder="e.g. 0.065" step="0.001" min="0"></div>
+        <div class="form-group"><div class="form-label">Width (m)</div><input class="form-input" id="prod-width" type="number" placeholder="e.g. 0.065" step="0.001" min="0"></div>
+        <div class="form-group"><div class="form-label">Height (m)</div><input class="form-input" id="prod-height" type="number" placeholder="e.g. 0.120" step="0.001" min="0"></div>
       </div>
 
       <div class="divider"></div>
@@ -3107,7 +3227,15 @@ function saveProductFromModal() {
   const minPickUnits   = parseInt(document.getElementById('prod-minpick-units')?.value) || 0;
   const minPickMode    = document.getElementById('minpick-btn-pct')?.classList.contains('active') ? 'pct' : 'units';
 
-  const imgUrl = document.getElementById('prod-img-url')?.value.trim();
+  const imgUrl     = document.getElementById('prod-img-url')?.value.trim();
+  const cost       = parseFloat(document.getElementById('prod-cost')?.value) || 0;
+  const rrp        = parseFloat(document.getElementById('prod-rrp')?.value) || 0;
+  const supplier   = document.getElementById('prod-supplier')?.value.trim() || '';
+  const cartonQty  = parseInt(document.getElementById('prod-carton-qty')?.value) || 0;
+  const weight     = parseFloat(document.getElementById('prod-weight')?.value) || 0;
+  const prodLength = parseFloat(document.getElementById('prod-length')?.value) || 0;
+  const width      = parseFloat(document.getElementById('prod-width')?.value) || 0;
+  const height     = parseFloat(document.getElementById('prod-height')?.value) || 0;
 
   saveProductToRegistry(name, {
     name, sku, barcode,
@@ -3118,6 +3246,8 @@ function saveProductFromModal() {
     minPickUnits:  minPickMode === 'units' ? minPickUnits : Math.round(30 * (PLANOGRAMS['M-001']?.slots?.[0]?.par || 10) / 100),
     minPickMode,
     imageUrl:      imgUrl || undefined,
+    cost, rrp, supplier, cartonQty,
+    weight, length: prodLength, width, height,
   });
 
   // Update PRODUCT_IMAGES cache
@@ -3163,6 +3293,17 @@ function openProductModal(name, sku, barcode, brand, mfg, family, cat, tax, life
   setMinPickMode('pct');
   const pctInput = document.getElementById('prod-minpick-pct');
   if (pctInput) pctInput.value = 30;
+
+  // Load pricing & physical fields
+  const prodData = PRODUCTS[name] || {};
+  const costEl     = document.getElementById('prod-cost');     if (costEl)     costEl.value     = prodData.cost       || '';
+  const rrpEl      = document.getElementById('prod-rrp');      if (rrpEl)      rrpEl.value      = prodData.rrp        || '';
+  const supplierEl = document.getElementById('prod-supplier'); if (supplierEl) supplierEl.value = prodData.supplier   || '';
+  const cartonEl   = document.getElementById('prod-carton-qty'); if (cartonEl) cartonEl.value   = prodData.cartonQty  || '';
+  const weightEl   = document.getElementById('prod-weight');   if (weightEl)   weightEl.value   = prodData.weight     || '';
+  const lengthEl   = document.getElementById('prod-length');   if (lengthEl)   lengthEl.value   = prodData.length     || '';
+  const widthEl    = document.getElementById('prod-width');    if (widthEl)    widthEl.value    = prodData.width      || '';
+  const heightEl   = document.getElementById('prod-height');   if (heightEl)   heightEl.value   = prodData.height     || '';
 
   // Reset image preview — load existing if available
   const existingImg = PRODUCT_IMAGES[name] || PRODUCTS[name]?.imageUrl || '';
@@ -5556,6 +5697,7 @@ function connectFirebase(apiKey, projectId, appId, dbUrl) {
     loadLanMap();
     loadOperationalSettings();
     loadProductsFromFirebase();
+    watchMushinyFeedback();
     loadProductImagesFromFirebase();
     pushPlanogramsToFirebase(false);
     loadPickingIdMap();
@@ -7082,7 +7224,7 @@ function loadOperationalSettings() {
 })();
 
 function switchSettingsTab(tab, btn) {
-  ['operations','cloud','users','data'].forEach(t => {
+  ['operations','cloud','users','data','mushiny'].forEach(t => {
     const el = document.getElementById('settings-tab-' + t);
     if (el) el.style.display = t === tab ? '' : 'none';
   });
@@ -7097,6 +7239,7 @@ function switchSettingsTab(tab, btn) {
   }
   if (tab === 'users') renderUsersList();
   if (tab === 'operations') loadDynamicParSettings();
+  if (tab === 'mushiny')    loadMushinySettingsUI();
 }
 
 function setBagMode(mode) {
@@ -7358,6 +7501,366 @@ function saveOperationalSettings() {
 }
 
 // ══════════════════════════════════════
+
+
+// ── Watch for Mushiny pick feedback arriving from server.js ───────────
+// When Mushiny confirms a pick, server.js writes to mushinyPickFeedback.
+// Portal watches this node and applies the allocation to the pick import flow.
+function watchMushinyFeedback() {
+  if (!fbReady || !fbDb) return;
+  fbDb.ref('vynd/mushinyOrders').on('child_changed', snap => {
+    const order = snap.val();
+    if (!order) return;
+    const status = order.status;
+    if (status === 'PICKING') {
+      showToast('🤖 Mushiny is picking order ' + order.orderNo);
+    } else if (status === 'PICKED') {
+      showToast('✅ Mushiny pick complete — ' + order.orderNo + '. Stock updated.');
+      // Refresh pick page if open
+      const pickPage = document.getElementById('page-picking');
+      if (pickPage && pickPage.style.display !== 'none') renderMushinyPickingControls();
+    } else if (status === 'SHORTED') {
+      showToast('⚠ Mushiny order shorted — ' + order.orderNo + '. Check portal for details.', 6000);
+      const pickPage = document.getElementById('page-picking');
+      if (pickPage && pickPage.style.display !== 'none') renderMushinyPickingControls();
+    }
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// MUSHINY AMR INTEGRATION
+// ══════════════════════════════════════════════════════════════════════
+
+const MUSHINY_CONFIG_KEY = 'vynd_mushiny_config';
+
+function getMushinyConfig() {
+  try { return JSON.parse(localStorage.getItem(MUSHINY_CONFIG_KEY) || '{}'); }
+  catch(e) { return {}; }
+}
+
+function saveMushinyConfig() {
+  const cfg = {
+    baseUrl:     document.getElementById('mushiny-base-url')?.value.trim()    || '',
+    username:    document.getElementById('mushiny-username')?.value.trim()     || '',
+    password:    document.getElementById('mushiny-password')?.value            || '',
+    clientNo:    document.getElementById('mushiny-client-no')?.value.trim()    || '',
+    callbackUrl: document.getElementById('mushiny-callback-url')?.value.trim() || '',
+    enabled:     document.getElementById('mushiny-enabled')?.checked            || false,
+  };
+  localStorage.setItem(MUSHINY_CONFIG_KEY, JSON.stringify(cfg));
+  showToast('Mushiny configuration saved ✓');
+}
+
+function loadMushinySettingsUI() {
+  const cfg = getMushinyConfig();
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+  set('mushiny-base-url',     cfg.baseUrl    || '');
+  set('mushiny-username',     cfg.username   || '');
+  set('mushiny-password',     cfg.password   || '');
+  set('mushiny-client-no',    cfg.clientNo   || '');
+  set('mushiny-callback-url', cfg.callbackUrl || '');
+  const enabledEl = document.getElementById('mushiny-enabled');
+  if (enabledEl) enabledEl.checked = !!cfg.enabled;
+  loadMushinyOrdersSummary();
+}
+
+function toggleMushinyEnabled(on) {
+  const cfg = getMushinyConfig();
+  cfg.enabled = on;
+  localStorage.setItem(MUSHINY_CONFIG_KEY, JSON.stringify(cfg));
+  showToast(on ? '🤖 Mushiny AMR picking enabled' : 'Mushiny AMR picking disabled');
+  // Refresh picking page UI if open
+  const pickingPage = document.getElementById('page-picking');
+  if (pickingPage && pickingPage.style.display !== 'none') renderMushinyPickingControls();
+}
+
+// ── Mushiny API call wrapper ──────────────────────────────────────────
+async function mushinyApi(method, path, body) {
+  const cfg = getMushinyConfig();
+  if (!cfg.baseUrl || !cfg.username) throw new Error('Mushiny not configured');
+
+  const headers = {
+    'Content-Type': 'application/json',
+    'Authorization': 'Basic ' + btoa(cfg.username + ':' + cfg.password),
+  };
+
+  const opts = { method, headers };
+  if (body) opts.body = JSON.stringify(body);
+
+  const res = await fetch(cfg.baseUrl + path, opts);
+  return res.json();
+}
+
+// ── Connection test ───────────────────────────────────────────────────
+async function testMushinyConnection() {
+  const statusEl = document.getElementById('mushiny-conn-status');
+  if (statusEl) { statusEl.textContent = 'Testing…'; statusEl.style.color = 'var(--muted)'; }
+  try {
+    const cfg = getMushinyConfig();
+    // Try to GET a known-nonexistent product — if we get a valid 9xxxx response, connection works
+    const res = await mushinyApi('GET', '/mushiny-provider/api/v1/products/vynd-test-connection');
+    if (res && (res.code === 0 || res.code === 91001)) {
+      if (statusEl) { statusEl.textContent = '✓ Connected'; statusEl.style.color = 'var(--accent)'; }
+    } else {
+      if (statusEl) { statusEl.textContent = '✕ Unexpected response'; statusEl.style.color = 'var(--danger)'; }
+    }
+  } catch(e) {
+    if (statusEl) { statusEl.textContent = '✕ ' + e.message; statusEl.style.color = 'var(--danger)'; }
+  }
+}
+
+// ── Format date for Mushiny (dd-mm-yyyy HH:mm:ss) ────────────────────
+function toMushinyDate(date) {
+  const d = date instanceof Date ? date : new Date(date);
+  const pad = n => String(n).padStart(2, '0');
+  return pad(d.getDate()) + '-' + pad(d.getMonth()+1) + '-' + d.getFullYear()
+       + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+}
+
+// ── Push products to Mushiny ──────────────────────────────────────────
+async function pushAllProductsToMushiny(updatedOnly = false) {
+  const cfg = getMushinyConfig();
+  if (!cfg.baseUrl || !cfg.username || !cfg.clientNo) {
+    showToast('⚠ Configure Mushiny connection first'); return;
+  }
+
+  const statusEl = document.getElementById('mushiny-product-push-status');
+  const logEl    = document.getElementById('mushiny-product-push-log');
+  if (statusEl) statusEl.textContent = 'Pushing…';
+  if (logEl)   { logEl.style.display = ''; logEl.innerHTML = ''; }
+
+  const products = Object.entries(PRODUCTS);
+  let ok = 0, failed = 0, skipped = 0;
+  const pushed = JSON.parse(localStorage.getItem('vynd_mushiny_pushed_products') || '{}');
+
+  for (const [name, p] of products) {
+    const sku = p.sku || p.barcode || name;
+    if (!sku) { skipped++; continue; }
+
+    // Skip if updatedOnly and not changed since last push
+    const hash = JSON.stringify({ name, sku, weight: p.weight, length: p.length, width: p.width, height: p.height });
+    if (updatedOnly && pushed[sku] === hash) { skipped++; continue; }
+
+    const payload = {
+      clientNo:              cfg.clientNo,
+      skuNo:                 sku,
+      barcodes:              (p.barcodes && p.barcodes.length > 0) ? p.barcodes : [p.barcode || sku],
+      name:                  name,
+      description:           name,
+      uom:                   'Piece',
+      productType:           'Ambient',
+      lotFlag:               false,
+      expDateMandatoryFlag:  false,
+      putThreshold:          1,
+      pickThreshold:         0,
+      weight:                p.weight   || 0,
+      length:                p.length   || 0,
+      width:                 p.width    || 0,
+      height:                p.height   || 0,
+    };
+    if (p.cartonQty) payload.cartonQty = p.cartonQty;
+
+    try {
+      // Try update first (PUT), fall back to create (POST) if 91001
+      let res = await mushinyApi('PUT', '/mushiny-provider/api/v1/products/' + encodeURIComponent(sku), payload);
+      if (res.code === 91001) {
+        res = await mushinyApi('POST', '/mushiny-provider/api/v1/products', payload);
+      }
+      if (res.code === 0 || res.code === 91002) {
+        ok++;
+        pushed[sku] = hash;
+        if (logEl) logEl.innerHTML += `<div style="color:var(--accent)">✓ ${name}</div>`;
+      } else {
+        failed++;
+        if (logEl) logEl.innerHTML += `<div style="color:var(--danger)">✕ ${name}: ${res.message}</div>`;
+      }
+    } catch(e) {
+      failed++;
+      if (logEl) logEl.innerHTML += `<div style="color:var(--danger)">✕ ${name}: ${e.message}</div>`;
+    }
+
+    // Small delay to avoid rate limiting
+    await new Promise(r => setTimeout(r, 80));
+  }
+
+  localStorage.setItem('vynd_mushiny_pushed_products', JSON.stringify(pushed));
+  if (statusEl) statusEl.textContent = `${ok} pushed · ${failed} failed · ${skipped} skipped`;
+  showToast(`Mushiny product push: ${ok} ✓  ${failed} ✕`);
+}
+
+// ── Send consolidated pick as Mushiny outbound order ─────────────────
+async function sendPickToMushiny(routeId, date) {
+  const cfg = getMushinyConfig();
+  if (!cfg.enabled) { showToast('Enable Mushiny integration first'); return; }
+  if (!cfg.baseUrl || !cfg.username || !cfg.clientNo) {
+    showToast('⚠ Configure Mushiny connection first'); return;
+  }
+  if (!pickData || !pickData.length) { showToast('No pick data to send'); return; }
+
+  const regularLines = pickData.filter(r => r.lineType === 'regular' || r.lineType === 'pick');
+  if (!regularLines.length) { showToast('No pick lines to send'); return; }
+
+  // Consolidate by product (SKU) across all machines
+  const skuMap = {};
+  regularLines.forEach(r => {
+    const sku = PRODUCTS[r.product]?.sku || PRODUCTS[r.product]?.barcode || r.barcode || r.product;
+    if (!skuMap[sku]) {
+      skuMap[sku] = { skuNo: sku, quantity: 0, product: r.product, rows: [] };
+    }
+    skuMap[sku].quantity += r.pickQty;
+    skuMap[sku].rows.push(r); // preserve lane context for allocation on callback
+  });
+
+  const orderNo = 'VYND-' + date.replace(/-/g,'') + '-' + (routeId || 'ALL');
+  const deliveryDt = toMushinyDate(new Date(date + 'T06:00:00'));
+
+  const payload = {
+    clientNo:         cfg.clientNo,
+    outboundOrderNo:  orderNo,
+    orderType:        'Vending',
+    deliveryDateTime: deliveryDt,
+    priority:         10,
+    details:          Object.values(skuMap).map(s => ({ skuNo: s.skuNo, quantity: s.quantity })),
+  };
+
+  const btn = document.getElementById('mushiny-send-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+
+  try {
+    const res = await mushinyApi('POST', '/mushiny-provider/api/v1/outbound-orders', payload);
+
+    if (res.code === 0) {
+      // Store order context in Firebase so callback can do lane allocation
+      const orderContext = {
+        orderNo, routeId, date,
+        sentAt:  new Date().toISOString(),
+        status:  'INITIALIZED',
+        lines:   Object.values(skuMap).map(s => ({
+          skuNo:    s.skuNo,
+          product:  s.product,
+          quantity: s.quantity,
+          rows:     s.rows.map(r => ({
+            machineId: r.machineId, slots: r.slots, pickQty: r.pickQty,
+          })),
+        })),
+      };
+      if (fbReady && fbDb) {
+        await fbDb.ref('vynd/mushinyOrders/' + orderNo).set(orderContext);
+      }
+      showToast('✓ Pick order sent to Mushiny — ' + orderNo);
+      renderMushinyPickingControls();
+    } else if (res.code === 91002) {
+      showToast('Order already exists in Mushiny — ' + orderNo);
+    } else if (res.code === 91007) {
+      // Inventory shortage — show detail
+      const shortItems = (res.data || []).filter(d => d.replenishmentQuantity > 0);
+      showToast('⚠ Mushiny shortage: ' + shortItems.map(d => d.skuNo + ' (need ' + d.replenishmentQuantity + ' more)').join(', '));
+    } else {
+      showToast('✕ Mushiny error: ' + res.message);
+    }
+  } catch(e) {
+    showToast('✕ Send failed: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🤖 Send to Mushiny'; }
+  }
+}
+
+// ── Cancel a Mushiny outbound order ──────────────────────────────────
+async function cancelMushinyOrder(orderNo) {
+  if (!confirm('Cancel Mushiny order ' + orderNo + '?')) return;
+  const cfg = getMushinyConfig();
+  try {
+    const res = await mushinyApi('DELETE',
+      '/mushiny-provider/api/v1/outbound-orders/' + encodeURIComponent(orderNo),
+      { clientNo: cfg.clientNo, outboundOrderNo: orderNo });
+    if (res.code === 0) {
+      showToast('Order cancelled ✓');
+      if (fbReady && fbDb) {
+        await fbDb.ref('vynd/mushinyOrders/' + orderNo + '/status').set('CANCELLED');
+      }
+      loadMushinyOrdersSummary();
+    } else {
+      showToast('✕ ' + res.message);
+    }
+  } catch(e) { showToast('✕ ' + e.message); }
+}
+
+// ── Poll order status from Mushiny ───────────────────────────────────
+async function refreshMushinyOrderStatus(orderNo) {
+  const cfg = getMushinyConfig();
+  try {
+    const res = await mushinyApi('GET',
+      '/mushiny-provider/api/v1/outbound-orders/' + encodeURIComponent(orderNo));
+    if (res.code === 0 && res.data) {
+      if (fbReady && fbDb) {
+        await fbDb.ref('vynd/mushinyOrders/' + orderNo + '/status').set(res.data.orderStatus);
+      }
+      showToast('Status: ' + res.data.orderStatus);
+      loadMushinyOrdersSummary();
+    }
+  } catch(e) { showToast('✕ ' + e.message); }
+}
+
+// ── Load Mushiny orders summary from Firebase ─────────────────────────
+async function loadMushinyOrdersSummary() {
+  const el = document.getElementById('mushiny-orders-summary');
+  if (!el || !fbReady || !fbDb) return;
+  const snap = await fbDb.ref('vynd/mushinyOrders').orderByChild('sentAt').limitToLast(10).once('value').catch(() => null);
+  if (!snap || !snap.val()) { el.textContent = 'No orders sent yet'; return; }
+  const orders = Object.values(snap.val()).reverse();
+  el.innerHTML = orders.map(o => {
+    const statusColor = o.status === 'PICKED' ? 'var(--accent)' : o.status === 'SHORTED' ? 'var(--danger)' : o.status === 'PICKING' ? 'var(--warn)' : 'var(--muted)';
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--border)">
+      <div>
+        <div style="font-size:12px;font-weight:600">${o.orderNo}</div>
+        <div style="font-size:11px;color:var(--muted)">${o.date} · ${o.lines?.length || 0} SKUs</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:11px;font-weight:700;color:${statusColor}">${o.status || '—'}</span>
+        <button class="btn-icon btn-sm" onclick="refreshMushinyOrderStatus('${o.orderNo}')" title="Refresh status">↻</button>
+        ${(o.status === 'INITIALIZED' || !o.status) ? `<button class="btn-icon btn-sm" onclick="cancelMushinyOrder('${o.orderNo}')" title="Cancel order">✕</button>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── Render Mushiny controls on the picking page ───────────────────────
+function renderMushinyPickingControls() {
+  const cfg = getMushinyConfig();
+  const wrap = document.getElementById('mushiny-picking-controls');
+  if (!wrap) return;
+  if (!cfg.enabled) { wrap.style.display = 'none'; return; }
+  wrap.style.display = '';
+
+  // Check if an order already exists for today's pick
+  const dateEl = document.getElementById('pick-date');
+  const routeSel = document.getElementById('pick-route-sel');
+  const date    = dateEl?.value || new Date().toLocaleDateString('en-CA');
+  const routeId = routeSel?.value || '';
+  const orderNo = 'VYND-' + date.replace(/-/g,'') + '-' + (routeId || 'ALL');
+
+  if (fbReady && fbDb) {
+    fbDb.ref('vynd/mushinyOrders/' + orderNo).once('value').then(snap => {
+      const order = snap.val();
+      const status = order?.status || null;
+      const statusColor = status === 'PICKED' ? 'var(--accent)' : status === 'SHORTED' ? 'var(--danger)' : status === 'PICKING' ? 'var(--warn)' : 'var(--muted)';
+
+      wrap.innerHTML = `
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <div style="font-size:13px">🤖 <strong>Mushiny AMR</strong></div>
+          ${status
+            ? `<span style="font-size:12px;font-weight:700;color:${statusColor}">${status}</span>
+               <button class="btn btn-secondary btn-sm" onclick="refreshMushinyOrderStatus('${orderNo}')">↻ Refresh</button>
+               ${(status === 'INITIALIZED') ? `<button class="btn btn-danger btn-sm" onclick="cancelMushinyOrder('${orderNo}')">Cancel order</button>` : ''}`
+            : `<button class="btn btn-primary btn-sm" id="mushiny-send-btn" onclick="sendPickToMushiny('${routeId}','${date}')">🤖 Send to Mushiny</button>`
+          }
+        </div>`;
+    });
+  } else {
+    wrap.innerHTML = `<div class="flag-row warn"><span class="flag-icon">⚠</span><span class="flag-text">Connect to Firebase to use Mushiny integration</span></div>`;
+  }
+}
+
 // PICKING MODULE
 // ══════════════════════════════════════
 
@@ -7367,6 +7870,7 @@ let pickRouteId     = '';
 let pickDate        = '';
 
 function initPickingPage() {
+  renderMushinyPickingControls();
   // Populate route selectors
   const routes = Object.entries(ROUTES).map(([id, r]) => `<option value="${id}">${r.label} — ${r.driver}</option>`).join('');
   const allOpt = '<option value="">— All routes —</option>';
@@ -7725,6 +8229,7 @@ async function clearPickLock() {
 }
 
 function renderPickPreview() {
+  renderMushinyPickingControls(); // refresh Mushiny controls whenever pick preview updates
   // Summary
   const isLocked = pickData.length > 0 && pickData[0].locked;
   const summary  = document.getElementById('pick-summary');
@@ -12472,6 +12977,12 @@ function openProductModal(name) {
     document.getElementById('prod-m-gstfree').classList.toggle('on',    !!p.gstFree);
     document.getElementById('prod-m-overridepar').classList.toggle('on', !!p.overridePar);
     document.getElementById('prod-m-prekit').classList.toggle('on',      !!p.prekit);
+    document.getElementById('prod-m-supplier').value    = p.supplier   || '';
+    document.getElementById('prod-m-carton-qty').value  = p.cartonQty  || '';
+    document.getElementById('prod-m-weight').value      = p.weight     || '';
+    document.getElementById('prod-m-length').value      = p.length     || '';
+    document.getElementById('prod-m-width').value       = p.width      || '';
+    document.getElementById('prod-m-height').value      = p.height     || '';
     // Image
     const imgUrl = p.imageUrl || resolveProductImage(name) || '';
     document.getElementById('prod-m-image-url').value = imgUrl;
@@ -12480,7 +12991,8 @@ function openProductModal(name) {
   } else {
     title.textContent = 'Add product';
     delBtn.style.display = 'none';
-    ['prod-m-name','prod-m-barcode','prod-m-brand','prod-m-manufacturer','prod-m-family','prod-m-rrp','prod-m-cost','prod-m-minpick']
+    ['prod-m-name','prod-m-barcode','prod-m-brand','prod-m-manufacturer','prod-m-family','prod-m-rrp','prod-m-cost','prod-m-minpick',
+     'prod-m-supplier','prod-m-carton-qty','prod-m-weight','prod-m-length','prod-m-width','prod-m-height']
       .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
     document.getElementById('prod-m-cat').value = 'drink';
     ['prod-m-gstfree','prod-m-overridepar','prod-m-prekit'].forEach(id => {
@@ -12519,6 +13031,12 @@ function saveProductModal() {
     overridePar:   document.getElementById('prod-m-overridepar')?.classList.contains('on') || false,
     prekit:        document.getElementById('prod-m-prekit')?.classList.contains('on')       || undefined,
     imageUrl,
+    supplier:   document.getElementById('prod-m-supplier')?.value.trim()       || undefined,
+    cartonQty:  parseInt(document.getElementById('prod-m-carton-qty')?.value)  || undefined,
+    weight:     parseFloat(document.getElementById('prod-m-weight')?.value)    || undefined,
+    length:     parseFloat(document.getElementById('prod-m-length')?.value)    || undefined,
+    width:      parseFloat(document.getElementById('prod-m-width')?.value)     || undefined,
+    height:     parseFloat(document.getElementById('prod-m-height')?.value)    || undefined,
   };
   // Clean undefined
   Object.keys(p).forEach(k => p[k] === undefined && delete p[k]);

@@ -56,7 +56,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
   .topbar{padding-top:max(56px,calc(env(safe-area-inset-top) + 16px))}
   .bottom-nav{padding-bottom:max(28px,env(safe-area-inset-bottom))}
 }
-.bottom-nav{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--border);background:var(--bg);padding:8px 0;padding-bottom:max(20px,env(safe-area-inset-bottom));flex-shrink:0}
+.bottom-nav{display:flex;justify-content:center;border-top:1px solid var(--border);background:var(--bg);padding:8px 0;padding-bottom:max(20px,env(safe-area-inset-bottom));flex-shrink:0}
 .topbar-left{display:flex;flex-direction:column}
 .topbar-title{font-size:18px;font-weight:600;letter-spacing:-0.3px}
 .topbar-sub{font-size:12px;color:var(--muted);margin-top:2px}
@@ -133,7 +133,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
 .cash-input:focus{border-color:var(--accent)}
 
 /* 4-tab bottom nav */
-.nav-btn{display:flex;flex-direction:column;align-items:center;gap:4px;background:none;border:none;color:var(--muted);font-family:inherit;font-size:10px;letter-spacing:.5px;text-transform:uppercase;cursor:pointer;padding:8px 4px;transition:color .15s}
+.nav-btn{display:flex;flex-direction:column;align-items:center;gap:4px;background:none;border:none;color:var(--muted);font-family:inherit;font-size:10px;letter-spacing:.5px;text-transform:uppercase;cursor:pointer;padding:8px 4px;transition:color .15s;flex:0 0 25%;max-width:100px}
 .nav-btn.active{color:var(--accent)}
 .nav-icon{width:22px;height:22px}
 
@@ -451,18 +451,12 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
     </div>
     <div style="height:10px"></div>
   </div>
-  <nav class="bottom-nav" id="nav-home">
-    <button class="nav-btn active" onclick="navTo('screen-home',this)">
+  <nav class="bottom-nav" id="nav-home" style="display:flex;justify-content:center">
+    <button class="nav-btn active" style="flex:0 0 50%;max-width:200px" onclick="navTo('screen-home',this)">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none"><path d="M3 12L12 4l9 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 10v9a1 1 0 001 1h4v-5h4v5h4a1 1 0 001-1v-9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Route
     </button>
-    <button class="nav-btn" onclick="navTo('screen-locations',this)">
+    <button class="nav-btn" style="flex:0 0 50%;max-width:200px" onclick="navTo('screen-locations',this)">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="10" r="3" stroke="currentColor" stroke-width="1.8"/><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>Locations
-    </button>
-    <button class="nav-btn" style="display:none" onclick="navTo('screen-stock',this)">
-      <svg class="nav-icon" viewBox="0 0 24 24" fill="none"><rect x="2" y="7" width="20" height="14" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Stock
-    </button>
-    <button class="nav-btn" style="display:none" onclick="navTo('screen-cash',this)">
-      <svg class="nav-icon" viewBox="0 0 24 24" fill="none"><rect x="2" y="6" width="20" height="13" rx="2" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/></svg>Cash
     </button>
   </nav>
 </div>
@@ -701,18 +695,12 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
     <div id="locations-list" style="display:flex;flex-direction:column;gap:16px"></div>
     <div style="height:80px"></div>
   </div>
-  <nav class="bottom-nav">
-    <button class="nav-btn" onclick="navTo('screen-home',this)">
+  <nav class="bottom-nav" style="display:flex;justify-content:center;gap:0">
+    <button class="nav-btn" style="flex:0 0 50%;max-width:180px" onclick="navTo('screen-home',this)">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none"><path d="M3 12L12 4l9 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 10v9a1 1 0 001 1h4v-5h4v5h4a1 1 0 001-1v-9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Route
     </button>
-    <button class="nav-btn active" onclick="navTo('screen-locations',this)">
+    <button class="nav-btn active" style="flex:0 0 50%;max-width:180px" onclick="navTo('screen-locations',this)">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="10" r="3" stroke="currentColor" stroke-width="1.8"/><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>Locations
-    </button>
-    <button class="nav-btn" style="display:none" onclick="navTo('screen-stock',this)">
-      <svg class="nav-icon" viewBox="0 0 24 24" fill="none"><rect x="2" y="7" width="20" height="14" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Stock
-    </button>
-    <button class="nav-btn" style="display:none" onclick="navTo('screen-cash',this)">
-      <svg class="nav-icon" viewBox="0 0 24 24" fill="none"><rect x="2" y="6" width="20" height="13" rx="2" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/></svg>Cash
     </button>
   </nav>
 </div>
@@ -796,18 +784,15 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
     <div id="stock-machine-list" style="display:flex;flex-direction:column;gap:8px"></div>
     <div style="height:10px"></div>
   </div>
-  <nav class="bottom-nav">
-    <button class="nav-btn" onclick="navTo('screen-home',this)">
+  <nav class="bottom-nav" style="display:flex;justify-content:center;gap:0">
+    <button class="nav-btn" style="flex:0 0 33.33%;max-width:180px" onclick="navTo('screen-home',this)">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none"><path d="M3 12L12 4l9 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 10v9a1 1 0 001 1h4v-5h4v5h4a1 1 0 001-1v-9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Route
     </button>
-    <button class="nav-btn" onclick="navTo('screen-locations',this)">
+    <button class="nav-btn" style="flex:0 0 33.33%;max-width:180px" onclick="navTo('screen-locations',this)">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="10" r="3" stroke="currentColor" stroke-width="1.8"/><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>Locations
     </button>
-    <button class="nav-btn active" onclick="navTo('screen-stock',this)">
+    <button class="nav-btn active" style="flex:0 0 33.33%;max-width:180px" onclick="navTo('screen-stock',this)">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none"><rect x="2" y="7" width="20" height="14" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Stock
-    </button>
-    <button class="nav-btn" style="display:none" onclick="navTo('screen-cash',this)">
-      <svg class="nav-icon" viewBox="0 0 24 24" fill="none"><rect x="2" y="6" width="20" height="13" rx="2" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/></svg>Cash
     </button>
   </nav>
 </div>
@@ -1460,8 +1445,44 @@ function navTo(screenId, btn) {
     b.classList.toggle('active', oc.includes("'"+screenId+"'"));
   });
   showScreen(screenId);
-  if (screenId === 'screen-stock')    buildStockPick();
-  if (screenId === 'screen-settings') initSettingsScreen();
+  if (screenId === 'screen-stock')     buildStockPick();
+  if (screenId === 'screen-settings')  initSettingsScreen();
+  if (screenId === 'screen-locations') loadAllMachinesForLocations();
+}
+
+// Load DEX slot data for all machines when Locations tab opens
+// so stock status (critical/low/OK) is current for every machine
+async function loadAllMachinesForLocations() {
+  if (!fbDb) return;
+  const allIds = Object.keys(MACHINE_META_DRIVER).filter(id => id !== 'M-001');
+  if (!allIds.length) return;
+
+  await Promise.all(allIds.map(async mid => {
+    if (STOPS[mid] && STOPS[mid].slots && STOPS[mid].slots.length > 0) return; // already loaded
+    try {
+      const [dexSnap, pogSnap] = await Promise.all([
+        fbDb.ref('vynd/dexReadings/' + mid + '/last/slots').once('value'),
+        fbDb.ref('vynd/planograms/'  + mid + '/slots').once('value'),
+      ]);
+      const dex = dexSnap.val() || {};
+      const pog = pogSnap.val() || {};
+      const allIds = new Set([...Object.keys(dex), ...Object.keys(pog)]);
+      const slots = [...allIds].map(id => {
+        const d = dex[id] || {}, p = pog[id] || {};
+        return {
+          id,
+          product:  p.product  || d.product  || '',
+          current:  d.currentSOH !== null && d.currentSOH !== undefined ? d.currentSOH : (p.currentSOH || 0),
+          par:      p.par      !== undefined ? p.par      : (d.par      || 0),
+          capacity: p.capacity !== undefined ? p.capacity : (d.capacity || 12),
+        };
+      }).filter(s => s.par > 0);
+      if (!STOPS[mid]) STOPS[mid] = { ...(MACHINE_META_DRIVER[mid] || {}), id: mid };
+      STOPS[mid].slots = slots;
+    } catch(e) {}
+  }));
+
+  renderLocations();
 }
 
 // ══════════════════════════════════════
@@ -1732,12 +1753,13 @@ function refreshStopDex(machineId, onDone) {
       }
     }
 
-    if (dex.dexReason === '1' && restockRow && restockEl) {
+    if ((dex.dexReason === '1' || dex.dexReason === 1 || dex.dexReasonLabel === 'restock') && restockRow && restockEl) {
       applyRestockDisplay(dexTime);
       if (onDone) onDone();
     } else if (restockRow) {
+      // Query by dexReasonLabel ('restock') to avoid type mismatch on dexReason (string vs number)
       fbDb.ref('vynd/dexHistory/' + machineId)
-        .orderByChild('dexReason').equalTo('1').limitToLast(1).once('value').then(hSnap => {
+        .orderByChild('dexReasonLabel').equalTo('restock').limitToLast(1).once('value').then(hSnap => {
           if (hSnap.exists()) {
             let lastRestock;
             hSnap.forEach(c => { lastRestock = c.val(); });
@@ -4852,10 +4874,33 @@ function saveAudit() {
   if (!currentStopId) return;
   const s = STOPS[currentStopId];
   if (!s || !auditState[currentStopId]) return;
+
   s.slots.forEach(slot => {
     const counted = auditState[currentStopId][slot.id];
     if (counted !== undefined) slot.current = counted;
   });
+
+  // Write audit counts to Firebase completedStops so server.js uses
+  // the physical count (ground truth) when the restock dial comes in
+  if (fbDb && currentStopId) {
+    const allSlots = s.slots.map(sl => ({
+      id:         sl.id,
+      product:    sl.product,
+      added:      stopSlotState[sl.id]?.added   || 0,
+      spoilt:     stopSlotState[sl.id]?.spoilt  || 0,
+      damaged:    stopSlotState[sl.id]?.damaged || 0,
+      auditCount: auditState[currentStopId]?.[sl.id] ?? null,
+      auditDone:  true,
+    }));
+    fbWrite('vynd/completedStops/' + currentStopId, {
+      machineId:   currentStopId,
+      completedAt: new Date().toISOString(),
+      runId:       currentRunData ? currentRunData.key : null,
+      auditDone:   true,
+      slots:       allSlots,
+    });
+  }
+
   updateStopAuditPill(currentStopId);
   const btn = document.getElementById('stop-audit-save-btn');
   if (btn) { btn.textContent = 'Audit saved ✓'; btn.style.background = 'rgba(74,222,128,.12)'; btn.style.color = 'var(--accent)'; btn.style.borderColor = 'rgba(74,222,128,.3)'; }
@@ -5970,7 +6015,7 @@ function listenForRestockDial(machineId) {
   const ref = fbDb.ref('vynd/dexReadings/' + machineId + '/last');
   const handler = ref.on('value', snap => {
     const data = snap.val();
-    if (!data || data.dexReason !== '1') return; // dexReason 1 = restock dial
+    if (!data || (data.dexReason !== '1' && data.dexReason !== 1 && data.dexReasonLabel !== 'restock')) return; // dexReason 1 = restock dial
 
     const slots    = data.slots || {};
     const s        = STOPS[machineId];

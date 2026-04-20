@@ -5500,7 +5500,7 @@ function showPlanogram(machineId) {
               id:       slot.id,
               tray:     letter,
               product:  getField('product', 'Empty'),
-              price:    parseFloat(String(getField('price', null) || getField('priceDollars', null) || slot.priceDollars || 0).replace('$','')),
+              price:    parseFloat(String(getField('price', null) || slot.priceDollars || 0).replace('$','')),
               current:  liveSOH[slot.id]?.currentSOH != null
                 ? liveSOH[slot.id].currentSOH
                 : (slot.currentSOH !== null && slot.currentSOH !== undefined && (slot.currentSOH > 0 || slot.cumulativeVends > 0))
@@ -6006,9 +6006,7 @@ function savePlanogram() {
     pog.slots.forEach(slot => {
       const slotData = {
         currentSOH:   slot.current !== undefined ? slot.current : (slot.currentSOH || 0),
-        priceCents:   Math.round((slot.price || 0) * 100),
-        priceDollars: parseFloat((slot.price || 0).toFixed(2)),
-        price:        parseFloat((slot.price || 0).toFixed(2)),
+        price:        parseFloat((slot.price || 0).toFixed(2)),   // VMS price — only field needed; do NOT write priceDollars/priceCents here
         product:      slot.product || 'Empty',
         par:          slot.par      || 0,
         capacity:     slot.capacity || 0,
@@ -11957,9 +11955,7 @@ function applyPanelChanges() {
       const slotPath = 'vynd/planograms/' + machineId + '/slots/' + slot.id;
       const updates  = {};
       updates[slotPath + '/product']      = slot.product || 'Empty';
-      updates[slotPath + '/price']        = newPrice;
-      updates[slotPath + '/priceCents']   = Math.round(newPrice * 100);
-      updates[slotPath + '/priceDollars'] = parseFloat(newPrice.toFixed(2));
+      updates[slotPath + '/price']        = newPrice;              // VMS price only — priceDollars is DEX territory
       updates[slotPath + '/par']          = newPar;
       updates[slotPath + '/capacity']     = newCap;
       updates[slotPath + '/currentSOH']   = slot.current;

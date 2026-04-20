@@ -1330,18 +1330,23 @@ async function loadHomeScreen() {
             STOPS[stop.id].status = stop.status || STOPS[stop.id].status;
           }
           if (dex?.slots) {
-            STOPS[stop.id].slots = Object.entries(dex.slots).map(([id, s]) => ({
-              id,
-              product:       s.product  || '',
-              price:         (s.priceCents || 0) / 100,
-              current:       s.currentSOH ?? 0,
-              par:           s.par        || 10,
-              capacity:      s.capacity   || 12,
-              dexVends:      s.vendsSinceLastRead || 0,
-              barcode:       s.barcode    || '',
-              // Overlay pendingChange from planogram — needed for STOPS card pill
-              pendingChange: (pog && pog[id] && pog[id].pendingChange) || null,
-            }));
+            STOPS[stop.id].slots = Object.entries(dex.slots).map(([id, s]) => {
+              const pogSlot = pog?.[id] || {};
+              const dexPriceDollars = s.priceDollars || (s.priceCents || 0) / 100;
+              const vmsPriceDollars = pogSlot.price || pogSlot.priceDollars || dexPriceDollars;
+              return {
+                id,
+                product:       pogSlot.product  || s.product  || '',
+                price:         vmsPriceDollars,               // planogram VMS price
+                dexPrice:      dexPriceDollars,               // machine DEX price
+                current:       s.currentSOH ?? 0,
+                par:           pogSlot.par      ?? s.par ?? 10,
+                capacity:      pogSlot.capacity ?? s.capacity ?? 12,
+                dexVends:      s.vendsSinceLastRead || 0,
+                barcode:       pogSlot.barcode  || s.barcode  || '',
+                pendingChange: (pog && pog[id] && pog[id].pendingChange) || null,
+              };
+            });
           } else if (pog) {
             // No DEX data yet — build from planogram only
             STOPS[stop.id].slots = Object.entries(pog).map(([id, p]) => ({
@@ -1410,6 +1415,7 @@ function renderHomeStops(stops) {
     const slots      = s.slots || [];
     const lowSlots   = slots.filter(sl => sl.current < sl.par * 0.3).length;
     const emptySlots = slots.filter(sl => sl.current === 0).length;
+    const priceSlots = slots.filter(sl => sl.dexPrice !== undefined && Math.abs((sl.dexPrice || 0) - (sl.price || 0)) > 0.005).length;
 
     // Pending pog changes
     const pogChangeCount = slots.filter(sl => sl.pendingChange && sl.pendingChange.changeType === 'queue').length;
@@ -1432,6 +1438,7 @@ function renderHomeStops(stops) {
     else                     tags.push('<span class="pill pill-blue">Pending</span>');
 
     if (pogChangeCount > 0)   tags.push('<span class="pill" style="background:rgba(245,158,11,.15);color:#f59e0b;border:1px solid rgba(245,158,11,.35);font-size:10px">⚠ ' + pogChangeCount + ' change' + (pogChangeCount > 1 ? 's' : '') + '</span>');
+    if (priceSlots > 0)       tags.push('<span class="pill" style="background:rgba(251,146,60,.12);color:var(--warn);border:1px solid rgba(251,146,60,.3);font-size:10px">💰 ' + priceSlots + ' price' + (priceSlots > 1 ? 's' : '') + '</span>');
     if (!isDone) {
       if (auditRequiredForStop(stop.id))  tags.push('<span class="pill pill-blue">📋 Audit</span>');
       if (photoRequiredForStop(stop.id))  tags.push('<span class="pill pill-blue">📷 Photo</span>');
@@ -1545,7 +1552,8 @@ async function loadAllMachinesForLocations() {
           current:       d.currentSOH !== null && d.currentSOH !== undefined ? d.currentSOH : (p.currentSOH || 0),
           par:           p.par      !== undefined ? p.par      : (d.par      || 0),
           capacity:      p.capacity !== undefined ? p.capacity : (d.capacity || 12),
-          price:         p.price    || d.priceDollars || 0,
+          price:         p.price    || d.priceDollars || 0,           // VMS/planogram price
+          dexPrice:      d.priceDollars || (d.priceCents || 0) / 100, // machine's actual programmed price
           barcode:       p.barcode  || d.barcode  || '',
           pendingChange: p.pendingChange || null,
         };
@@ -1812,6 +1820,31 @@ function refreshStopDex(machineId, onDone) {
       }
     }
 
+    // ── Cash estimate since last restock ──────────────────────────────────
+    // Find the last restock reading timestamp, then sum totalRevenueSinceLastRead
+    // for all dexHistory entries AFTER that point.
+    function updateCashEstimate(restockTimestamp) {
+      fbDb.ref('vynd/dexHistory/' + machineId).once('value').then(histSnap => {
+        let totalCents = 0;
+        histSnap.forEach(child => {
+          const r = child.val();
+          const ts = parseDexDate(r.transmitTime || r.createdAt);
+          if (!ts) return;
+          // Only include readings after the last restock (or all if no restock found)
+          if (restockTimestamp && ts <= restockTimestamp) return;
+          totalCents += (r.totalRevenueSinceLastRead || 0);
+        });
+        const dollars = totalCents / 100;
+        const cashStr = '$' + dollars.toFixed(2);
+        if (STOPS[machineId]) STOPS[machineId].cash = cashStr;
+        const cashEst = document.getElementById('stop-cash-est');
+        if (cashEst && currentStopMachineId === machineId) {
+          cashEst.textContent = cashStr;
+          cashEst.style.color = dollars > 0 ? 'var(--accent)' : 'var(--muted)';
+        }
+      }).catch(() => {});
+    }
+
     function applyRestockDisplay(date) {
       if (!restockRow || !restockEl) return;
       restockRow.style.display = '';
@@ -1828,22 +1861,28 @@ function refreshStopDex(machineId, onDone) {
 
     if ((dex.dexReason === '1' || dex.dexReason === 1 || dex.dexReasonLabel === 'restock') && restockRow && restockEl) {
       applyRestockDisplay(dexTime);
+      // This dial IS the restock — no prior revenue to sum, cash estimate is $0
+      updateCashEstimate(dexTime);
       if (onDone) onDone();
     } else if (restockRow) {
       // Query by dexReasonLabel ('restock') to avoid type mismatch on dexReason (string vs number)
       fbDb.ref('vynd/dexHistory/' + machineId)
         .orderByChild('dexReasonLabel').equalTo('restock').limitToLast(1).once('value').then(hSnap => {
+          let restockTs = null;
           if (hSnap.exists()) {
             let lastRestock;
             hSnap.forEach(c => { lastRestock = c.val(); });
             if (lastRestock && restockRow && restockEl) {
               const rd = parseDexDate(lastRestock.transmitTime || lastRestock.createdAt);
+              restockTs = rd;
               applyRestockDisplay(rd);
             }
           }
+          updateCashEstimate(restockTs);
           if (onDone) onDone();
-        }).catch(() => { if (onDone) onDone(); });
+        }).catch(() => { updateCashEstimate(null); if (onDone) onDone(); });
     } else {
+      updateCashEstimate(null);
       if (onDone) onDone();
     }
   }).catch(() => {
@@ -2115,9 +2154,16 @@ async function showStop(machineId) {
             const soh = sl.currentSOH ?? sl.current;
             if (soh != null) slotSOH[id] = soh;
           }
-          // Attach pendingChange to slot so fill guide can show it
+          // Attach pendingChange and VMS price to slot
           const slot = s.slots && s.slots.find(slot => slot.id === id);
-          if (slot && sl.pendingChange) slot.pendingChange = sl.pendingChange;
+          if (slot) {
+            if (sl.pendingChange) slot.pendingChange = sl.pendingChange;
+            // VMS price is planogram price — dexPrice keeps the machine's actual price
+            if (sl.price != null) {
+              slot.dexPrice = slot.dexPrice ?? slot.price; // preserve DEX price if not already set
+              slot.price = sl.price; // update to planogram VMS price
+            }
+          }
         });
       }
     } catch(e) { console.warn('SOH load:', e.message); }
@@ -2304,7 +2350,7 @@ async function showStop(machineId) {
   if(ft) ft.classList.toggle('on', hideFilledOn);
   if(fl) fl.textContent = hideFilledOn ? 'Show all' : 'Hide filled';
 
-  buildPlanogram(s);
+  try { buildPlanogram(s); } catch(e) { console.warn('buildPlanogram error:', e); }
   updateSOH(s);
   updateWasteSummary();
   initStopPhotoSection(machineId);
@@ -2316,6 +2362,7 @@ async function showStop(machineId) {
 function buildPlanogram(s) {
   const container = document.getElementById('planogram-slots');
   if (!container) return;
+  if (!s) { container.innerHTML = '<div class="text-muted" style="text-align:center;padding:24px">No stop data — go back and tap the stop again.</div>'; return; }
   container.innerHTML = '';
 
   // If no slots yet — try loading from Firebase dexReadings
@@ -2362,9 +2409,33 @@ function buildPlanogram(s) {
   }
 
   // Count mismatches for the summary banner
-  const mismatchSlots  = s.slots.filter(sl => sl.dexPrice !== undefined && Math.abs(sl.dexPrice - sl.price) > 0.001);
-  const prekitSlots    = s.slots.filter(sl => sl.prekit);
-  const pogChangeSlots = s.slots.filter(sl => sl.pendingChange && sl.pendingChange.changeType === 'queue');
+  const slots = Array.isArray(s.slots) ? s.slots : [];
+  const mismatchSlots  = slots.filter(sl => sl.dexPrice !== undefined && Math.abs((sl.dexPrice || 0) - (sl.price || 0)) > 0.005);
+  const prekitSlots    = slots.filter(sl => sl.prekit);
+  const pogChangeSlots = slots.filter(sl => sl.pendingChange && sl.pendingChange.changeType === 'queue');
+
+  // Price mismatch pill — shown above fill guide when machine price ≠ VMS price
+  const existingPricePill = document.getElementById('price-mismatch-pill');
+  if (existingPricePill) existingPricePill.remove();
+  if (mismatchSlots.length > 0) {
+    const pricePill = document.createElement('div');
+    pricePill.id = 'price-mismatch-pill';
+    pricePill.style.cssText = 'display:flex;align-items:center;gap:10px;padding:10px 14px;margin-bottom:-4px;background:rgba(251,146,60,.1);border:1px solid rgba(251,146,60,.35);border-radius:8px';
+    pricePill.innerHTML =
+      '<span style="font-size:18px;flex-shrink:0">💰</span>' +
+      '<div style="flex:1;min-width:0">' +
+        '<div style="font-size:13px;font-weight:700;color:var(--warn)">' + mismatchSlots.length + ' price mismatch' + (mismatchSlots.length > 1 ? 'es' : '') + '</div>' +
+        '<div style="font-size:11px;color:var(--muted);margin-top:1px">Machine price differs from VMS — update keypad &amp; label at affected slots</div>' +
+      '</div>' +
+      '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">' +
+        mismatchSlots.map(sl =>
+          '<div style="font-size:10px;font-family:\'DM Mono\',monospace;color:var(--warn);background:rgba(251,146,60,.15);padding:1px 6px;border-radius:3px">' +
+          'Slot ' + sl.id + ' · DEX $' + (sl.dexPrice || 0).toFixed(2) + ' → VMS $' + (sl.price || 0).toFixed(2) +
+          '</div>'
+        ).join('') +
+      '</div>';
+    container.parentNode.insertBefore(pricePill, container);
+  }
 
   // Planogram changes pill — shown above fill guide when swaps are queued
   const existingPogPill = document.getElementById('pog-changes-pill');
@@ -2387,18 +2458,6 @@ function buildPlanogram(s) {
     container.parentNode.insertBefore(pogPill, container);
   }
 
-  // Price mismatch banner
-  const existingBanner = document.getElementById('price-mismatch-banner');
-  if (existingBanner) existingBanner.remove();
-  if (mismatchSlots.length > 0) {
-    const banner = document.createElement('div');
-    banner.id = 'price-mismatch-banner';
-    banner.className = 'flag-row warn';
-    banner.style.cssText = 'margin-bottom:-4px';
-    banner.innerHTML = `<span class="flag-icon">💰</span><span class="flag-text"><strong>${mismatchSlots.length} price mismatch${mismatchSlots.length>1?'es':''} detected</strong> — DEX price differs from VMS. Update machine price labels and keypad for flagged slots.</span>`;
-    container.parentNode.insertBefore(banner, container);
-  }
-
   // Fresh / prekit banner
   const existingFreshBanner = document.getElementById('fresh-prekit-banner');
   if (existingFreshBanner) existingFreshBanner.remove();
@@ -2411,13 +2470,13 @@ function buildPlanogram(s) {
     container.parentNode.insertBefore(freshBanner, container);
   }
 
-  s.slots.forEach((slot, i) => {
+  slots.forEach((slot, i) => {
     const state    = stopSlotState[slot.id] || { added: 0, spoilt: 0, damaged: 0 };
     const capacity = slot.capacity || 12;
     const par      = slot.par || capacity;
     const current  = slot.current;
     const isPrekit = !!slot.prekit;
-    const isLast   = i === s.slots.length - 1;
+    const isLast   = i === slots.length - 1;
     const pct      = Math.min(current / capacity, 1);
     const barColor = pct > .5 ? 'var(--accent)' : pct > .2 ? 'var(--warn)' : 'var(--danger)';
     const maxAdd   = isPrekit ? par : Math.max(0, capacity - current);
@@ -6428,7 +6487,7 @@ function listenForRestockDial(machineId) {
     const s        = STOPS[machineId];
     if (!s) return;
 
-    // Update slot SOH from real DEX data
+    // Update slot SOH from real DEX data + check if prices now match
     s.slots.forEach(slot => {
       const dexSlot = slots[slot.id];
       if (!dexSlot) return;
@@ -6437,7 +6496,23 @@ function listenForRestockDial(machineId) {
         slot.current = truSOH;
         stopSlotState[slot.id] = { ...stopSlotState[slot.id], added: 0 }; // reset after dial
       }
+      // Restock dial reports the machine's current price — update dexPrice
+      // If the operator updated the keypad, this will now match the VMS price
+      const dialPrice = dexSlot.priceDollars || (dexSlot.priceCents || 0) / 100;
+      if (dialPrice > 0) slot.dexPrice = dialPrice;
     });
+
+    // Remove price mismatch pill if all slots now match
+    const stillMismatched = s.slots.filter(sl =>
+      sl.dexPrice !== undefined && Math.abs((sl.dexPrice || 0) - (sl.price || 0)) > 0.005
+    );
+    if (stillMismatched.length === 0) {
+      const pill = document.getElementById('price-mismatch-pill');
+      if (pill) pill.remove();
+    } else {
+      // Rebuild pill with updated mismatch list
+      if (currentStopMachineId === machineId) buildPlanogram(s);
+    }
 
     // Apply any pending planogram changes now that true SOH is known
     applyPendingPogChangesAfterDial(machineId, slots);

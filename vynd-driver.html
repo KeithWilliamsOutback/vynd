@@ -644,6 +644,59 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
 </div>
 
 <!-- ════════════════════════
+     SCREEN: MARKET STOP
+     Micromarket restock flow
+════════════════════════ -->
+<div class="screen" id="screen-market-stop">
+  <div class="topbar">
+    <button class="back-btn" onclick="showScreen('screen-home')">
+      <svg viewBox="0 0 16 16" fill="none"><path d="M10 4L6 8l4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Route
+    </button>
+    <div style="text-align:right">
+      <div class="topbar-title" id="mkt-stop-title">MKT-001</div>
+      <div class="topbar-sub" id="mkt-stop-sub">Micromarket</div>
+    </div>
+  </div>
+
+  <div class="scroll">
+
+    <!-- Status bar -->
+    <div class="card" style="cursor:default;margin-bottom:0">
+      <div class="row" style="margin-bottom:6px">
+        <div>
+          <div style="font-size:14px;font-weight:600" id="mkt-stop-name">Inland Distributors</div>
+          <div style="font-size:12px;color:var(--muted)" id="mkt-stop-addr">Break Room</div>
+        </div>
+        <span class="pill pill-blue" id="mkt-stop-status"><span class="pill-dot"></span>Pending</span>
+      </div>
+      <div style="display:flex;gap:16px;margin-top:8px">
+        <div><div style="font-family:'DM Mono',monospace;font-size:18px;font-weight:600" id="mkt-stop-low-count">—</div><div style="font-size:10px;color:var(--muted);text-transform:uppercase">Low stock</div></div>
+        <div><div style="font-family:'DM Mono',monospace;font-size:18px;font-weight:600" id="mkt-stop-product-count">—</div><div style="font-size:10px;color:var(--muted);text-transform:uppercase">Products</div></div>
+        <div><div style="font-family:'DM Mono',monospace;font-size:18px;font-weight:600" id="mkt-stop-total-units">—</div><div style="font-size:10px;color:var(--muted);text-transform:uppercase">Units to load</div></div>
+      </div>
+    </div>
+
+    <!-- Pick list — grouped by asset -->
+    <div id="mkt-stop-product-list" style="margin-top:4px">
+      <div style="text-align:center;padding:32px;color:var(--muted)">Loading market…</div>
+    </div>
+
+    <!-- Short supply notice -->
+    <div id="mkt-short-supply-notice" style="display:none;margin:4px 0;padding:10px 14px;background:rgba(251,146,60,.08);border:1px solid rgba(251,146,60,.25);border-radius:10px;font-size:12px;color:var(--warn)">
+      ⚠ Some quantities differ from the pick list — short supply allocation will run on import
+    </div>
+
+    <!-- Actions -->
+    <div style="margin-top:8px;display:flex;flex-direction:column;gap:8px" id="mkt-stop-actions">
+      <button class="btn btn-primary" onclick="completeMktStop()" id="mkt-complete-btn">✓ Confirm restock</button>
+      <button class="btn btn-secondary" onclick="showScreen('screen-home')">Back to route</button>
+    </div>
+
+    <div style="height:20px"></div>
+  </div>
+</div>
+
+<!-- ════════════════════════
      SCREEN: MACHINE DETAIL
 ════════════════════════ -->
 <div class="screen" id="screen-machine-detail">
@@ -1246,15 +1299,16 @@ async function loadHomeScreen() {
         const routeEl = document.getElementById('home-route-label');
         if (routeEl) routeEl.textContent = 'Route ' + (todayRun.routeId || '');
 
-        // Load DEX data for each stop
+        // Load DEX data + planogram pendingChange for each stop in parallel
         const stopPromises = todayRun.stops.map(stop =>
-          db.ref('vynd/dexReadings/' + stop.id + '/last').once('value')
-            .then(snap => ({ stop, dex: snap.val() }))
-            .catch(() => ({ stop, dex: null }))
+          Promise.all([
+            db.ref('vynd/dexReadings/' + stop.id + '/last').once('value').catch(() => null),
+            db.ref('vynd/planograms/'  + stop.id + '/slots').once('value').catch(() => null),
+          ]).then(([dexSnap, pogSnap]) => ({ stop, dex: dexSnap?.val(), pog: pogSnap?.val() }))
         );
         const stopData = await Promise.all(stopPromises);
 
-        stopData.forEach(({ stop, dex }) => {
+        stopData.forEach(({ stop, dex, pog }) => {
           const seed = MACHINE_META_DRIVER[stop.id] || {};
           if (!STOPS[stop.id]) {
             STOPS[stop.id] = {
@@ -1278,14 +1332,28 @@ async function loadHomeScreen() {
           if (dex?.slots) {
             STOPS[stop.id].slots = Object.entries(dex.slots).map(([id, s]) => ({
               id,
-              product:  s.product  || '',
-              price:    (s.priceCents || 0) / 100,
-              current:  s.currentSOH ?? 0,
-              par:      s.par        || 10,
-              capacity: s.capacity   || 12,
-              dexVends: s.vendsSinceLastRead || 0,
-              barcode:  s.barcode    || '',
+              product:       s.product  || '',
+              price:         (s.priceCents || 0) / 100,
+              current:       s.currentSOH ?? 0,
+              par:           s.par        || 10,
+              capacity:      s.capacity   || 12,
+              dexVends:      s.vendsSinceLastRead || 0,
+              barcode:       s.barcode    || '',
+              // Overlay pendingChange from planogram — needed for STOPS card pill
+              pendingChange: (pog && pog[id] && pog[id].pendingChange) || null,
             }));
+          } else if (pog) {
+            // No DEX data yet — build from planogram only
+            STOPS[stop.id].slots = Object.entries(pog).map(([id, p]) => ({
+              id,
+              product:       p.product   || '',
+              price:         p.price     || 0,
+              current:       p.currentSOH ?? 0,
+              par:           p.par       || 0,
+              capacity:      p.capacity  || 0,
+              barcode:       p.barcode   || '',
+              pendingChange: p.pendingChange || null,
+            })).filter(s => s.par > 0);
           }
           STOPS[stop.id].serviceOrder = stop.serviceOrder;
         });
@@ -1344,7 +1412,7 @@ function renderHomeStops(stops) {
     const emptySlots = slots.filter(sl => sl.current === 0).length;
 
     // Pending pog changes
-    const hasPogChanges = slots.some(sl => sl.pendingChange);
+    const pogChangeCount = slots.filter(sl => sl.pendingChange && sl.pendingChange.changeType === 'queue').length;
 
     const numStyle = isDone
       ? 'background:rgba(74,222,128,.15);border-color:rgba(74,222,128,.3);color:var(--accent)'
@@ -1363,7 +1431,7 @@ function renderHomeStops(stops) {
     else if (lowSlots > 0)   tags.push('<span class="pill pill-orange">' + lowSlots + ' slots low</span>');
     else                     tags.push('<span class="pill pill-blue">Pending</span>');
 
-    if (hasPogChanges)       tags.push('<span class="pill pill-orange">⚠ Pog change</span>');
+    if (pogChangeCount > 0)   tags.push('<span class="pill" style="background:rgba(245,158,11,.15);color:#f59e0b;border:1px solid rgba(245,158,11,.35);font-size:10px">⚠ ' + pogChangeCount + ' change' + (pogChangeCount > 1 ? 's' : '') + '</span>');
     if (!isDone) {
       if (auditRequiredForStop(stop.id))  tags.push('<span class="pill pill-blue">📋 Audit</span>');
       if (photoRequiredForStop(stop.id))  tags.push('<span class="pill pill-blue">📷 Photo</span>');
@@ -1371,13 +1439,15 @@ function renderHomeStops(stops) {
     tags.push('<span class="pill pill-gray">' + cashIcon + '</span>');
 
     return '<div class="stop-card-wrap" id="stop-' + stop.id + '-wrap">' +
-      '<div class="card" onclick="showStop(\'' + stop.id + '\')">' +
+      '<div class="card" onclick="' + (stop.type==='micromarket'?'showMarketStop':'showStop') + '(\'' + stop.id + '\')">' +
         '<div class="stop-card">' +
           '<div class="stop-num ' + (isDone ? 'done' : '') + '" style="' + numStyle + '">' + numContent + '</div>' +
           '<div class="stop-info">' +
             '<div class="stop-name">' + (s.locationName || stop.name || stop.id) + '</div>' +
             '<div class="stop-addr">' + (s.addr || '') + (s.addr ? ' · ' : '') + stop.id + '</div>' +
-            '<div class="stop-tags">' + tags.join('') + '</div>' +
+            '<div class="stop-tags">' + tags.join('') +
+            (stop.type==='micromarket' ? '<span class="pill" style="background:rgba(96,165,250,.12);color:#60a5fa;border:1px solid rgba(96,165,250,.25);font-size:10px">🏪 Market</span>' : '') +
+            '</div>' +
           '</div>' +
           '<div class="stop-right">' +
             '<svg class="arrow-icon" viewBox="0 0 16 16" fill="none" width="16"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
@@ -1471,10 +1541,13 @@ async function loadAllMachinesForLocations() {
         const d = dex[id] || {}, p = pog[id] || {};
         return {
           id,
-          product:  p.product  || d.product  || '',
-          current:  d.currentSOH !== null && d.currentSOH !== undefined ? d.currentSOH : (p.currentSOH || 0),
-          par:      p.par      !== undefined ? p.par      : (d.par      || 0),
-          capacity: p.capacity !== undefined ? p.capacity : (d.capacity || 12),
+          product:       p.product  || d.product  || '',
+          current:       d.currentSOH !== null && d.currentSOH !== undefined ? d.currentSOH : (p.currentSOH || 0),
+          par:           p.par      !== undefined ? p.par      : (d.par      || 0),
+          capacity:      p.capacity !== undefined ? p.capacity : (d.capacity || 12),
+          price:         p.price    || d.priceDollars || 0,
+          barcode:       p.barcode  || d.barcode  || '',
+          pendingChange: p.pendingChange || null,
         };
       }).filter(s => s.par > 0);
       if (!STOPS[mid]) STOPS[mid] = { ...(MACHINE_META_DRIVER[mid] || {}), id: mid };
@@ -1779,6 +1852,239 @@ function refreshStopDex(machineId, onDone) {
   });
 }
 
+// ══════════════════════════════════════════════════════
+// MARKET STOP — micromarket restock flow
+// Reads catalogue from vynd/micromarkets/{id}/catalogue
+// Driver enters total units loaded per product (not per lane)
+// On complete: writes new SOH to Firebase + logs restock event
+// ══════════════════════════════════════════════════════
+
+// Current market stop state
+let currentMarketStop = null; // { stopId, marketId, name, addr, products: [] }
+let mktLoadedQty      = {};   // barcode → units driver loaded this visit
+
+async function showMarketStop(stopId) {
+  // Find the stop definition from the run
+  const run = currentRunData;
+  const stopDef = run?.stops?.find(s => s.id === stopId) || {};
+  const marketId = stopDef.marketId || stopId;
+
+  currentMarketStop = { stopId, marketId, name: stopDef.name || stopId, addr: stopDef.addr || 'Micromarket' };
+  mktLoadedQty = {};
+
+  // Update header
+  const el = id => document.getElementById(id);
+  el('mkt-stop-title').textContent  = stopId;
+  el('mkt-stop-sub').textContent    = 'Micromarket';
+  el('mkt-stop-name').textContent   = stopDef.name || stopId;
+  el('mkt-stop-addr').textContent   = stopDef.addr || 'Break Room';
+  el('mkt-stop-product-list').innerHTML = '<div style="text-align:center;padding:32px;color:var(--muted)">Loading market…</div>';
+  el('mkt-short-supply-notice').style.display = 'none';
+  showScreen('screen-market-stop');
+
+  // Load catalogue + planogram assets from Firebase
+  let catalogue = {}, assets = [];
+  if (fbDb) {
+    try {
+      const [catSnap, assetSnap] = await Promise.all([
+        fbDb.ref('vynd/micromarkets/' + marketId + '/catalogue').once('value'),
+        fbDb.ref('vynd/micromarkets/' + marketId + '/planogramAssets').once('value'),
+      ]);
+      catalogue = catSnap.val() || {};
+      const rawAssets = assetSnap.val() || {};
+
+      // Build per-barcode product summary with lane placements
+      const barcodeMap = {};
+      Object.entries(rawAssets).forEach(([aid, asset]) => {
+        Object.values(asset.slots || {}).forEach(slot => {
+          if (!slot.barcode) return;
+          const bc = slot.barcode;
+          const catEntry = catalogue[bc] || {};
+          if (!barcodeMap[bc]) {
+            barcodeMap[bc] = {
+              barcode:       bc,
+              name:          catEntry.name || bc,
+              stock:         catEntry.stock ?? 0,
+              totalPar:      0,
+              totalCapacity: 0,
+              lanes:         [],
+            };
+          }
+          barcodeMap[bc].totalPar      += (slot.par      || 0);
+          barcodeMap[bc].totalCapacity += (slot.capacity || 0);
+          barcodeMap[bc].lanes.push({ assetLabel: asset.label || 'Asset', par: slot.par || 0, capacity: slot.capacity || 0 });
+        });
+      });
+      assets = Object.values(barcodeMap);
+    } catch(e) { console.warn('[Market stop] load:', e.message); }
+  }
+
+  currentMarketStop.products = assets;
+
+  // Load pick export quantities for this stop if available
+  const pickQtyByBarcode = {};
+  let hasPickExport = false;
+  if (fbDb && run) {
+    try {
+      const dateKey = (run.plannedDate || new Date().toLocaleDateString('en-CA')).replace(/-/g,'');
+      const exportKey = dateKey + '_' + (run.routeId || 'all');
+      const snap = await fbDb.ref('vynd/pickExports/' + exportKey).once('value');
+      const data = snap.val();
+      if (data?.lockedLines) {
+        data.lockedLines.filter(l => l.machineId === stopId || l.machineId === marketId).forEach(l => {
+          const qty = Math.max(0, l.pickQty - (l.shortSupply || 0));
+          pickQtyByBarcode[l.barcode] = qty;
+        });
+        hasPickExport = Object.keys(pickQtyByBarcode).length > 0;
+      }
+    } catch(e) {}
+  }
+
+  // Pre-fill loaded qty from pick export if available, else from par - soh
+  assets.forEach(p => {
+    const pickQty = pickQtyByBarcode[p.barcode];
+    mktLoadedQty[p.barcode] = pickQty != null ? pickQty : Math.max(0, p.totalPar - p.stock);
+  });
+
+  renderMktStopProducts(assets, hasPickExport);
+}
+
+function renderMktStopProducts(products, hasPickExport) {
+  const el = id => document.getElementById(id);
+  const low = products.filter(p => p.stock < p.totalPar).length;
+  const totalUnits = products.reduce((sum, p) => sum + (mktLoadedQty[p.barcode] || 0), 0);
+
+  el('mkt-stop-low-count').textContent  = low;
+  el('mkt-stop-product-count').textContent = products.length;
+  el('mkt-stop-total-units').textContent = totalUnits;
+
+  if (!products.length) {
+    el('mkt-stop-product-list').innerHTML = '<div class="card" style="text-align:center;color:var(--muted);font-size:13px">No products in this market.<br>Check the planogram in the portal.</div>';
+    return;
+  }
+
+  // Sort: low stock first, then alphabetically
+  const sorted = [...products].sort((a, b) => {
+    const aLow = a.stock < a.totalPar ? 0 : 1;
+    const bLow = b.stock < b.totalPar ? 0 : 1;
+    return aLow - bLow || (a.name||'').localeCompare(b.name||'');
+  });
+
+  el('mkt-stop-product-list').innerHTML = sorted.map(p => {
+    const loaded    = mktLoadedQty[p.barcode] || 0;
+    const isLow     = p.stock < p.totalPar;
+    const newSOH    = p.stock + loaded;
+    const overCap   = p.totalCapacity > 0 && newSOH > p.totalCapacity;
+    const laneHint  = p.lanes.length > 1 ? `<div style="font-size:10px;color:var(--muted);margin-top:2px">Spread across ${p.lanes.length} lanes in ${[...new Set(p.lanes.map(l=>l.assetLabel))].join(', ')}</div>` : p.lanes.length===1?`<div style="font-size:10px;color:var(--muted);margin-top:2px">${p.lanes[0].assetLabel}</div>`:'';
+
+    return `<div class="card" style="cursor:default;margin-bottom:4px;${isLow?'border-left:3px solid var(--warn)':''}">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600;color:var(--text)">${p.name}</div>
+          <div style="font-size:11px;font-family:'DM Mono',monospace;color:var(--muted);margin-top:2px">${p.barcode}</div>
+          ${laneHint}
+          <div style="display:flex;gap:12px;margin-top:8px">
+            <div><div style="font-family:'DM Mono',monospace;font-size:15px;font-weight:600;color:${isLow?'var(--warn)':'var(--text)'}">${p.stock}</div><div style="font-size:9px;color:var(--muted);text-transform:uppercase">Current SOH</div></div>
+            <div><div style="font-family:'DM Mono',monospace;font-size:15px;font-weight:600;color:var(--muted)">${p.totalPar}</div><div style="font-size:9px;color:var(--muted);text-transform:uppercase">Par</div></div>
+            <div><div style="font-family:'DM Mono',monospace;font-size:15px;font-weight:600;color:${overCap?'var(--danger)':newSOH>p.totalPar?'var(--accent)':'var(--text)'}">${newSOH}</div><div style="font-size:9px;color:var(--muted);text-transform:uppercase">After load</div></div>
+          </div>
+          ${overCap?`<div style="font-size:10px;color:var(--danger);margin-top:4px">⚠ Exceeds shelf capacity (${p.totalCapacity})</div>`:''}
+        </div>
+        <!-- Qty adjuster -->
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0">
+          <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Load</div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <button onclick="mktAdjQty('${p.barcode}',-1)" style="width:32px;height:32px;border-radius:50%;background:var(--surface);border:1px solid var(--border2);color:var(--text);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-weight:700">−</button>
+            <div style="font-family:'DM Mono',monospace;font-size:22px;font-weight:600;min-width:36px;text-align:center;color:${loaded>0?'var(--accent)':'var(--muted)'}">${loaded}</div>
+            <button onclick="mktAdjQty('${p.barcode}',1)" style="width:32px;height:32px;border-radius:50%;background:var(--surface);border:1px solid var(--border2);color:var(--text);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-weight:700">+</button>
+          </div>
+          <div style="font-size:9px;color:var(--muted)">units</div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Short supply notice — show if any loaded qty differs from pick export qty
+  if (hasPickExport) {
+    const hasDiff = products.some(p => {
+      const loaded = mktLoadedQty[p.barcode] || 0;
+      const needed = Math.max(0, p.totalPar - p.stock);
+      return loaded > 0 && loaded < needed;
+    });
+    el('mkt-short-supply-notice').style.display = hasDiff ? '' : 'none';
+  }
+}
+
+window.mktAdjQty = function(barcode, delta) {
+  mktLoadedQty[barcode] = Math.max(0, (mktLoadedQty[barcode] || 0) + delta);
+  if (currentMarketStop?.products) renderMktStopProducts(currentMarketStop.products, false);
+};
+
+async function completeMktStop() {
+  if (!currentMarketStop) return;
+  const { stopId, marketId, products } = currentMarketStop;
+  const btn = document.getElementById('mkt-complete-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+
+  const updates = {};
+  const restockedAt = new Date().toISOString();
+
+  // Write updated SOH for each product and log restock line
+  const restockLines = [];
+  products.forEach(p => {
+    const loaded = mktLoadedQty[p.barcode] || 0;
+    if (loaded === 0) return; // only write products that were actually loaded
+    const newSOH = p.stock + loaded;
+    updates['vynd/micromarkets/' + marketId + '/catalogue/' + p.barcode + '/stock'] = newSOH;
+    restockLines.push({ barcode: p.barcode, name: p.name, soHBefore: p.stock, unitsLoaded: loaded, sohAfter: newSOH });
+  });
+
+  // Restock event log
+  const eventKey = 'restock_' + Date.now();
+  updates['vynd/micromarkets/' + marketId + '/restockEvents/' + eventKey] = {
+    restockedAt,
+    driverId:   userPrefs?.driverId || 'unknown',
+    driverName: userPrefs?.driverName || 'Driver',
+    marketId,
+    stopId,
+    lines:      restockLines,
+    runId:      currentRunData?.id || null,
+  };
+
+  if (fbDb && restockLines.length) {
+    try {
+      await fbDb.ref().update(updates);
+    } catch(e) { console.warn('[Market stop] SOH write failed:', e.message); }
+  }
+
+  // Mark stop done in STOPS
+  if (!STOPS[stopId]) STOPS[stopId] = {};
+  STOPS[stopId].status = 'done';
+  STOPS[stopId].restockedAt = restockedAt;
+
+  // Mark run stop done in Firebase
+  if (fbDb && currentRunData?.id) {
+    fbDb.ref('vynd/runs/' + currentRunData.id + '/stops').once('value').then(snap => {
+      const stops = snap.val() || [];
+      const idx = Array.isArray(stops) ? stops.findIndex(s => s.id === stopId) : -1;
+      if (idx >= 0) fbDb.ref('vynd/runs/' + currentRunData.id + '/stops/' + idx + '/status').set('done');
+    }).catch(() => {});
+  }
+
+  // Update home stop card
+  const wrap = document.getElementById('stop-' + stopId + '-wrap');
+  if (wrap) {
+    const numEl = wrap.querySelector('.stop-num');
+    if (numEl) { numEl.classList.add('done'); numEl.textContent = '✓'; numEl.style.cssText += ';background:rgba(74,222,128,.15);border-color:rgba(74,222,128,.3);color:var(--accent)'; }
+    const tagsEl = wrap.querySelector('.stop-tags');
+    if (tagsEl) tagsEl.innerHTML = '<span class="pill pill-green">Done</span><span class="pill" style="background:rgba(96,165,250,.12);color:#60a5fa;border:1px solid rgba(96,165,250,.25);font-size:10px">🏪 Market</span>';
+  }
+
+  showScreen('screen-home');
+  if (currentRunData?.stops) updateHomeProgress(currentRunData.stops);
+  showToast('Restock saved — ' + restockLines.length + ' product' + (restockLines.length !== 1 ? 's' : '') + ' updated ✓');
+}
+
 async function showStop(machineId) {
   const s = STOPS[machineId];
   currentStopId = machineId;
@@ -1804,10 +2110,14 @@ async function showStop(machineId) {
       const pogSnap = await fbDb.ref('vynd/planograms/' + machineId + '/slots').once('value');
       if (pogSnap && pogSnap.val()) {
         Object.entries(pogSnap.val()).forEach(([id, sl]) => {
+          // Fill in missing SOH from planogram
           if (slotSOH[id] == null) {
             const soh = sl.currentSOH ?? sl.current;
             if (soh != null) slotSOH[id] = soh;
           }
+          // Attach pendingChange to slot so fill guide can show it
+          const slot = s.slots && s.slots.find(slot => slot.id === id);
+          if (slot && sl.pendingChange) slot.pendingChange = sl.pendingChange;
         });
       }
     } catch(e) { console.warn('SOH load:', e.message); }
@@ -2052,8 +2362,30 @@ function buildPlanogram(s) {
   }
 
   // Count mismatches for the summary banner
-  const mismatchSlots = s.slots.filter(sl => sl.dexPrice !== undefined && Math.abs(sl.dexPrice - sl.price) > 0.001);
-  const prekitSlots   = s.slots.filter(sl => sl.prekit);
+  const mismatchSlots  = s.slots.filter(sl => sl.dexPrice !== undefined && Math.abs(sl.dexPrice - sl.price) > 0.001);
+  const prekitSlots    = s.slots.filter(sl => sl.prekit);
+  const pogChangeSlots = s.slots.filter(sl => sl.pendingChange && sl.pendingChange.changeType === 'queue');
+
+  // Planogram changes pill — shown above fill guide when swaps are queued
+  const existingPogPill = document.getElementById('pog-changes-pill');
+  if (existingPogPill) existingPogPill.remove();
+  if (pogChangeSlots.length > 0) {
+    const pogPill = document.createElement('div');
+    pogPill.id = 'pog-changes-pill';
+    pogPill.style.cssText = 'display:flex;align-items:center;gap:10px;padding:10px 14px;margin-bottom:-4px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.35);border-radius:8px';
+    pogPill.innerHTML =
+      '<span style="font-size:18px;flex-shrink:0">⚠️</span>' +
+      '<div style="flex:1;min-width:0">' +
+        '<div style="font-size:13px;font-weight:700;color:#f59e0b">' + pogChangeSlots.length + ' planogram change' + (pogChangeSlots.length > 1 ? 's' : '') + ' at this stop</div>' +
+        '<div style="font-size:11px;color:var(--muted);margin-top:1px">Slots marked <strong style="color:#f59e0b">SWAP</strong> below — complete before filling regular stock</div>' +
+      '</div>' +
+      '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">' +
+        pogChangeSlots.map(sl =>
+          '<div style="font-size:10px;font-family:\'DM Mono\',monospace;color:#f59e0b;background:rgba(245,158,11,.15);padding:1px 6px;border-radius:3px">Slot ' + sl.id + '</div>'
+        ).join('') +
+      '</div>';
+    container.parentNode.insertBefore(pogPill, container);
+  }
 
   // Price mismatch banner
   const existingBanner = document.getElementById('price-mismatch-banner');
@@ -2105,7 +2437,12 @@ function buildPlanogram(s) {
     const dexLower    = isPriceMismatch && slot.dexPrice < slot.price;
 
     const row = document.createElement('div');
-    row.className = 'fg-row' + (isLast ? ' fg-last' : '') + (isFull && !isPrekit ? ' fg-filled' : '') + (isPriceMismatch ? ' fg-price-mismatch' : '') + (isPrekit ? ' fg-prekit' : '');
+    row.className = 'fg-row'
+      + (isLast ? ' fg-last' : '')
+      + (isFull && !isPrekit ? ' fg-filled' : '')
+      + (isPriceMismatch ? ' fg-price-mismatch' : '')
+      + (isPrekit ? ' fg-prekit' : '')
+      + (notOnPick ? ' not-on-pick' : '');
     row.dataset.slotId = slot.id;
     row.dataset.filled = (isFull && !isPrekit) ? '1' : '0';
 
@@ -2153,7 +2490,8 @@ function buildPlanogram(s) {
     infoDiv.appendChild(barWrap);
 
     const stepper = document.createElement('div');
-    stepper.style.cssText = 'display:flex;align-items:center;border:1px solid var(--border2);border-radius:8px;overflow:hidden' + (isPrekit ? ';opacity:.5;pointer-events:none' : '');
+    stepper.style.cssText = 'display:flex;align-items:center;border:1px solid var(--border2);border-radius:8px;overflow:hidden'
+      + ((isPrekit || notOnPick) ? ';opacity:.35;pointer-events:none' : '');
 
     const btnMinus = document.createElement('button');
     btnMinus.style.cssText = 'width:30px;height:30px;background:var(--surface);border:none;color:var(--text);font-size:17px;cursor:pointer;font-family:inherit';
@@ -2163,7 +2501,7 @@ function buildPlanogram(s) {
     const valDiv = document.createElement('div');
     valDiv.id = 'fg-val-' + slot.id;
     valDiv.style.cssText = "width:32px;text-align:center;font-family:'DM Mono',monospace;font-size:13px;font-weight:500;background:var(--surface);color:var(--text);border-left:1px solid var(--border2);border-right:1px solid var(--border2);height:30px;line-height:30px";
-    valDiv.textContent = isPrekit ? par : (isFull ? '✓' : state.added);
+    valDiv.textContent = isPrekit ? par : (isFull ? '✓' : (notOnPick ? '—' : state.added));
 
     const btnPlus = document.createElement('button');
     btnPlus.style.cssText = 'width:30px;height:30px;background:var(--surface);border:none;color:var(--text);font-size:17px;cursor:pointer;font-family:inherit';
@@ -2205,6 +2543,75 @@ function buildPlanogram(s) {
       freshBadge.style.cssText = 'display:inline-flex;align-items:center;gap:3px;font-size:10px;padding:2px 8px;border-radius:99px;font-weight:600;background:rgba(74,222,128,.12);color:var(--accent);border:1px solid rgba(74,222,128,.25)';
       freshBadge.innerHTML = `🥬 ${current} units auto-spoilt`;
       tagsRow.appendChild(freshBadge);
+    }
+
+    // ── Planogram change — shown inline in the fill guide ─────────────
+    const pc = slot.pendingChange;
+    if (pc && pc.changeType === 'queue') {
+      const newPar        = pc.newPar || par;
+      const loadQty       = pc.pickQty || 0;
+      const moveQty       = (pc.isMove && pc.existingSOHofNew > 0) ? pc.existingSOHofNew : 0;
+      const totalIncoming = loadQty + moveQty;
+
+      // Style row with amber left border
+      inner.style.cssText = (inner.style.cssText || '') + ';border-left:3px solid #f59e0b;background:rgba(245,158,11,.04)';
+
+      // Show NEW product in name — driver is loading this
+      prodDiv.innerHTML = `<span style="font-size:9px;font-weight:700;color:#f59e0b;background:rgba(245,158,11,.15);padding:1px 5px;border-radius:3px;margin-right:5px;vertical-align:middle;letter-spacing:.3px">SWAP</span>${pc.newProduct}`;
+      subDiv.textContent = `New par ${newPar} · load ${totalIncoming} unit${totalIncoming !== 1 ? 's' : ''}`;
+
+      // Clean step-by-step action cards
+      const changeBanner = document.createElement('div');
+      changeBanner.style.cssText = 'margin-top:10px;display:flex;flex-direction:column;gap:5px;width:100%';
+
+      const makeStep = (num, icon, color, bg, border, actionLabel, qty, productName) => {
+        const row = document.createElement('div');
+        row.style.cssText = `display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:7px;background:${bg};border:1px solid ${border}`;
+        row.innerHTML = `
+          <div style="width:18px;height:18px;border-radius:50%;background:${color};color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${num}</div>
+          <div style="font-size:11px;color:${color};font-weight:700;flex-shrink:0">${icon} ${actionLabel}</div>
+          <div style="flex:1;min-width:0;font-size:11px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${productName}</div>
+          <div style="font-family:'DM Mono',monospace;font-size:13px;font-weight:700;color:${color};flex-shrink:0">×${qty}</div>`;
+        return row;
+      };
+
+      let step = 1;
+
+      // Step 1: COLLECT old product
+      if (pc.collectQty > 0) {
+        changeBanner.appendChild(makeStep(step++, '🔄', '#ef4444', 'rgba(248,113,113,.08)', 'rgba(248,113,113,.2)',
+          'COLLECT', pc.collectQty, slot.product));
+      }
+
+      // Step N: MOVE from another slot
+      if (pc.isMove && moveQty > 0) {
+        const srcSlots = s.slots.filter(sl => sl.product === pc.newProduct && sl.id !== slot.id);
+        const srcLabel = srcSlots.length > 0 ? 'from slot ' + srcSlots.map(sl => sl.id).join(', ') : '';
+        changeBanner.appendChild(makeStep(step++, '↔', '#a78bfa', 'rgba(167,139,250,.08)', 'rgba(167,139,250,.2)',
+          'MOVE ' + srcLabel, moveQty, pc.newProduct));
+      }
+
+      // Step N: LOAD from van
+      if (loadQty > 0) {
+        changeBanner.appendChild(makeStep(step++, '📦', '#3b82f6', 'rgba(96,165,250,.08)', 'rgba(96,165,250,.2)',
+          'LOAD from van', loadQty, pc.newProduct));
+      } else if (moveQty > 0) {
+        const okRow = document.createElement('div');
+        okRow.style.cssText = 'font-size:11px;color:var(--accent);padding:4px 8px;border-radius:6px;background:rgba(74,222,128,.06);border:1px solid rgba(74,222,128,.15)';
+        okRow.textContent = '✓ Moved stock covers par — no van pick needed';
+        changeBanner.appendChild(okRow);
+      }
+
+      infoDiv.appendChild(changeBanner);
+
+      // Stepper pre-loaded with total incoming qty for new product
+      valDiv.textContent = totalIncoming || 0;
+      stopSlotState[slot.id] = { added: totalIncoming, spoilt: 0, damaged: 0, notOnPick: false };
+
+      // Stepper bounds: max = newPar (can't overfill), min = 0
+      btnPlus.onclick  = () => fgAdj(slot.id, 1, newPar, 0);
+      btnMinus.onclick = () => fgAdj(slot.id, -1, newPar, 0);
+      confirmBtn.onclick = () => fgConfirm(slot.id, newPar, capacity, 0);
     }
 
     inner.appendChild(slotIdDiv);
@@ -2311,16 +2718,16 @@ function buildPlanogram(s) {
 
   // Show toggle only when audit is NOT required (audit forces all lanes visible)
   const isAudit = auditRequiredForStop(currentStopId);
-  showUnpickedOn = isAudit; // treat as "show all" mode when auditing
+  showUnpickedOn = isAudit; // audit mode = show all lanes; normal mode = pick list only
   const unpickedCount = s.slots.filter(sl => stopSlotState[sl.id]?.notOnPick).length;
   const unpickedWrap  = document.getElementById('unpicked-toggle-wrap');
   const unpickedTrack = document.getElementById('unpicked-toggle');
   const unpickedLabel = document.getElementById('unpicked-toggle-lbl');
   if (unpickedWrap) {
-    // Hide the toggle entirely during audit — "show all" is locked on
+    // Show toggle when there are not-on-pick slots and not in audit (audit locks to show-all)
     unpickedWrap.style.display = (unpickedCount > 0 && !isAudit) ? '' : 'none';
-    if (unpickedTrack) unpickedTrack.classList.toggle('on', isAudit);
-    if (unpickedLabel) unpickedLabel.textContent = isAudit ? 'Pick list only' : 'Show all';
+    if (unpickedTrack) unpickedTrack.classList.toggle('on', showUnpickedOn);
+    if (unpickedLabel) unpickedLabel.textContent = showUnpickedOn ? 'Hide no-pick' : 'Show all';
   }
 }
 
@@ -2830,7 +3237,7 @@ function toggleUnpickedSlots() {
   const track = document.getElementById('unpicked-toggle');
   const label = document.getElementById('unpicked-toggle-lbl');
   if (track) track.classList.toggle('on', showUnpickedOn);
-  if (label) label.textContent = showUnpickedOn ? 'Pick list only' : 'Show all';
+  if (label) label.textContent = showUnpickedOn ? 'Hide no-pick' : 'Show all';
   document.querySelectorAll('.fg-row.not-on-pick').forEach(row => {
     row.classList.toggle('fg-hidden', !showUnpickedOn);
   });

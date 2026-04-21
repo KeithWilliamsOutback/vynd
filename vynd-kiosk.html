@@ -1103,6 +1103,9 @@ window.filterProducts=v=>renderProducts(v);
    BASKET
    ═══════════════════════════════ */
 window.addToBasket=function(barcode,flagType){
+  // Clear search box so all products show after selection
+  const inp=el('search-input');
+  if(inp&&inp.value){inp.value='';filterProducts('');}
   const cat=STATE.catalogue[barcode], dbp=STATE.productDB[barcode], src=cat||dbp;
   const name=src?.name||`Unknown (${barcode})`;
   const priceCents=flagType==='unknown'?KIOSK_CONFIG.fallbackPriceCents:cat?.priceCents??dbp?.priceCents??KIOSK_CONFIG.fallbackPriceCents;

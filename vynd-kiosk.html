@@ -1061,7 +1061,7 @@ function renderProducts(filter) {
     const inB=STATE.basket.find(b=>b.barcode===bc), oos=(p.stock||0)<=0;
     const promo=getItemPromo(bc);
     const discAmt=promo?calcDisc(promo.discount,p.priceCents):0;
-    const img=p.imageUrl?`<img class="product-img" src="${p.imageUrl}" alt="${p.name}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="product-img-placeholder" style="display:none">📦</div>`:`<div class="product-img-placeholder">📦</div>`;
+    const img=p.image||p.imageUrl?`<img class="product-img" src="${p.image||p.imageUrl}" alt="${p.name}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="product-img-placeholder" style="display:none">📦</div>`:`<div class="product-img-placeholder">📦</div>`;
     const priceHtml=discAmt>0
       ?`<div class="product-price has-promo"><span class="price-was">$${(p.priceCents/100).toFixed(2)}</span><span class="price-now">$${((p.priceCents-discAmt)/100).toFixed(2)}</span></div>`
       :`<div class="product-price">$${(p.priceCents/100).toFixed(2)}</div>`;
@@ -1084,7 +1084,7 @@ window.addToBasket=function(barcode,flagType){
   const priceCents=flagType==='unknown'?KIOSK_CONFIG.fallbackPriceCents:cat?.priceCents??dbp?.priceCents??KIOSK_CONFIG.fallbackPriceCents;
   const existing=STATE.basket.find(b=>b.barcode===barcode);
   if(existing){existing.qty++;}
-  else{STATE.basket.push({barcode,qty:1,name,priceCents,imageUrl:src?.imageUrl||'',gst:src?.gst!==false,flagType:flagType||null,discountCentsPerUnit:0,promoId:null,promoName:null,promoBadge:null});}
+  else{STATE.basket.push({barcode,qty:1,name,priceCents,imageUrl:src?.image||src?.imageUrl||'',gst:src?.gst!==false,flagType:flagType||null,discountCentsPerUnit:0,promoId:null,promoName:null,promoBadge:null});}
   recalcPromotions();
   renderBasket(); renderProducts(el('search-input').value);
   resetIdleTimer();

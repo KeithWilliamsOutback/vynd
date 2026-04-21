@@ -402,9 +402,21 @@
 </div>
 
 <!-- ─── SUCCESS ─── -->
-<div id="screen-success" class="screen">
+<div id="screen-success" class="screen" style="align-items:center;justify-content:center;background:linear-gradient(145deg,#0a1628 0%,#0d2818 60%,#0a1628 100%)">
   <div class="success-inner">
-    <div class="success-tick">✅</div>
+    <div class="success-tick-wrap" id="success-tick-wrap">
+      <svg id="success-tick-svg" viewBox="0 0 120 120" width="220" height="220">
+        <circle cx="60" cy="60" r="54" fill="none" stroke="#10b981" stroke-width="6" opacity="0.25"/>
+        <circle cx="60" cy="60" r="54" fill="none" stroke="#10b981" stroke-width="6"
+          stroke-dasharray="339" stroke-dashoffset="339"
+          style="transition:stroke-dashoffset 0.6s cubic-bezier(.4,0,.2,1);transform:rotate(-90deg);transform-origin:60px 60px"
+          id="success-circle"/>
+        <polyline points="34,62 52,80 86,42" fill="none" stroke="#10b981" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"
+          stroke-dasharray="80" stroke-dashoffset="80"
+          style="transition:stroke-dashoffset 0.4s 0.5s cubic-bezier(.4,0,.2,1)"
+          id="success-check"/>
+      </svg>
+    </div>
     <div class="success-title">Thank you!</div>
     <div class="success-ref" id="success-ref"></div>
     <div class="success-summary" id="success-summary"></div>
@@ -415,9 +427,23 @@
 </div>
 
 <!-- ─── DECLINED ─── -->
-<div id="screen-declined" class="screen">
+<div id="screen-declined" class="screen" style="align-items:center;justify-content:center;background:linear-gradient(145deg,#0a1628 0%,#1a0a0a 60%,#0a1628 100%)">
   <div class="declined-inner">
-    <div class="declined-icon">❌</div>
+    <svg viewBox="0 0 120 120" width="200" height="200" id="declined-x-svg">
+      <circle cx="60" cy="60" r="54" fill="none" stroke="#ef4444" stroke-width="6" opacity="0.25"/>
+      <circle cx="60" cy="60" r="54" fill="none" stroke="#ef4444" stroke-width="6"
+        stroke-dasharray="339" stroke-dashoffset="339"
+        style="transition:stroke-dashoffset 0.6s cubic-bezier(.4,0,.2,1);transform:rotate(-90deg);transform-origin:60px 60px"
+        id="declined-circle"/>
+      <line x1="40" y1="40" x2="80" y2="80" stroke="#ef4444" stroke-width="7" stroke-linecap="round"
+        stroke-dasharray="57" stroke-dashoffset="57"
+        style="transition:stroke-dashoffset 0.3s 0.5s cubic-bezier(.4,0,.2,1)"
+        id="declined-line1"/>
+      <line x1="80" y1="40" x2="40" y2="80" stroke="#ef4444" stroke-width="7" stroke-linecap="round"
+        stroke-dasharray="57" stroke-dashoffset="57"
+        style="transition:stroke-dashoffset 0.3s 0.65s cubic-bezier(.4,0,.2,1)"
+        id="declined-line2"/>
+    </svg>
     <div class="declined-title">Payment not approved</div>
     <div class="declined-msg" id="declined-msg">Your card was not approved. Please try again or use a different card.</div>
     <div class="declined-actions">
@@ -1136,6 +1162,9 @@ window.clearBasket=function(){
   STATE.basket=[];
   recalcPromotions();
   renderBasket(); renderProducts(el('search-input').value);
+  // Refocus search so next scan/type goes straight to cart
+  const inp = el('search-input');
+  if(inp){ inp.value=''; filterProducts(''); inp.focus(); }
 };
 
 function renderBasket(){
@@ -1221,9 +1250,16 @@ function renderBasket(){
    ═══════════════════════════════ */
 let scanBuf='', scanLast=0;
 const SCAN_MS=80;
+// Suppress scanner input during touch scroll
+let _touchScrolling = false;
+document.addEventListener('touchstart', () => { _touchScrolling = false; }, { passive: true });
+document.addEventListener('touchmove',  () => { _touchScrolling = true;  }, { passive: true });
+document.addEventListener('touchend',   () => { setTimeout(() => { _touchScrolling = false; }, 150); }, { passive: true });
+
 document.addEventListener('keydown',e=>{
   if(STATE.screen!=='shopping')return;
   if(document.activeElement===el('search-input'))return;
+  if(_touchScrolling) return; // ignore scanner input during scroll
   const now=Date.now();
   if(e.key==='Enter'){if(scanBuf.length>2)handleScan(scanBuf.trim());scanBuf='';return;}
   if(e.key.length===1){if(now-scanLast>SCAN_MS*3&&scanBuf.length>0)scanBuf='';scanBuf+=e.key;scanLast=now;}
@@ -1357,6 +1393,14 @@ function handlePaymentResult(msg){
   else{
     el('declined-msg').textContent=msg.status==='timeout'?'No card was detected. Please try again.':`Payment declined: ${msg.responseText||'Please try a different card.'}`;
     showScreen('declined');
+    // Animate X
+    requestAnimationFrame(()=>{
+      const circle=el('declined-circle'), l1=el('declined-line1'), l2=el('declined-line2');
+      if(circle) circle.style.strokeDashoffset='0';
+      if(l1) l1.style.strokeDashoffset='0';
+      if(l2) l2.style.strokeDashoffset='0';
+    });
+    playDeclinedSound();
   }
 }
 
@@ -1466,6 +1510,40 @@ async function writeSaleToFirebase(txn){
   }
 }
 
+function playSuccessSound(){
+  try{
+    const ctx=new (window.AudioContext||window.webkitAudioContext)();
+    // Three ascending tones — classic success chime
+    [[523,0],[659,0.18],[784,0.36]].forEach(([freq,delay])=>{
+      const o=ctx.createOscillator(), g=ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.type='sine'; o.frequency.value=freq;
+      g.gain.setValueAtTime(0,ctx.currentTime+delay);
+      g.gain.linearRampToValueAtTime(0.35,ctx.currentTime+delay+0.04);
+      g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+delay+0.5);
+      o.start(ctx.currentTime+delay);
+      o.stop(ctx.currentTime+delay+0.5);
+    });
+  }catch(e){}
+}
+
+function playDeclinedSound(){
+  try{
+    const ctx=new (window.AudioContext||window.webkitAudioContext)();
+    // Two descending tones — negative sound
+    [[300,0],[220,0.25]].forEach(([freq,delay])=>{
+      const o=ctx.createOscillator(), g=ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.type='sawtooth'; o.frequency.value=freq;
+      g.gain.setValueAtTime(0,ctx.currentTime+delay);
+      g.gain.linearRampToValueAtTime(0.25,ctx.currentTime+delay+0.04);
+      g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+delay+0.4);
+      o.start(ctx.currentTime+delay);
+      o.stop(ctx.currentTime+delay+0.4);
+    });
+  }catch(e){}
+}
+
 function showSuccessScreen(txn){
   const {grandTotal,totalSavings}=calcTotals();
   el('success-ref').textContent=txn.txnRef?`Transaction ref: ${txn.txnRef}`:'';
@@ -1481,6 +1559,13 @@ function showSuccessScreen(txn){
   if(totalSavings>0){savEl.textContent=`🏷 You saved ${fmt(totalSavings)}`;savEl.style.display='block';}
   else savEl.style.display='none';
   showScreen('success');
+  // Animate tick
+  requestAnimationFrame(()=>{
+    const circle=el('success-circle'), check=el('success-check');
+    if(circle) circle.style.strokeDashoffset='0';
+    if(check)  check.style.strokeDashoffset='0';
+  });
+  playSuccessSound();
   let secs=10;
   el('success-countdown').textContent=`Returning to start in ${secs}s…`;
   STATE.countdownInterval=setInterval(()=>{secs--;if(secs<=0){clearInterval(STATE.countdownInterval);resetToIdle();}else el('success-countdown').textContent=`Returning to start in ${secs}s…`;},1000);

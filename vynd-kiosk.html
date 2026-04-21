@@ -301,7 +301,7 @@
       <div class="shop-header-title" id="shop-title">Products</div>
       <div class="search-wrap">
         <span class="search-icon">🔍</span>
-        <input id="search-input" type="text" placeholder="Search products…" oninput="filterProducts(this.value)" autocomplete="off" inputmode="none" onfocus="this.select()">
+        <input id="search-input" type="text" placeholder="🔍 Scan or type to search…" autocomplete="off" inputmode="none" readonly onfocus="this.removeAttribute('readonly')" onblur="this.setAttribute('readonly','')" oninput="filterProducts(this.value)">
       </div>
       <button class="scan-badge" id="scan-toggle" onclick="toggleScanMode()">📷 Scan</button>
     </div>

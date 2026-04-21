@@ -310,7 +310,7 @@
       </div>
       <button class="scan-badge" id="scan-toggle" onclick="toggleScanMode()">📷 Scan</button>
     </div>
-    <div class="product-grid" id="product-grid">
+    <div class="product-grid" id="product-grid" onclick="if(document.activeElement===el('search-input'))el('search-input').blur()">
       <div style="grid-column:1/-1;text-align:center;padding:60px;color:var(--muted);">Loading products…</div>
     </div>
     <div class="scan-hint">🔲 Scan product barcodes or tap any item above</div>
@@ -1041,6 +1041,8 @@ window.startSession = function() {
     writeHeartbeat(r.key);
   });
   showScreen('shopping'); recalcPromotions(); renderProducts(''); renderBasket(); resetIdleTimer();
+  // Focus search so virtual keyboard is available immediately
+  setTimeout(() => { const inp = el('search-input'); if(inp) inp.focus(); }, 300);
 };
 
 // ── Virtual keyboard (Windows touch keyboard / tabtip) ────────────────
@@ -1136,7 +1138,7 @@ window.filterProducts=v=>renderProducts(v);
    ═══════════════════════════════ */
 window.addToBasket=function(barcode,flagType){
   const inp = document.getElementById('search-input');
-  if (inp && inp.value) { inp.value = ''; filterProducts(''); }
+  if (inp && inp.value) { inp.value = ''; filterProducts(''); inp.blur(); }
   const cat=STATE.catalogue[barcode], dbp=STATE.productDB[barcode], src=cat||dbp;
   const name=src?.name||`Unknown (${barcode})`;
   const priceCents=flagType==='unknown'?KIOSK_CONFIG.fallbackPriceCents:cat?.priceCents??dbp?.priceCents??KIOSK_CONFIG.fallbackPriceCents;
@@ -1161,10 +1163,10 @@ window.clearBasket=function(){
   if(!STATE.basket.length)return;
   STATE.basket=[];
   recalcPromotions();
-  renderBasket(); renderProducts(el('search-input').value);
-  // Refocus search so next scan/type goes straight to cart
+  renderBasket(); renderProducts('');
+  // Clear and blur search so scanner keydown handler works immediately
   const inp = el('search-input');
-  if(inp){ inp.value=''; filterProducts(''); inp.focus(); }
+  if(inp){ inp.value=''; inp.blur(); }
 };
 
 function renderBasket(){
@@ -1248,22 +1250,56 @@ function renderBasket(){
 /* ═══════════════════════════════
    SCAN — THREE-TIER LOGIC
    ═══════════════════════════════ */
-let scanBuf='', scanLast=0;
-const SCAN_MS=80;
-// Suppress scanner input during touch scroll
-let _touchScrolling = false;
-document.addEventListener('touchstart', () => { _touchScrolling = false; }, { passive: true });
-document.addEventListener('touchmove',  () => { _touchScrolling = true;  }, { passive: true });
-document.addEventListener('touchend',   () => { setTimeout(() => { _touchScrolling = false; }, 150); }, { passive: true });
 
-document.addEventListener('keydown',e=>{
-  if(STATE.screen!=='shopping')return;
-  if(document.activeElement===el('search-input'))return;
-  if(_touchScrolling) return; // ignore scanner input during scroll
-  const now=Date.now();
-  if(e.key==='Enter'){if(scanBuf.length>2)handleScan(scanBuf.trim());scanBuf='';return;}
-  if(e.key.length===1){if(now-scanLast>SCAN_MS*3&&scanBuf.length>0)scanBuf='';scanBuf+=e.key;scanLast=now;}
-});
+// ── Smart scanner detection ───────────────────────────────────────────
+// Scanner sends chars in <20ms bursts. Human typing is >100ms between keys.
+// We intercept rapid-fire input as a scan regardless of what has focus,
+// so scanner and virtual keyboard can coexist without fighting each other.
+const SCAN_CHAR_MS = 30; // max ms between scanner chars
+let scanBuf='', scanLast=0, scanTimer=null;
+
+document.addEventListener('keydown', e => {
+  if (STATE.screen !== 'shopping') return;
+  const now = Date.now();
+  const gap  = now - scanLast;
+  scanLast   = now;
+
+  if (e.key === 'Enter') {
+    // If we have a buffer that came in fast — it's a scan
+    if (scanBuf.length > 6) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      const code = scanBuf.trim();
+      scanBuf = '';
+      if (scanTimer) { clearTimeout(scanTimer); scanTimer = null; }
+      handleScan(code);
+    } else {
+      scanBuf = '';
+    }
+    return;
+  }
+
+  if (e.key.length !== 1) return; // ignore Shift, Ctrl etc
+
+  if (gap < SCAN_CHAR_MS || scanBuf.length === 0) {
+    // Fast keystroke — accumulate as scanner input
+    scanBuf += e.key;
+    // If search input is focused and this is scanner input, prevent it going to the box
+    if (document.activeElement === el('search-input') && gap < SCAN_CHAR_MS) {
+      e.preventDefault();
+    }
+    // Auto-flush if scanner doesn't send Enter (some configs)
+    if (scanTimer) clearTimeout(scanTimer);
+    scanTimer = setTimeout(() => {
+      if (scanBuf.length > 6) handleScan(scanBuf.trim());
+      scanBuf = '';
+      scanTimer = null;
+    }, 100);
+  } else {
+    // Slow keystroke — human typing, let it go to search input naturally
+    scanBuf = e.key; // start fresh in case they type then scan
+  }
+}, true); // useCapture=true so we intercept before input element
 
 function handleScan(barcode){
   if(STATE.scanMode==='awaiting-confirm'){

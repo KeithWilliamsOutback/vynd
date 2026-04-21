@@ -1229,7 +1229,7 @@ body.dark .mkt-slot-stock-badge{background:rgba(255,255,255,.08)}
                 <input class="form-input" id="prod-m-cost" type="number" step="0.01" placeholder="1.20">
               </div>
               <div class="form-group">
-                <div class="form-label">Min pick threshold (%)</div>
+                <div class="form-label" id="prod-m-minpick-label">Min pick threshold (%)</div>
                 <input class="form-input" id="prod-m-minpick" type="number" min="0" max="100" placeholder="0 = disabled">
               </div>
             </div>
@@ -1259,13 +1259,13 @@ body.dark .mkt-slot-stock-badge{background:rgba(255,255,255,.08)}
               </div>
               <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r-sm)">
                 <span style="font-size:13px">Override par — always pick to par regardless of SOH</span>
-                <div class="toggle-wrap" onclick="document.getElementById('prod-m-overridepar').classList.toggle('on')">
+                <div class="toggle-wrap" onclick="document.getElementById('prod-m-overridepar').classList.toggle('on');updateMinPickState()">
                   <div class="toggle-track" id="prod-m-overridepar"><div class="toggle-knob"></div></div>
                 </div>
               </div>
               <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r-sm)">
                 <span style="font-size:13px">Fresh / prekit — current stock auto-recorded as waste</span>
-                <div class="toggle-wrap" onclick="document.getElementById('prod-m-prekit').classList.toggle('on')">
+                <div class="toggle-wrap" onclick="document.getElementById('prod-m-prekit').classList.toggle('on');updateMinPickState()">
                   <div class="toggle-track" id="prod-m-prekit"><div class="toggle-knob"></div></div>
                 </div>
               </div>
@@ -1776,107 +1776,131 @@ body.dark .mkt-slot-stock-badge{background:rgba(255,255,255,.08)}
     <div class="page page-flex" id="page-pricing" style="height:calc(100vh - 60px);overflow:hidden">
 
       <!-- Filter bar -->
-      <div class="filter-bar" style="flex-shrink:0">
-        <input class="search-input" id="pricing-search" placeholder="Search product or customer…" oninput="renderPricingPage()">
+      <div class="filter-bar" style="flex-shrink:0;flex-wrap:wrap;gap:6px">
+        <input class="search-input" id="pricing-search" placeholder="Search product, customer, location…" oninput="renderPricingPage()" style="min-width:180px">
         <select class="form-select" id="pricing-customer-filter" style="font-size:12px;padding:5px 10px;width:auto" onchange="renderPricingPage()">
           <option value="">All customers</option>
         </select>
-        <button class="filter-btn on" id="pricing-filter-all"      onclick="setPricingFilter('all',this)">All</button>
-        <button class="filter-btn"   id="pricing-filter-mismatch"  onclick="setPricingFilter('mismatch',this)">⚠ DEX mismatch</button>
-        <button class="filter-btn"   id="pricing-filter-custom"    onclick="setPricingFilter('custom',this)">Custom pricing</button>
-        <div style="margin-left:auto;display:flex;gap:8px">
-          <button class="btn btn-primary btn-sm" onclick="openPricingModal()">+ Set price</button>
-          <button class="btn btn-secondary btn-sm" onclick="exportPricingCSV()">⬇ Export</button>
+        <select class="form-select" id="pricing-route-filter" style="font-size:12px;padding:5px 10px;width:auto" onchange="renderPricingPage()">
+          <option value="">All routes</option>
+        </select>
+        <button class="filter-btn on" onclick="setPricingFilter('all',this)">All lanes</button>
+        <button class="filter-btn"   onclick="setPricingFilter('mismatch',this)">💰 DEX mismatch</button>
+        <button class="filter-btn"   onclick="setPricingFilter('pending',this)">⏳ Pending change</button>
+        <div style="margin-left:auto">
+          <button class="btn btn-secondary btn-sm" onclick="exportLanePricingCSV()">⬇ Export</button>
         </div>
       </div>
 
-      <!-- Summary bar -->
+      <!-- Stat bar -->
       <div style="display:flex;gap:0;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0">
-        <div style="flex:1;padding:12px 24px;border-right:1px solid var(--border);text-align:center">
-          <div style="font-family:'DM Mono',monospace;font-size:20px;font-weight:700;color:var(--accent)" id="pricing-stat-rules">—</div>
-          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;margin-top:2px">Price rules</div>
+        <div style="flex:1;padding:10px 20px;border-right:1px solid var(--border);text-align:center">
+          <div style="font-family:'DM Mono',monospace;font-size:18px;font-weight:700;color:var(--accent)" id="pricing-stat-lanes">—</div>
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-top:1px">Active lanes</div>
         </div>
-        <div style="flex:1;padding:12px 24px;border-right:1px solid var(--border);text-align:center">
-          <div style="font-family:'DM Mono',monospace;font-size:20px;font-weight:700;color:var(--danger)" id="pricing-stat-mismatches">—</div>
-          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;margin-top:2px">DEX mismatches</div>
+        <div style="flex:1;padding:10px 20px;border-right:1px solid var(--border);text-align:center">
+          <div style="font-family:'DM Mono',monospace;font-size:18px;font-weight:700;color:var(--danger)" id="pricing-stat-mismatches">—</div>
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-top:1px">DEX mismatches</div>
         </div>
-        <div style="flex:1;padding:12px 24px;border-right:1px solid var(--border);text-align:center">
-          <div style="font-family:'DM Mono',monospace;font-size:20px;font-weight:700;color:var(--info)" id="pricing-stat-custom">—</div>
-          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;margin-top:2px">Custom prices</div>
+        <div style="flex:1;padding:10px 20px;border-right:1px solid var(--border);text-align:center">
+          <div style="font-family:'DM Mono',monospace;font-size:18px;font-weight:700;color:var(--warn)" id="pricing-stat-pending">—</div>
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-top:1px">Pending changes</div>
         </div>
-        <div style="flex:1;padding:12px 24px;text-align:center">
-          <div style="font-family:'DM Mono',monospace;font-size:20px;font-weight:700;color:var(--accent)" id="pricing-stat-machines">—</div>
-          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;margin-top:2px">Machines</div>
+        <div style="flex:1;padding:10px 20px;text-align:center">
+          <div style="font-family:'DM Mono',monospace;font-size:18px;font-weight:700;color:var(--accent)" id="pricing-stat-machines">—</div>
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-top:1px">Machines</div>
         </div>
       </div>
 
-      <!-- Info banner -->
-      <div style="background:var(--info-bg);border-bottom:1px solid rgba(37,99,235,.15);padding:10px 24px;font-size:12px;color:var(--muted);flex-shrink:0">
-        💡 <strong style="color:var(--text)">Customer-specific pricing</strong> — prices set here override the product RRP for that customer's machines. DEX mismatches mean the machine price label doesn't match VYND — driver should update label on next visit.
+      <!-- Bulk action bar — shown when rows selected -->
+      <div id="pricing-bulk-bar" style="display:none;flex-shrink:0;padding:8px 20px;background:rgba(37,99,235,.08);border-bottom:1px solid rgba(37,99,235,.2);display:none;align-items:center;gap:10px">
+        <span style="font-size:12px;font-weight:600;color:var(--info)" id="pricing-selected-count">0 lanes selected</span>
+        <div style="margin-left:auto;display:flex;gap:8px">
+          <button class="btn btn-sm" style="background:rgba(37,99,235,.12);color:var(--info);border:1px solid rgba(37,99,235,.25)" onclick="openBulkPriceModal()">💲 Change price</button>
+          <button class="btn btn-sm" style="background:rgba(245,158,11,.1);color:var(--warn);border:1px solid rgba(245,158,11,.25)" onclick="openBulkSwapModal()">🔄 Swap product</button>
+          <button class="btn btn-secondary btn-sm" onclick="pricingClearSelection()">✕ Clear</button>
+        </div>
       </div>
 
       <!-- Table -->
       <div style="flex:1;overflow-y:auto">
-        <div class="table-wrap" style="margin:0">
-          <table id="pricing-table">
-            <thead>
-              <tr>
-                <th>Customer</th>
-                <th>Product</th>
-                <th>RRP</th>
-                <th>Custom price</th>
-                <th>Machines</th>
-                <th>DEX status</th>
-                <th>Last DEX</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody id="pricing-tbody"></tbody>
-          </table>
+        <table id="pricing-table" style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead style="position:sticky;top:0;z-index:2;background:var(--surface)">
+            <tr>
+              <th style="width:36px;padding:8px 10px;text-align:center;border-bottom:2px solid var(--border)">
+                <input type="checkbox" id="pricing-select-all" onchange="pricingToggleAll(this.checked)" style="cursor:pointer">
+              </th>
+              <th style="padding:8px 12px;text-align:left;border-bottom:2px solid var(--border);font-size:11px;color:var(--muted);text-transform:uppercase;white-space:nowrap">Machine</th>
+              <th style="padding:8px 12px;text-align:left;border-bottom:2px solid var(--border);font-size:11px;color:var(--muted);text-transform:uppercase">Customer</th>
+              <th style="padding:8px 12px;text-align:left;border-bottom:2px solid var(--border);font-size:11px;color:var(--muted);text-transform:uppercase">Location</th>
+              <th style="padding:8px 6px;text-align:center;border-bottom:2px solid var(--border);font-size:11px;color:var(--muted);text-transform:uppercase">Slot</th>
+              <th style="padding:8px 12px;text-align:left;border-bottom:2px solid var(--border);font-size:11px;color:var(--muted);text-transform:uppercase">Product</th>
+              <th style="padding:8px 12px;text-align:right;border-bottom:2px solid var(--border);font-size:11px;color:var(--muted);text-transform:uppercase;white-space:nowrap">VMS price</th>
+              <th style="padding:8px 12px;text-align:right;border-bottom:2px solid var(--border);font-size:11px;color:var(--muted);text-transform:uppercase">RRP</th>
+              <th style="padding:8px 12px;text-align:right;border-bottom:2px solid var(--border);font-size:11px;color:var(--muted);text-transform:uppercase;white-space:nowrap">DEX price</th>
+              <th style="padding:8px 12px;text-align:center;border-bottom:2px solid var(--border);font-size:11px;color:var(--muted);text-transform:uppercase">Status</th>
+            </tr>
+          </thead>
+          <tbody id="pricing-tbody"></tbody>
+        </table>
+      </div>
+
+      <!-- Bulk price modal -->
+      <div class="modal-overlay" id="bulk-price-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:center;justify-content:center">
+        <div class="modal" style="width:380px">
+          <div class="modal-hd">
+            <div class="modal-title">Change price — <span id="bulk-price-lane-count">N</span> lanes</div>
+            <button class="modal-close" onclick="closeBulkPriceModal()">✕</button>
+          </div>
+          <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
+            <div style="font-size:12px;color:var(--muted)" id="bulk-price-lane-list"></div>
+            <div>
+              <div class="form-label">New VMS price ($)</div>
+              <input class="form-input" id="bulk-price-value" type="number" step="0.10" min="0" placeholder="e.g. 3.50">
+              <div style="font-size:11px;color:var(--muted);margin-top:4px">Queued for next restock — driver app will update machine label and keypad</div>
+            </div>
+          </div>
+          <div class="modal-ft">
+            <button class="btn btn-secondary" onclick="closeBulkPriceModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="applyBulkPrice()">Queue price change</button>
+          </div>
         </div>
       </div>
 
-      <!-- Pricing modal -->
-      <div class="modal-overlay" id="pricing-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:center;justify-content:center">
-        <div class="modal" style="width:460px">
+      <!-- Bulk swap modal -->
+      <div class="modal-overlay" id="bulk-swap-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:center;justify-content:center">
+        <div class="modal" style="width:420px">
           <div class="modal-hd">
-            <div class="modal-title" id="pricing-modal-title">Set customer price</div>
-            <button class="modal-close" onclick="closePricingModal()">✕</button>
+            <div class="modal-title">Swap product — <span id="bulk-swap-lane-count">N</span> lanes</div>
+            <button class="modal-close" onclick="closeBulkSwapModal()">✕</button>
           </div>
-          <div class="modal-body" style="display:flex;flex-direction:column;gap:12px">
-            <div class="form-row">
-              <div class="form-group">
-                <div class="form-label">Customer</div>
-                <select class="form-select" id="pricing-cust-sel">
-                  <option value="">— Select customer —</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <div class="form-label">Product</div>
-                <select class="form-select" id="pricing-prod-sel">
-                  <option value="">— Select product —</option>
-                </select>
-              </div>
+          <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
+            <div style="font-size:12px;color:var(--muted)" id="bulk-swap-lane-list"></div>
+            <div>
+              <div class="form-label">New product</div>
+              <select class="form-select" id="bulk-swap-product">
+                <option value="">— Select product —</option>
+              </select>
             </div>
             <div class="form-row">
               <div class="form-group">
-                <div class="form-label">RRP</div>
-                <div class="form-input" id="pricing-rrp-display" style="background:var(--bg);color:var(--muted)">—</div>
+                <div class="form-label">New VMS price ($)</div>
+                <input class="form-input" id="bulk-swap-price" type="number" step="0.10" min="0" placeholder="e.g. 3.50">
               </div>
               <div class="form-group">
-                <div class="form-label">Custom price ($)</div>
-                <input class="form-input" id="pricing-custom-price" type="number" step="0.10" placeholder="e.g. 3.50">
+                <div class="form-label">New par</div>
+                <input class="form-input" id="bulk-swap-par" type="number" min="1" placeholder="e.g. 10">
               </div>
             </div>
-            <div style="font-size:12px;color:var(--muted)">Leave custom price blank to revert to product RRP</div>
+            <div style="font-size:11px;color:var(--muted)">Queued for next restock — driver will collect old stock and load new product</div>
           </div>
           <div class="modal-ft">
-            <button class="btn btn-danger btn-sm" id="pricing-delete-btn" style="margin-right:auto;display:none" onclick="deletePricingRule()">Remove rule</button>
-            <button class="btn btn-secondary" onclick="closePricingModal()">Cancel</button>
-            <button class="btn btn-primary" onclick="savePricingRule()">Save price</button>
+            <button class="btn btn-secondary" onclick="closeBulkSwapModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="applyBulkSwap()">Queue product swap</button>
           </div>
         </div>
       </div>
+
     </div>
     <!-- ══ COMMISSION ══ -->
     <div class="page page-flex" id="page-commission" style="height:calc(100vh - 60px);overflow:hidden">
@@ -3626,6 +3650,7 @@ const ROUTES = {
       { id:'1383968',  name:'Dubbo Earlyrise Bakery',    addr:'Inside Roller Door', est:15, type:'vending' },
       { id:'42097963', name:'Dubbo Agriweld Engineering',addr:'Workshop',            est:30, type:'vending' },
       { id:'MKT-001',  name:'Inland Distributors',       addr:'Break Room',         est:30, type:'micromarket', marketId:'MKT-001' },
+      { id:'M-001',    name:'Test Machine',               addr:'',                   est:30, type:'vending' },
     ]
   },
 };
@@ -3964,7 +3989,42 @@ function urgencyColor(score) {
 
 // ── Init route list ──
 function initRoutingPage() {
-  buildRouteDriversAndUnplanned();
+  // Merge any Firebase-saved route stops into ROUTES (catches route changes saved via machine settings)
+  if (fbReady && fbDb) {
+    fbDb.ref('vynd/routes').once('value').then(snap => {
+      const fbRoutes = snap.val();
+      if (fbRoutes) {
+        Object.entries(fbRoutes).forEach(([routeId, fbRoute]) => {
+          if (!fbRoute.stops) return;
+          if (!ROUTES[routeId]) ROUTES[routeId] = {
+            id:     routeId,
+            label:  fbRoute.label  || routeId + ' Route',
+            name:   fbRoute.name   || routeId,
+            driver: fbRoute.driver || '',
+            days:   fbRoute.days   || 'Weekly',
+            freq:   fbRoute.freq   || 1,
+            stops:  [],
+          };
+          // Only ADD stops from Firebase that aren't already in the hardcoded list
+          // Never remove hardcoded stops — Firebase is supplemental, not authoritative
+          fbRoute.stops.forEach(fbStop => {
+            const exists = ROUTES[routeId].stops.some(s => s.id === fbStop.id);
+            if (!exists) ROUTES[routeId].stops.push({
+              ...fbStop,
+              est:  fbStop.est  || 30,
+              type: fbStop.type || fbStop.stopType || 'vending',
+            });
+          });
+        });
+      }
+      buildRouteDriversAndUnplanned();
+      _renderRoutingPage(true);
+    }).catch(() => { buildRouteDriversAndUnplanned(); _renderRoutingPage(true); });
+  } else {
+    buildRouteDriversAndUnplanned();
+    _renderRoutingPage();
+  }
+
   loadTodaysRuns();
 
   // Always reload users from Firebase so dropdown is current
@@ -3975,8 +4035,11 @@ function initRoutingPage() {
       refreshDriverSelectors();
     });
   }
+}
+
+function _renderRoutingPage(force = false) {
   const list = document.getElementById('routing-route-list');
-  if (!list || list.innerHTML.includes('rcard-')) return; // already rendered
+  if (!list || (!force && list.innerHTML.includes('rcard-'))) return; // already rendered
 
   // Render route list immediately
   list.innerHTML = Object.keys(ROUTES).map(rid => {
@@ -8449,14 +8512,13 @@ async function buildPickList(routeId, runsForDate) {
     }));
   }
 
-  // Fetch Firebase planograms for vending machines not in memory
+  // Fetch Firebase planograms for all vending stops — always read pendingChange from Firebase
+  // (in-memory slots only carry pendingChange if showPlanogram was opened this session)
   const fbPogSlots = {};
   if (fbReady && fbDb) {
     await Promise.all([...new Set(vendingStops.map(m => m.id))].map(async mid => {
-      if (!PLANOGRAMS[mid] || !PLANOGRAMS[mid].slots || PLANOGRAMS[mid].slots.length === 0) {
-        const pogSnap = await fbDb.ref('vynd/planograms/' + mid + '/slots').once('value').catch(() => null);
-        if (pogSnap && pogSnap.val()) fbPogSlots[mid] = pogSnap.val();
-      }
+      const pogSnap = await fbDb.ref('vynd/planograms/' + mid + '/slots').once('value').catch(() => null);
+      if (pogSnap && pogSnap.val()) fbPogSlots[mid] = pogSnap.val();
     }));
   }
 
@@ -8514,16 +8576,24 @@ async function buildPickList(routeId, runsForDate) {
         const memSlot = PLANOGRAMS[mid]?.slots?.find(ms => ms.id === id);
         return {
           id,
-          product:    s.product    || memSlot?.product  || 'Empty',
-          barcode:    s.barcode    || memSlot?.barcode   || '',
-          par:        s.par        || memSlot?.par       || 0,
-          capacity:   s.capacity   || memSlot?.capacity  || s.par || memSlot?.par || 0,
-          currentSOH: s.currentSOH ?? s.current ?? memSlot?.currentSOH ?? 0,
-          cost:       s.cost       || memSlot?.cost      || 0,
-          price:      s.price      || s.priceDollars     || memSlot?.price || 0,
-          overflow:   s.overflow   || memSlot?.overflow  || false,
+          product:       s.product    || memSlot?.product  || 'Empty',
+          barcode:       s.barcode    || memSlot?.barcode   || '',
+          par:           s.par        || memSlot?.par       || 0,
+          capacity:      s.capacity   || memSlot?.capacity  || s.par || memSlot?.par || 0,
+          currentSOH:    s.currentSOH ?? s.current ?? memSlot?.currentSOH ?? 0,
+          cost:          s.cost       || memSlot?.cost      || 0,
+          price:         s.price      || s.priceDollars     || memSlot?.price || 0,
+          overflow:      s.overflow   || memSlot?.overflow  || false,
+          pendingChange: s.pendingChange || null,
         };
       });
+    } else {
+      // In-memory slots — stamp pendingChange from Firebase (always freshly fetched above)
+      const fbSlots = fbPogSlots[mid] || {};
+      slots = slots.map(slot => ({
+        ...slot,
+        pendingChange: fbSlots[slot.id]?.pendingChange || slot.pendingChange || null,
+      }));
     }
 
     let slotNeeded = 0, slotSkipped = 0;
@@ -8604,7 +8674,10 @@ async function buildPickList(routeId, runsForDate) {
 
       const oldProduct     = slot.product;
       const newProduct     = pc.newProduct;
-      const collectQty     = pc.collectQty || slot.current || 0;   // units to pull out
+      // collectQty = live SOH from latest DEX dial (most accurate — auto-adjusts for sales since queuing)
+      // Falls back to pc.collectQty (planned at queue time) only if SOH is unknown
+      const liveSOH        = slot.currentSOH ?? slot.current;
+      const collectQty     = liveSOH !== undefined && liveSOH !== null ? liveSOH : (pc.collectQty || 0);
       const pickQty        = pc.pickQty    || pc.newPar    || slot.par || 0; // units to bring in
       const oldBarcode     = getProductBarcode(oldProduct);
       const newBarcode     = getProductBarcode(newProduct);
@@ -13343,7 +13416,15 @@ function exportCommissionCSV() {
 // Customer price rules: { 'CustomerName:ProductName' → price }
 const PRICING_RULES = {};
 
-let pricingFilter = 'all';
+// ══════════════════════════════════════
+// PRICING PAGE — lane-level bulk management
+// One row per active slot across all machines
+// Supports bulk price change and product swap → queued pendingChange
+// ══════════════════════════════════════
+
+let pricingFilter     = 'all';
+let pricingSelection  = new Set(); // Set of "mid:slotId" keys
+let _pricingAllRows   = [];        // full unfiltered lane list
 
 function setPricingFilter(f, btn) {
   pricingFilter = f;
@@ -13356,209 +13437,384 @@ function initPricingPage() {
   // Populate customer filter
   const custSel = document.getElementById('pricing-customer-filter');
   if (custSel && custSel.options.length <= 1) {
-    Object.values(CUSTOMERS).filter(c => c.status === 'active').forEach(c => {
+    const custNames = [...new Set(Object.values(MACHINE_META).map(m => m.customer).filter(Boolean))].sort();
+    custNames.forEach(name => {
       const opt = document.createElement('option');
-      opt.value = c.name; opt.textContent = c.name;
+      opt.value = name; opt.textContent = name;
       custSel.appendChild(opt);
     });
   }
-  // Load from Firebase
+  // Populate route filter
+  const routeSel = document.getElementById('pricing-route-filter');
+  if (routeSel && routeSel.options.length <= 1) {
+    const routes = [...new Set(Object.values(MACHINE_META).map(m => m.route).filter(Boolean))].sort();
+    routes.forEach(r => {
+      const opt = document.createElement('option');
+      opt.value = r; opt.textContent = r;
+      routeSel.appendChild(opt);
+    });
+  }
+  // Populate swap product dropdown
+  const swapProd = document.getElementById('bulk-swap-product');
+  if (swapProd && swapProd.options.length <= 1) {
+    Object.keys(PRODUCTS).sort().forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p; opt.textContent = p;
+      swapProd.appendChild(opt);
+    });
+  }
+
+  // Fetch DEX prices from Firebase for any machine whose slots don't have dexPrice yet.
+  // showPlanogram sets dexPrice when a planogram is opened, but if none have been opened
+  // this session the pricing page would show "No DEX" for every lane.
   if (fbReady && fbDb) {
-    fbDb.ref('vynd/pricingRules').once('value').then(snap => {
-      const data = snap.val();
-      if (data) Object.assign(PRICING_RULES, data);
+    const mids = Object.keys(MACHINE_META).filter(mid => {
+      const pog = PLANOGRAMS[mid];
+      if (!pog?.slots?.length) return true; // no slots at all — definitely need to fetch
+      return pog.slots.some(s => s.dexPrice === undefined); // any slot missing dexPrice
+    });
+
+    if (mids.length === 0) { renderPricingPage(); return; }
+
+    // Show a loading state then render once all fetches complete
+    const tbody = document.getElementById('pricing-tbody');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:32px;color:var(--muted)">Loading DEX prices…</td></tr>';
+
+    Promise.all(mids.map(mid =>
+      fbDb.ref('vynd/dexReadings/' + mid + '/last/slots').once('value')
+        .then(snap => ({ mid, slots: snap.val() }))
+        .catch(() => ({ mid, slots: null }))
+    )).then(results => {
+      results.forEach(({ mid, slots }) => {
+        if (!slots) return;
+        const pog = PLANOGRAMS[mid];
+        if (!pog?.slots) return;
+        // Stamp dexPrice onto every matching slot
+        pog.slots.forEach(slot => {
+          const d = slots[slot.id];
+          if (!d) return;
+          slot.dexPrice = parseFloat(d.priceDollars) || parseFloat(d.priceCents) / 100 || 0;
+          // Also stamp hasPlanogramPrice so mismatch filter works
+          if (slot.price > 0) slot.hasPlanogramPrice = true;
+        });
+      });
       renderPricingPage();
-    }).catch(() => renderPricingPage());
+    });
   } else {
     renderPricingPage();
   }
 }
 
 function renderPricingPage() {
-  const search   = (document.getElementById('pricing-search')?.value || '').toLowerCase();
-  const custFilt = document.getElementById('pricing-customer-filter')?.value || '';
-  const tbody    = document.getElementById('pricing-tbody');
+  const search    = (document.getElementById('pricing-search')?.value    || '').toLowerCase();
+  const custFilt  = document.getElementById('pricing-customer-filter')?.value || '';
+  const routeFilt = document.getElementById('pricing-route-filter')?.value    || '';
+  const tbody     = document.getElementById('pricing-tbody');
   if (!tbody) return;
 
-  const setEl = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
-
-  // Build pricing rows from planograms — one row per product per customer
-  const rows = [];
-  let mismatchCount = 0, customCount = 0, machineSet = new Set();
+  // Build one row per active slot across all planograms
+  let allRows = [], mismatchCount = 0, pendingCount = 0;
+  const machineSet = new Set();
 
   Object.entries(PLANOGRAMS).forEach(([mid, pog]) => {
-    const meta     = MACHINE_META[mid] || {};
-    const custName = meta.customer || '—';
     if (!pog?.slots) return;
-    machineSet.add(mid);
+    const meta     = MACHINE_META[mid] || {};
+    const customer = meta.customer || '—';
+    const location = meta.locationName || meta.name || mid;
+    const subloc   = meta.sublocation || '';
+    const route    = meta.route || '—';
 
     pog.slots.forEach(slot => {
-      if (!slot.product) return;
-      const product  = slot.product;
-      const rrp      = PRODUCTS[product]?.rrp || slot.price || 0;
-      const ruleKey  = custName + ':' + product;
-      const custPrice = PRICING_RULES[ruleKey] ?? rrp;
-      const dexPrice = slot.dexPrice;
-      const hasMismatch = dexPrice !== undefined && Math.abs(dexPrice - custPrice) > 0.01;
-      const isCustom    = Math.abs(custPrice - rrp) > 0.01;
+      if (!slot.product || slot.product === 'Empty') return;
+      machineSet.add(mid);
+
+      const rrp      = parseFloat(PRODUCTS[slot.product]?.rrp || PRODUCTS[slot.product]?.priceCents / 100 || 0) || 0;
+      const vmsPrice = parseFloat(slot.price) || 0;
+      const dexPrice = parseFloat(slot.dexPrice) || null;
+      const hasMismatch = dexPrice !== null && slot.hasPlanogramPrice &&
+                          Math.abs(dexPrice - vmsPrice) > 0.005;
+      const hasPending  = !!(slot.pendingChange?.changeType === 'queue');
 
       if (hasMismatch) mismatchCount++;
-      if (isCustom)    customCount++;
+      if (hasPending)  pendingCount++;
 
-      // Filter
-      if (pricingFilter === 'mismatch' && !hasMismatch) return;
-      if (pricingFilter === 'custom'   && !isCustom)    return;
-      if (custFilt && custName !== custFilt)             return;
-      if (search && !product.toLowerCase().includes(search) && !custName.toLowerCase().includes(search)) return;
-
-      rows.push({ mid, custName, product, rrp, custPrice, dexPrice, hasMismatch, isCustom, slot });
+      allRows.push({ mid, customer, location, subloc, route, slot, rrp, vmsPrice, dexPrice, hasMismatch, hasPending });
     });
   });
 
-  // Deduplicate by customer + product
-  const seen  = new Set();
-  const dedup = rows.filter(r => {
-    const key = r.custName + ':' + r.product;
-    if (seen.has(key)) return false;
-    seen.add(key);
+  _pricingAllRows = allRows;
+
+  // Stats
+  const setEl = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  setEl('pricing-stat-lanes',      allRows.length);
+  setEl('pricing-stat-mismatches', mismatchCount);
+  setEl('pricing-stat-pending',    pendingCount);
+  setEl('pricing-stat-machines',   machineSet.size);
+
+  // Filter
+  const filtered = allRows.filter(r => {
+    if (pricingFilter === 'mismatch' && !r.hasMismatch) return false;
+    if (pricingFilter === 'pending'  && !r.hasPending)  return false;
+    if (custFilt  && r.customer !== custFilt)           return false;
+    if (routeFilt && r.route    !== routeFilt)           return false;
+    if (search && ![r.customer, r.location, r.slot.product, r.slot.id]
+        .some(v => (v || '').toLowerCase().includes(search))) return false;
     return true;
   });
 
-  // Count machines per customer+product
-  const machineCount = {};
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--muted)">No lanes match the current filters</td></tr>';
+    return;
+  }
+
+  // Sort: customer → location → slot ID
+  filtered.sort((a, b) =>
+    a.customer.localeCompare(b.customer) ||
+    a.location.localeCompare(b.location) ||
+    String(a.slot.id).localeCompare(String(b.slot.id), undefined, { numeric: true })
+  );
+
+  tbody.innerHTML = filtered.map(r => {
+    const key       = r.mid + ':' + r.slot.id;
+    const checked   = pricingSelection.has(key) ? 'checked' : '';
+    const rowBg     = r.hasPending  ? 'background:rgba(245,158,11,.04)' :
+                      r.hasMismatch ? 'background:rgba(220,38,38,.04)'  : '';
+
+    const dexCell = r.dexPrice === null
+      ? '<span style="color:var(--muted);font-size:11px">No DEX</span>'
+      : r.hasMismatch
+        ? `<span style="font-family:'DM Mono',monospace;color:var(--danger);font-weight:700">$${r.dexPrice.toFixed(2)}</span>`
+        : `<span style="font-family:'DM Mono',monospace;color:var(--accent)">$${r.dexPrice.toFixed(2)}</span>`;
+
+    const statusCell = r.hasPending
+      ? `<span class="pill" style="background:rgba(245,158,11,.12);color:var(--warn);border:1px solid rgba(245,158,11,.3);font-size:10px">⏳ ${r.slot.pendingChange.changeType === 'queue' ? (r.slot.pendingChange.newProduct ? 'SWAP→' + r.slot.pendingChange.newProduct.split(' ')[0] : 'Price change') : 'Change'}</span>`
+      : r.hasMismatch
+        ? '<span class="pill" style="background:rgba(220,38,38,.1);color:var(--danger);border:1px solid rgba(220,38,38,.25);font-size:10px">💰 Mismatch</span>'
+        : '<span style="color:var(--muted);font-size:11px">—</span>';
+
+    const locDisplay = r.subloc ? `${r.location} <span style="color:var(--muted);font-size:10px">· ${r.subloc}</span>` : r.location;
+
+    return `<tr style="border-bottom:1px solid var(--border);cursor:pointer;${rowBg}" onclick="pricingToggleRow('${key}',this)">
+      <td style="text-align:center;padding:7px 10px"><input type="checkbox" data-key="${key}" ${checked} onclick="event.stopPropagation();pricingToggleRow('${key}',this.closest('tr'))" style="cursor:pointer"></td>
+      <td style="padding:7px 12px;font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);white-space:nowrap">${r.mid}</td>
+      <td style="padding:7px 12px;font-size:12px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.customer}</td>
+      <td style="padding:7px 12px;font-size:12px;max-width:160px">${locDisplay}</td>
+      <td style="padding:7px 6px;text-align:center;font-family:'DM Mono',monospace;font-size:11px;font-weight:700;color:var(--muted)">${r.slot.id}</td>
+      <td style="padding:7px 12px;font-size:12px;font-weight:600;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.slot.product}</td>
+      <td style="padding:7px 12px;text-align:right;font-family:'DM Mono',monospace;font-size:12px;font-weight:700">${r.vmsPrice > 0 ? '$' + r.vmsPrice.toFixed(2) : '<span style="color:var(--muted)">—</span>'}</td>
+      <td style="padding:7px 12px;text-align:right;font-family:'DM Mono',monospace;font-size:12px;color:var(--muted)">${r.rrp > 0 ? '$' + r.rrp.toFixed(2) : '—'}</td>
+      <td style="padding:7px 12px;text-align:right">${dexCell}</td>
+      <td style="padding:7px 12px;text-align:center">${statusCell}</td>
+    </tr>`;
+  }).join('');
+
+  updatePricingBulkBar();
+}
+
+function pricingToggleRow(key, rowEl) {
+  if (pricingSelection.has(key)) {
+    pricingSelection.delete(key);
+    if (rowEl) { rowEl.style.outline = ''; rowEl.querySelector('input[type=checkbox]').checked = false; }
+  } else {
+    pricingSelection.add(key);
+    if (rowEl) { rowEl.style.outline = '2px solid rgba(37,99,235,.4)'; rowEl.querySelector('input[type=checkbox]').checked = true; }
+  }
+  updatePricingBulkBar();
+}
+
+function pricingToggleAll(checked) {
+  const rows = document.querySelectorAll('#pricing-tbody tr');
+  rows.forEach(row => {
+    const cb = row.querySelector('input[type=checkbox]');
+    if (!cb) return;
+    const key = cb.dataset.key;
+    if (!key) return;
+    if (checked) {
+      pricingSelection.add(key);
+      row.style.outline = '2px solid rgba(37,99,235,.4)';
+      cb.checked = true;
+    } else {
+      pricingSelection.delete(key);
+      row.style.outline = '';
+      cb.checked = false;
+    }
+  });
+  updatePricingBulkBar();
+}
+
+function pricingClearSelection() {
+  pricingSelection.clear();
+  document.querySelectorAll('#pricing-tbody input[type=checkbox]').forEach(cb => { cb.checked = false; cb.closest('tr').style.outline = ''; });
+  const sa = document.getElementById('pricing-select-all');
+  if (sa) sa.checked = false;
+  updatePricingBulkBar();
+}
+
+function updatePricingBulkBar() {
+  const bar = document.getElementById('pricing-bulk-bar');
+  const cnt = document.getElementById('pricing-selected-count');
+  const n   = pricingSelection.size;
+  if (bar) bar.style.display = n > 0 ? 'flex' : 'none';
+  if (cnt) cnt.textContent = n + ' lane' + (n !== 1 ? 's' : '') + ' selected';
+}
+
+// ── Resolve selected lanes to slot objects ────────────────────────────────
+function getSelectedLanes() {
+  return [...pricingSelection].map(key => {
+    const [mid, slotId] = key.split(':');
+    const slot = PLANOGRAMS[mid]?.slots?.find(s => s.id === slotId);
+    return slot ? { mid, slot } : null;
+  }).filter(Boolean);
+}
+
+// ── Bulk price change ─────────────────────────────────────────────────────
+function openBulkPriceModal() {
+  const lanes = getSelectedLanes();
+  if (!lanes.length) return;
+  document.getElementById('bulk-price-lane-count').textContent = lanes.length;
+  document.getElementById('bulk-price-lane-list').textContent =
+    lanes.map(l => `${l.mid} / ${l.slot.id} — ${l.slot.product}`).join('\n');
+  document.getElementById('bulk-price-value').value = '';
+  const m = document.getElementById('bulk-price-modal');
+  if (m) { m.style.display = 'flex'; }
+}
+function closeBulkPriceModal() {
+  const m = document.getElementById('bulk-price-modal'); if (m) m.style.display = 'none';
+}
+
+async function applyBulkPrice() {
+  const newPrice = parseFloat(document.getElementById('bulk-price-value').value);
+  if (isNaN(newPrice) || newPrice <= 0) { showToast('Enter a valid price'); return; }
+
+  const lanes = getSelectedLanes();
+  if (!lanes.length) return;
+
+  const updates = {};
+  lanes.forEach(({ mid, slot }) => {
+    const slotPath = 'vynd/planograms/' + mid + '/slots/' + slot.id;
+    // For price-only changes, queue as a pendingChange so driver is notified
+    const pc = {
+      changeType:  'queue',
+      newProduct:  null,            // null = price-only, no product change
+      newPrice:    newPrice,
+      newPar:      slot.par,
+      pickQty:     0,               // no extra pick needed for price change only
+      collectQty:  0,
+      isMove:      false,
+      existingSOHofNew: slot.current || 0,
+      oldSOH:      slot.current || 0,
+      createdAt:   new Date().toISOString(),
+    };
+    // Update in-memory
+    slot.price        = newPrice;
+    slot.pendingChange = pc;
+    // Write to Firebase
+    updates[slotPath + '/price']         = newPrice;
+    updates[slotPath + '/priceCents']    = Math.round(newPrice * 100);
+    updates[slotPath + '/pendingChange'] = pc;
+  });
+
+  if (fbReady && fbDb) {
+    await fbDb.ref().update(updates)
+      .then(() => showToast(`✓ Price change queued for ${lanes.length} lane${lanes.length !== 1 ? 's' : ''}`))
+      .catch(() => showToast('⚠ Firebase write failed — check connection'));
+  } else {
+    showToast(`Price updated locally — sync when connected`);
+  }
+
+  closeBulkPriceModal();
+  pricingClearSelection();
+  renderPricingPage();
+}
+
+// ── Bulk product swap ─────────────────────────────────────────────────────
+function openBulkSwapModal() {
+  const lanes = getSelectedLanes();
+  if (!lanes.length) return;
+  document.getElementById('bulk-swap-lane-count').textContent = lanes.length;
+  document.getElementById('bulk-swap-lane-list').textContent =
+    lanes.map(l => `${l.mid} / ${l.slot.id} — ${l.slot.product}`).join('\n');
+  document.getElementById('bulk-swap-product').value = '';
+  document.getElementById('bulk-swap-price').value   = '';
+  document.getElementById('bulk-swap-par').value     = '';
+  const m = document.getElementById('bulk-swap-modal');
+  if (m) m.style.display = 'flex';
+}
+function closeBulkSwapModal() {
+  const m = document.getElementById('bulk-swap-modal'); if (m) m.style.display = 'none';
+}
+
+async function applyBulkSwap() {
+  const newProduct = document.getElementById('bulk-swap-product').value;
+  const newPrice   = parseFloat(document.getElementById('bulk-swap-price').value);
+  const newPar     = parseInt(document.getElementById('bulk-swap-par').value);
+
+  if (!newProduct)          { showToast('Select a product'); return; }
+  if (isNaN(newPrice) || newPrice <= 0) { showToast('Enter a valid price'); return; }
+
+  const lanes = getSelectedLanes();
+  if (!lanes.length) return;
+
+  const updates = {};
+  lanes.forEach(({ mid, slot }) => {
+    const slotPath  = 'vynd/planograms/' + mid + '/slots/' + slot.id;
+    const par       = isNaN(newPar) ? (slot.par || 10) : newPar;
+    const collectQty = slot.current || 0;   // live SOH = what driver will collect
+    const pickQty    = Math.max(0, par - 0); // full par since incoming slot is empty
+
+    const pc = {
+      changeType:  'queue',
+      newProduct:  newProduct,
+      newPrice:    newPrice,
+      newPar:      par,
+      pickQty,
+      collectQty,
+      isMove:      false,
+      existingSOHofNew: 0,
+      oldSOH:      collectQty,
+      createdAt:   new Date().toISOString(),
+    };
+
+    // Update in-memory
+    slot.pendingChange = pc;
+    // Write to Firebase planogram — product/price unchanged until driver completes fill
+    updates[slotPath + '/pendingChange'] = pc;
+  });
+
+  if (fbReady && fbDb) {
+    await fbDb.ref().update(updates)
+      .then(() => showToast(`✓ Product swap queued for ${lanes.length} lane${lanes.length !== 1 ? 's' : ''}`))
+      .catch(() => showToast('⚠ Firebase write failed — check connection'));
+  } else {
+    showToast(`Swap queued locally — sync when connected`);
+  }
+
+  closeBulkSwapModal();
+  pricingClearSelection();
+  renderPricingPage();
+}
+
+// ── Export ────────────────────────────────────────────────────────────────
+function exportLanePricingCSV() {
+  const rows = _pricingAllRows;
+  if (!rows.length) { showToast('No data to export'); return; }
+  const lines = ['Machine,Customer,Location,Slot,Product,VMS Price,RRP,DEX Price,Status'];
   rows.forEach(r => {
-    const key = r.custName + ':' + r.product;
-    machineCount[key] = (machineCount[key] || 0) + 1;
+    const status = r.hasPending ? 'Pending change' : r.hasMismatch ? 'DEX mismatch' : 'OK';
+    lines.push([
+      r.mid, r.customer, `"${r.location}"`, r.slot.id,
+      `"${r.slot.product}"`,
+      r.vmsPrice > 0 ? r.vmsPrice.toFixed(2) : '',
+      r.rrp > 0 ? r.rrp.toFixed(2) : '',
+      r.dexPrice !== null ? r.dexPrice.toFixed(2) : '',
+      status,
+    ].join(','));
   });
-
-  setEl('pricing-stat-rules',      Object.keys(PRICING_RULES).length);
-  setEl('pricing-stat-mismatches', mismatchCount);
-  setEl('pricing-stat-custom',     customCount);
-  setEl('pricing-stat-machines',   machineSet.size);
-
-  tbody.innerHTML = dedup.length === 0
-    ? '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--muted)">No pricing rules found</td></tr>'
-    : dedup.sort((a,b) => a.custName.localeCompare(b.custName) || a.product.localeCompare(b.product)).map(r => {
-      const key      = r.custName + ':' + r.product;
-      const machines = machineCount[key] || 1;
-      const rowBg    = r.hasMismatch ? 'background:rgba(220,38,38,.04)' : '';
-      const dexStatus = r.dexPrice === undefined
-        ? '<span class="pill gray" style="font-size:10px">No DEX</span>'
-        : r.hasMismatch
-          ? '<span class="pill red" style="font-size:10px">⚠ DEX $' + r.dexPrice.toFixed(2) + '</span>'
-          : '<span class="pill green" style="font-size:10px">Match</span>';
-
-      return `<tr style="${rowBg}">
-        <td style="font-size:12px">${r.custName}</td>
-        <td style="font-size:12px;font-weight:600">${r.product}</td>
-        <td class="text-mono">$${r.rrp.toFixed(2)}</td>
-        <td class="text-mono" style="font-weight:700;color:${r.isCustom?'var(--info)':'var(--text)'}">${r.isCustom?'$'+r.custPrice.toFixed(2):'—'}</td>
-        <td class="text-mono">${machines}</td>
-        <td>${dexStatus}</td>
-        <td class="text-muted text-mono" style="font-size:11px">—</td>
-        <td><button class="btn-icon btn-sm" onclick="openPricingModal('${r.custName}','${r.product}',${r.custPrice})">
-          <svg width="13" height="13" viewBox="0 0 20 20" fill="none"><path d="M4 13.5V16h2.5l7.37-7.37-2.5-2.5L4 13.5zM16.71 6.04a1 1 0 000-1.41l-1.34-1.34a1 1 0 00-1.41 0l-1.05 1.05 2.75 2.75 1.05-1.05z" fill="currentColor"/></svg>
-        </button></td>
-      </tr>`;
-    }).join('');
-}
-
-function openPricingModal(custName, productName, currentPrice) {
-  const modal  = document.getElementById('pricing-modal');
-  const custSel = document.getElementById('pricing-cust-sel');
-  const prodSel = document.getElementById('pricing-prod-sel');
-  const delBtn = document.getElementById('pricing-delete-btn');
-  if (!modal) return;
-
-  // Populate customer dropdown
-  if (custSel) {
-    custSel.innerHTML = '<option value="">— Select customer —</option>' +
-      Object.values(CUSTOMERS).filter(c=>c.status==='active')
-        .map(c => `<option value="${c.name}" ${c.name===custName?'selected':''}>${c.name}</option>`).join('');
-  }
-  // Populate product dropdown
-  if (prodSel) {
-    prodSel.innerHTML = '<option value="">— Select product —</option>' +
-      Object.keys(PRODUCTS)
-        .map(p => `<option value="${p}" ${p===productName?'selected':''}>${p}</option>`).join('');
-  }
-
-  const rrp = PRODUCTS[productName]?.rrp || 0;
-  const rrpEl = document.getElementById('pricing-rrp-display');
-  if (rrpEl) rrpEl.textContent = productName ? '$' + rrp.toFixed(2) : '—';
-
-  const priceEl = document.getElementById('pricing-custom-price');
-  if (priceEl) priceEl.value = currentPrice && Math.abs(currentPrice - rrp) > 0.01 ? currentPrice : '';
-
-  if (custName && productName) {
-    const ruleKey = custName + ':' + productName;
-    if (delBtn) delBtn.style.display = PRICING_RULES[ruleKey] ? '' : 'none';
-  } else {
-    if (delBtn) delBtn.style.display = 'none';
-  }
-
-  // Update RRP when product changes
-  if (prodSel) prodSel.onchange = () => {
-    const p   = prodSel.value;
-    const rrp = PRODUCTS[p]?.rrp || 0;
-    if (rrpEl) rrpEl.textContent = p ? '$' + rrp.toFixed(2) : '—';
-  };
-
-  modal.style.display = 'flex';
-}
-
-function closePricingModal() {
-  const modal = document.getElementById('pricing-modal');
-  if (modal) modal.style.display = 'none';
-}
-
-function savePricingRule() {
-  const custName = document.getElementById('pricing-cust-sel')?.value;
-  const product  = document.getElementById('pricing-prod-sel')?.value;
-  const price    = parseFloat(document.getElementById('pricing-custom-price')?.value);
-
-  if (!custName || !product) { showToast('Select customer and product'); return; }
-
-  const ruleKey = custName + ':' + product;
-  const rrp     = PRODUCTS[product]?.rrp || 0;
-
-  if (!price || Math.abs(price - rrp) < 0.01) {
-    // Remove rule — revert to RRP
-    delete PRICING_RULES[ruleKey];
-    if (fbReady && fbDb) fbDb.ref('vynd/pricingRules/' + encodeURIComponent(ruleKey)).remove();
-    showToast('Price reverted to RRP ✓');
-  } else {
-    PRICING_RULES[ruleKey] = price;
-    if (fbReady && fbDb) fbDb.ref('vynd/pricingRules/' + encodeURIComponent(ruleKey)).set(price);
-    showToast('Price rule saved ✓');
-  }
-
-  closePricingModal();
-  renderPricingPage();
-}
-
-function deletePricingRule() {
-  const custName = document.getElementById('pricing-cust-sel')?.value;
-  const product  = document.getElementById('pricing-prod-sel')?.value;
-  if (!custName || !product) return;
-  const ruleKey = custName + ':' + product;
-  delete PRICING_RULES[ruleKey];
-  if (fbReady && fbDb) fbDb.ref('vynd/pricingRules/' + encodeURIComponent(ruleKey)).remove();
-  closePricingModal();
-  renderPricingPage();
-  showToast('Price rule removed ✓');
-}
-
-function exportPricingCSV() {
-  const lines = ['Customer,Product,RRP,Custom Price,Effective Price'];
-  Object.entries(PRICING_RULES).forEach(([key, price]) => {
-    const [cust, ...prodParts] = key.split(':');
-    const product = prodParts.join(':');
-    const rrp = PRODUCTS[product]?.rrp || 0;
-    lines.push(['"'+cust+'"', '"'+product+'"', rrp.toFixed(2), price.toFixed(2), price.toFixed(2)].join(','));
-  });
-  downloadFile('vynd-pricing-' + new Date().toLocaleDateString('en-CA') + '.csv', lines.join('\n'), 'text/csv');
-  showToast('Pricing exported ✓');
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'vynd-lane-pricing-' + new Date().toLocaleDateString('en-CA') + '.csv';
+  a.click();
 }
 
 // ══════════════════════════════════════
@@ -13814,7 +14070,6 @@ function renderProductsPage() {
 
     const flags = [];
     if (p.gstFree)        flags.push('<span class="pill green" style="font-size:10px">GST Free</span>');
-    if (p.minPickEnabled) flags.push('<span class="pill blue"  style="font-size:10px">Min pick ' + (p.minPickPct||0) + '%</span>');
     if (p.overridePar)    flags.push('<span class="pill orange" style="font-size:10px">Override par</span>');
     if (p.prekit)         flags.push('<span class="pill orange" style="font-size:10px">🥬 Fresh</span>');
 
@@ -13840,7 +14095,7 @@ function renderProductsPage() {
       <td class="text-mono" style="color:var(--muted)">$${cost.toFixed(2)}</td>
       <td class="text-mono" style="color:${marginColor(margin)};font-weight:600">${margin}%</td>
       <td>${p.gstFree ? '<span class="pill green" style="font-size:10px">Free</span>' : '<span class="pill gray" style="font-size:10px">GST</span>'}</td>
-      <td style="display:flex;gap:4px;flex-wrap:wrap">${flags.join('') || '<span style="color:var(--muted);font-size:11px">—</span>'}</td>
+      <td><div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center">${flags.join('')}</div></td>
       <td><button class="btn-icon btn-sm" onclick="event.stopPropagation();openProductModal('${nameEsc}')">
         <svg width="13" height="13" viewBox="0 0 20 20" fill="none"><path d="M4 13.5V16h2.5l7.37-7.37-2.5-2.5L4 13.5zM16.71 6.04a1 1 0 000-1.41l-1.34-1.34a1 1 0 00-1.41 0l-1.05 1.05 2.75 2.75 1.05-1.05z" fill="currentColor"/></svg>
       </button></td>
@@ -13901,6 +14156,29 @@ function openProductModal(name) {
     document.getElementById('prod-m-upload-status').textContent = '';
   }
   modal.style.display = 'flex';
+  updateMinPickState();
+}
+
+// Grey out min pick threshold when override par or fresh/prekit is on —
+// those modes always pick to par so a minimum threshold is irrelevant
+function updateMinPickState() {
+  const overrideOn = document.getElementById('prod-m-overridepar')?.classList.contains('on');
+  const prekitOn   = document.getElementById('prod-m-prekit')?.classList.contains('on');
+  const disabled   = overrideOn || prekitOn;
+  const input      = document.getElementById('prod-m-minpick');
+  const label      = document.getElementById('prod-m-minpick-label');
+  if (input) {
+    input.disabled = disabled;
+    input.style.opacity = disabled ? '0.35' : '';
+    input.style.pointerEvents = disabled ? 'none' : '';
+    if (disabled) input.value = '';
+  }
+  if (label) {
+    label.style.opacity = disabled ? '0.45' : '';
+    label.textContent = disabled
+      ? 'Min pick threshold (%) — not used with override/prekit'
+      : 'Min pick threshold (%)';
+  }
 }
 
 function closeProdModal() {
@@ -14949,6 +15227,7 @@ function saveMachineDetail() {
   const mid = document.getElementById('md-set-id')?.value?.trim();
   if (!mid) return;
 
+  const oldRoute = MACHINE_META[mid]?.route || '';
   const updates = {
     name:           document.getElementById('md-set-name')?.value?.trim()        || '',
     sublocation:    document.getElementById('md-set-sublocation')?.value?.trim()  || '',
@@ -14964,8 +15243,54 @@ function saveMachineDetail() {
     dynparEnabled:  document.getElementById('md-set-dynpar-enabled')?.checked !== false,
   };
 
+  const newRoute = updates.route;
+
   // Update in-memory MACHINE_META
   MACHINE_META[mid] = { ...MACHINE_META[mid], ...updates };
+
+  // ── Sync ROUTES stops when route changes ──────────────────────────────
+  if (newRoute !== oldRoute) {
+    // Remove from old route stops (in-memory + Firebase)
+    if (oldRoute && ROUTES[oldRoute]) {
+      ROUTES[oldRoute].stops = (ROUTES[oldRoute].stops || []).filter(s => s.id !== mid);
+      if (fbReady && fbDb) {
+        const oldStops = ROUTES[oldRoute].stops.map((s, i) => ({ ...s, serviceOrder: i + 1 }));
+        fbDb.ref('vynd/routes/' + oldRoute + '/stops').set(oldStops).catch(() => {});
+      }
+    }
+    // Add to new route stops (in-memory + Firebase)
+    if (newRoute) {
+      if (!ROUTES[newRoute]) ROUTES[newRoute] = { id: newRoute, label: newRoute + ' Route', name: newRoute, driver: '', days: 'Weekly', freq: 1, stops: [] };
+      const already = ROUTES[newRoute].stops.some(s => s.id === mid);
+      if (!already) {
+        const meta = MACHINE_META[mid];
+        const newStop = {
+          id:           mid,
+          name:         updates.name || mid,
+          addr:         updates.sublocation || '',
+          est:          30,   // default 30 min service time
+          type:         'vending',
+          lat:          updates.lat || 0,
+          lng:          updates.lng || 0,
+          cashType:     updates.cashType || 'cash',
+          serviceOrder: (ROUTES[newRoute].stops.length + 1),
+          routeId:      newRoute,
+          stopType:     'vending',
+        };
+        ROUTES[newRoute].stops.push(newStop);
+        if (fbReady && fbDb) {
+          fbDb.ref('vynd/routes/' + newRoute + '/stops').set(ROUTES[newRoute].stops).catch(() => {});
+          fbDb.ref('vynd/routes/' + newRoute + '/name').set(newRoute).catch(() => {});
+          fbDb.ref('vynd/routes/' + newRoute + '/label').set(newRoute + ' Route').catch(() => {});
+          fbDb.ref('vynd/routes/' + newRoute + '/days').set('Weekly').catch(() => {});
+        }
+      }
+    }
+    // Rebuild unplanned machine list
+    buildRouteDriversAndUnplanned();
+    // Re-render routing page if it's open
+    if (typeof initRoutingPage === 'function') initRoutingPage();
+  }
 
   // Save to Firebase
   if (fbReady && fbDb) {

@@ -1333,7 +1333,7 @@ async function loadHomeScreen() {
             STOPS[stop.id].slots = Object.entries(dex.slots).map(([id, s]) => {
               const pogSlot = pog?.[id] || {};
               const dexPriceDollars  = parseFloat(s.priceDollars) || parseFloat(s.priceCents) / 100 || 0;
-              const vmsPog = parseFloat(pogSlot.price) || 0;
+              const vmsPog = parseFloat(pogSlot.price) || parseFloat(pogSlot.priceDollars) || parseFloat(pogSlot.priceCents) / 100 || 0;
               const vmsPriceDollars  = vmsPog > 0 ? vmsPog : dexPriceDollars;
               const hasPlanogramPrice = vmsPog > 0;
               return {
@@ -1555,9 +1555,9 @@ async function loadAllMachinesForLocations() {
           current:       d.currentSOH !== null && d.currentSOH !== undefined ? d.currentSOH : (p.currentSOH || 0),
           par:           p.par      !== undefined ? p.par      : (d.par      || 0),
           capacity:      p.capacity !== undefined ? p.capacity : (d.capacity || 12),
-          price:         (p.price > 0) ? p.price : (d.priceDollars || 0),
-          dexPrice:      parseFloat(d.priceDollars) || parseFloat(d.priceCents) / 100 || 0,
-          hasPlanogramPrice: p.price > 0,
+          price:         parseFloat(p.price) || parseFloat(p.priceDollars) || parseFloat(p.priceCents) / 100 || dexP || 0,
+          dexPrice:      dexP,
+          hasPlanogramPrice: !!(parseFloat(p.price) || parseFloat(p.priceDollars) || parseFloat(p.priceCents)),
           barcode:       p.barcode  || d.barcode  || '',
           pendingChange: p.pendingChange || null,
         };
@@ -1763,9 +1763,43 @@ function initStopPullToRefresh() {
       // Show brief spinner feedback
       indicator.style.opacity = 1;
       document.getElementById('stop-ptr-spinner').style.animation = 'ptr-spin .7s linear infinite';
-      refreshStopDex(currentStopMachineId, () => {
+      refreshStopDex(currentStopMachineId, async () => {
         indicator.style.opacity = 0;
         document.getElementById('stop-ptr-spinner').style.animation = '';
+        if (!fbDb || !currentStopMachineId) return;
+        const s = STOPS[currentStopMachineId];
+        if (!s) return;
+        try {
+          // Fetch both DEX and planogram in parallel
+          const [dexSnap, pogSnap] = await Promise.all([
+            fbDb.ref('vynd/dexReadings/' + currentStopMachineId + '/last/slots').once('value'),
+            fbDb.ref('vynd/planograms/'  + currentStopMachineId + '/slots').once('value'),
+          ]);
+          const dexSlots = dexSnap.val() || {};
+          const pogSlots = pogSnap.val() || {};
+          if (s.slots) {
+            s.slots.forEach(slot => {
+              const d = dexSlots[slot.id] || {};
+              const p = pogSlots[slot.id]  || {};
+              // Product name — planogram wins, DEX fallback
+              const newProduct = p.product || d.product;
+              if (newProduct) slot.product = newProduct;
+              // SOH — DEX is source of truth
+              if (d.currentSOH !== undefined) slot.current = d.currentSOH;
+              // DEX price — always from DEX
+              const newDexPrice = parseFloat(d.priceDollars) || parseFloat(d.priceCents) / 100 || 0;
+              if (newDexPrice > 0) slot.dexPrice = newDexPrice;
+              // VMS price — planogram
+              const newVmsPrice = parseFloat(p.price) || parseFloat(p.priceDollars) || 0;
+              if (newVmsPrice > 0) { slot.price = newVmsPrice; slot.hasPlanogramPrice = true; }
+              // pendingChange
+              if (p.pendingChange) slot.pendingChange = p.pendingChange;
+              else if (!p.pendingChange && slot.pendingChange) slot.pendingChange = null;
+            });
+          }
+          // Rebuild fill guide with fresh data
+          try { buildPlanogram(s); } catch(e) { console.warn('buildPlanogram error:', e); }
+        } catch(e) { /* silent */ }
       });
     }
   });
@@ -2498,7 +2532,9 @@ function buildPlanogram(s) {
     }
 
     const isFull      = isPrekit ? false : (current >= par);
-    const notOnPick   = !!stopSlotState[slot.id]?.notOnPick;
+    // Swap slots always count as "on pick" — driver must COLLECT + LOAD regardless of pick list
+    const isSwapSlot  = slot.pendingChange?.changeType === 'queue' && !!slot.pendingChange?.newProduct;
+    const notOnPick   = isSwapSlot ? false : !!stopSlotState[slot.id]?.notOnPick;
 
     // Price mismatch: DEX price from machine vs VMS price
     const hasDex      = slot.dexPrice !== undefined;

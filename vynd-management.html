@@ -1176,6 +1176,11 @@ body.dark .mkt-slot-stock-badge{background:rgba(255,255,255,.08)}
                 <input class="form-input" id="prod-m-brand" placeholder="e.g. Coca-Cola">
               </div>
             </div>
+            <div class="form-group">
+              <div class="form-label">Alternate barcodes <span style="font-weight:400;color:var(--muted)">(comma separated — old barcodes, size variants)</span></div>
+              <input class="form-input" id="prod-m-altbarcodes" placeholder="e.g. 9300617000001, 9300617000002" style="font-family:'DM Mono',monospace;font-size:12px">
+              <div style="font-size:11px;color:var(--muted);margin-top:3px">Scanning any of these will add this product at its current price</div>
+            </div>
             <!-- Image section -->
             <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px">
               <div style="display:flex;gap:12px;align-items:flex-start">
@@ -1968,37 +1973,93 @@ body.dark .mkt-slot-stock-badge{background:rgba(255,255,255,.08)}
       </div>
     </div>
     <!-- ══ RECONCILIATION ══ -->
-    <div class="page" id="page-reconciliation">
-      <div class="filter-bar">
-        <button class="filter-btn on" onclick="filterRecon('all',this)">All</button>
-        <button class="filter-btn" onclick="filterRecon('pending',this)">Pending</button>
-        <button class="filter-btn" onclick="filterRecon('complete',this)">Complete</button>
-        <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
-          <span class="pill orange" id="recon-pending-badge" style="display:none">0 pending</span>
-          <button class="btn btn-secondary btn-sm" onclick="loadReconciliation()">↻ Refresh</button>
-        </div>
+    <div class="page page-flex" id="page-reconciliation" style="height:calc(100vh - 60px);overflow:hidden">
+
+      <!-- Tab bar -->
+      <div style="display:flex;gap:0;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--surface)">
+        <button class="settings-tab active" id="recon-tab-records" onclick="switchReconTab('records',this)" style="margin-bottom:-1px">Restock records</button>
+        <button class="settings-tab"        id="recon-tab-bags"    onclick="switchReconTab('bags',this)"    style="margin-bottom:-1px">
+          💰 Cash bags
+          <span id="recon-bags-badge" style="display:none;background:var(--danger);color:#fff;border-radius:10px;padding:1px 6px;font-size:10px;margin-left:4px;vertical-align:middle">0</span>
+        </button>
       </div>
-      <div id="recon-table-wrap">
-        <div style="padding:40px;text-align:center;color:var(--muted)">
-          <div style="font-size:28px;margin-bottom:8px">📋</div>
-          <div style="font-size:14px;font-weight:600;margin-bottom:4px">Loading reconciliation records...</div>
-        </div>
-      </div>
-      <div id="recon-detail-panel" style="display:none;margin-top:24px;border-top:1px solid var(--border);padding-top:20px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-          <div>
-            <div style="font-size:15px;font-weight:700" id="recon-detail-title">Restock details</div>
-            <div style="font-size:12px;color:var(--muted);margin-top:2px" id="recon-detail-sub"></div>
+
+      <!-- ── Tab: Restock records (existing) ──────────────────────── -->
+      <div id="recon-tab-content-records" style="flex:1;overflow-y:auto;display:flex;flex-direction:column">
+        <div class="filter-bar" style="flex-shrink:0">
+          <button class="filter-btn on" onclick="filterRecon('all',this)">All</button>
+          <button class="filter-btn" onclick="filterRecon('pending',this)">Pending</button>
+          <button class="filter-btn" onclick="filterRecon('complete',this)">Complete</button>
+          <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+            <span class="pill orange" id="recon-pending-badge" style="display:none">0 pending</span>
+            <button class="btn btn-secondary btn-sm" onclick="loadReconciliation()">↻ Refresh</button>
           </div>
-          <button class="btn btn-secondary btn-sm" onclick="closeReconDetail()">✕ Close</button>
         </div>
-        <div style="overflow-x:auto">
-          <table>
-            <thead><tr><th>Slot</th><th>Product</th><th>Price</th><th>SOH before</th><th>Sold (DEX)</th><th>Filled</th><th>SOH after</th><th>Variance</th></tr></thead>
-            <tbody id="recon-detail-body"></tbody>
-          </table>
+        <div id="recon-table-wrap" style="flex:1;overflow-y:auto">
+          <div style="padding:40px;text-align:center;color:var(--muted)">
+            <div style="font-size:28px;margin-bottom:8px">📋</div>
+            <div style="font-size:14px;font-weight:600;margin-bottom:4px">Loading reconciliation records...</div>
+          </div>
         </div>
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:16px" id="recon-detail-summary"></div>
+        <div id="recon-detail-panel" style="display:none;border-top:1px solid var(--border);padding:20px;flex-shrink:0">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+            <div>
+              <div style="font-size:15px;font-weight:700" id="recon-detail-title">Restock details</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:2px" id="recon-detail-sub"></div>
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="closeReconDetail()">✕ Close</button>
+          </div>
+          <div style="overflow-x:auto">
+            <table>
+              <thead><tr><th>Slot</th><th>Product</th><th>Price</th><th>SOH before</th><th>Sold (DEX)</th><th>Filled</th><th>SOH after</th><th>Variance</th></tr></thead>
+              <tbody id="recon-detail-body"></tbody>
+            </table>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:16px" id="recon-detail-summary"></div>
+        </div>
+      </div>
+
+      <!-- ── Tab: Cash bags ────────────────────────────────────────── -->
+      <div id="recon-tab-content-bags" style="flex:1;overflow-y:auto;display:none;flex-direction:column">
+
+        <!-- Scan bar -->
+        <div style="padding:16px 20px;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0">
+          <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">Scan or enter bag number</div>
+          <div style="display:flex;gap:8px">
+            <input class="form-input" id="bag-scan-input" placeholder="Scan seal number or type bag number…"
+              style="flex:1;font-family:'DM Mono',monospace;font-size:14px"
+              oninput="filterBagList(this.value)"
+              onkeydown="if(event.key==='Enter') confirmBagScan(this.value)">
+            <button class="btn btn-primary" onclick="confirmBagScan(document.getElementById('bag-scan-input').value)">Find bag</button>
+            <button class="btn btn-secondary" onclick="document.getElementById('bag-scan-input').value='';filterBagList('')">✕</button>
+          </div>
+        </div>
+
+        <!-- Stats strip -->
+        <div style="display:flex;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0">
+          <div style="flex:1;padding:10px 20px;border-right:1px solid var(--border);text-align:center">
+            <div style="font-family:'DM Mono',monospace;font-size:18px;font-weight:700;color:var(--danger)" id="bags-stat-outstanding">—</div>
+            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-top:1px">Outstanding</div>
+          </div>
+          <div style="flex:1;padding:10px 20px;border-right:1px solid var(--border);text-align:center">
+            <div style="font-family:'DM Mono',monospace;font-size:18px;font-weight:700;color:var(--accent)" id="bags-stat-counted">—</div>
+            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-top:1px">Counted today</div>
+          </div>
+          <div style="flex:1;padding:10px 20px;border-right:1px solid var(--border);text-align:center">
+            <div style="font-family:'DM Mono',monospace;font-size:18px;font-weight:700;color:var(--accent)" id="bags-stat-expected">—</div>
+            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-top:1px">Expected (DEX)</div>
+          </div>
+          <div style="flex:1;padding:10px 20px;text-align:center">
+            <div style="font-family:'DM Mono',monospace;font-size:18px;font-weight:700" id="bags-stat-variance">—</div>
+            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-top:1px">Variance</div>
+          </div>
+        </div>
+
+        <!-- Bag list -->
+        <div style="flex:1;overflow-y:auto;padding:16px 20px;display:flex;flex-direction:column;gap:10px" id="bags-list">
+          <div style="text-align:center;color:var(--muted);padding:40px;font-size:13px">Loading bags…</div>
+        </div>
+
       </div>
     </div>
 
@@ -3848,7 +3909,7 @@ function navTo(page, el) {
   if (page === 'commission')      renderCommissionPage();
   if (page === 'pricing')         initPricingPage();
   if (page === 'reports')         renderReportsPage();
-  if (page === 'reconciliation')  loadReconciliation();
+  if (page === 'reconciliation')  { loadReconciliation(); loadCashBags(); }
   if (page === 'picking')         initPickingPage();
 }
 
@@ -7398,6 +7459,265 @@ function closeDexImport() {
 
 let allReconRecords = [];
 let reconFilter     = 'all';
+
+// ── Reconciliation tab switcher ─────────────────────────────────────────
+function switchReconTab(tab, btn) {
+  document.querySelectorAll('#page-reconciliation .settings-tab').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  document.getElementById('recon-tab-content-records').style.display = tab === 'records' ? 'flex' : 'none';
+  document.getElementById('recon-tab-content-bags').style.display    = tab === 'bags'    ? 'flex' : 'none';
+  if (tab === 'bags') loadCashBags();
+}
+
+// ── Cash Bags ────────────────────────────────────────────────────────────
+// Bags come from vynd/reconciliation/{mid}/{key} where bagNumber is set
+// Cash room staff scan the bag seal number, enter cash counted, mark complete
+
+let _allBags = []; // cached bag records
+
+async function loadCashBags() {
+  const list = document.getElementById('bags-list');
+  if (list) list.innerHTML = '<div style="text-align:center;color:var(--muted);padding:40px;font-size:13px">Loading bags…</div>';
+  if (!fbReady || !fbDb) { if (list) list.innerHTML = '<div style="text-align:center;color:var(--muted);padding:40px">Connect to Firebase first</div>'; return; }
+
+  // Fetch all reconciliation records for all machines in parallel
+  const mids = Object.keys(MACHINE_META);
+  const results = await Promise.all(mids.map(mid =>
+    fbDb.ref('vynd/reconciliation/' + mid).once('value')
+      .then(snap => ({ mid, data: snap.val() }))
+      .catch(() => ({ mid, data: null }))
+  ));
+
+  const bags = [];
+  results.forEach(({ mid, data }) => {
+    if (!data) return;
+    Object.entries(data).forEach(([key, r]) => {
+      if (!r.bagNumber) return; // no bag number — skip
+      const meta = MACHINE_META[mid] || {};
+      bags.push({
+        key,
+        mid,
+        machineName: meta.name || mid,
+        sublocation: meta.sublocation || '',
+        bagNumber:   String(r.bagNumber),
+        createdAt:   r.createdAt || r.completedAt || '',
+        // DEX expected cash = cashToBoxSinceReset (cash physically removed from machine)
+        expectedCents: r.cashBreakdown?.cashToBoxSinceReset || r.cashBreakdown?.cashInSinceReset || 0,
+        cashCounted:   parseFloat(r.cashCounted) || 0,
+        cashRoomStatus: r.cashRoomStatus || (r.cashCounted > 0 ? 'complete' : 'outstanding'),
+        cashRoomAt:    r.cashRoomAt || '',
+        cashRoomNote:  r.cashRoomNote || '',
+        variance:      r.cashRoomStatus === 'complete' ? (parseFloat(r.cashCounted) - (r.cashBreakdown?.cashToBoxSinceReset || 0) / 100) : null,
+      });
+    });
+  });
+
+  // Sort: outstanding first, then by date desc
+  bags.sort((a, b) => {
+    if (a.cashRoomStatus !== b.cashRoomStatus) return a.cashRoomStatus === 'outstanding' ? -1 : 1;
+    return b.createdAt.localeCompare(a.createdAt);
+  });
+
+  _allBags = bags;
+  renderBagList(bags);
+  updateBagStats(bags);
+}
+
+function updateBagStats(bags) {
+  const outstanding = bags.filter(b => b.cashRoomStatus === 'outstanding');
+  const counted     = bags.filter(b => b.cashRoomStatus === 'complete');
+  // Today's counted
+  const today = new Date().toLocaleDateString('en-CA');
+  const countedToday = counted.filter(b => (b.cashRoomAt || b.createdAt).startsWith(today));
+
+  const totalExpected = outstanding.reduce((s, b) => s + b.expectedCents / 100, 0);
+  const totalCounted  = countedToday.reduce((s, b) => s + b.cashCounted, 0);
+  const totalExpectedToday = countedToday.reduce((s, b) => s + b.expectedCents / 100, 0);
+  const variance = totalCounted - totalExpectedToday;
+
+  const s = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  s('bags-stat-outstanding', outstanding.length);
+  s('bags-stat-counted',     countedToday.length);
+  s('bags-stat-expected',    '$' + totalExpected.toFixed(2));
+
+  const varEl = document.getElementById('bags-stat-variance');
+  if (varEl) {
+    varEl.textContent = (variance >= 0 ? '+' : '') + '$' + variance.toFixed(2);
+    varEl.style.color = Math.abs(variance) < 0.05 ? 'var(--accent)' : variance > 0 ? 'var(--info)' : 'var(--danger)';
+  }
+
+  // Update badge
+  const badge = document.getElementById('recon-bags-badge');
+  if (badge) {
+    badge.textContent = outstanding.length;
+    badge.style.display = outstanding.length > 0 ? '' : 'none';
+  }
+}
+
+function renderBagList(bags, highlightBag) {
+  const list = document.getElementById('bags-list');
+  if (!list) return;
+
+  if (bags.length === 0) {
+    list.innerHTML = '<div style="text-align:center;color:var(--muted);padding:40px;font-size:13px">No bags found</div>';
+    return;
+  }
+
+  const outstanding = bags.filter(b => b.cashRoomStatus === 'outstanding');
+  const completed   = bags.filter(b => b.cashRoomStatus === 'complete');
+
+  let html = '';
+
+  if (outstanding.length > 0) {
+    html += `<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:4px">${outstanding.length} outstanding</div>`;
+    html += outstanding.map(b => renderBagCard(b, b.bagNumber === highlightBag)).join('');
+  }
+
+  if (completed.length > 0) {
+    html += `<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin:12px 0 4px">Completed</div>`;
+    html += completed.map(b => renderBagCard(b, false)).join('');
+  }
+
+  list.innerHTML = html;
+
+  // Auto-scroll to highlighted bag
+  if (highlightBag) {
+    setTimeout(() => {
+      const card = document.getElementById('bag-card-' + highlightBag);
+      if (card) { card.scrollIntoView({ behavior: 'smooth', block: 'center' }); card.focus(); }
+    }, 100);
+  }
+}
+
+function renderBagCard(b, highlighted) {
+  const isComplete  = b.cashRoomStatus === 'complete';
+  const expectedDol = b.expectedCents / 100;
+  const variance    = isComplete ? (b.cashCounted - expectedDol) : null;
+  const varStr      = variance !== null ? (variance >= 0 ? '+' : '') + '$' + variance.toFixed(2) : '';
+  const varColor    = variance !== null ? (Math.abs(variance) < 0.05 ? 'var(--accent)' : variance < 0 ? 'var(--danger)' : 'var(--info)') : '';
+  const dateStr     = b.createdAt ? new Date(b.createdAt).toLocaleDateString('en-AU', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' }) : '—';
+  const outline     = highlighted ? 'outline:2px solid var(--info);' : '';
+
+  if (isComplete) {
+    return `<div id="bag-card-${b.bagNumber}" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 16px;opacity:.7;${outline}">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="width:32px;height:32px;border-radius:50%;background:rgba(74,222,128,.12);border:1px solid rgba(74,222,128,.25);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">✓</div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:baseline;gap:8px">
+            <span style="font-family:'DM Mono',monospace;font-weight:700;font-size:14px">${b.bagNumber}</span>
+            <span style="font-size:11px;color:var(--muted)">${b.machineName}${b.sublocation ? ' · ' + b.sublocation : ''}</span>
+            <span style="font-size:11px;color:var(--muted);margin-left:auto">${dateStr}</span>
+          </div>
+          <div style="display:flex;gap:16px;margin-top:4px;font-size:12px">
+            <span>DEX: <strong>$${expectedDol.toFixed(2)}</strong></span>
+            <span>Counted: <strong>$${b.cashCounted.toFixed(2)}</strong></span>
+            <span style="color:${varColor};font-weight:700">${varStr}</span>
+            ${b.cashRoomNote ? `<span style="color:var(--muted)">"${b.cashRoomNote}"</span>` : ''}
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  return `<div id="bag-card-${b.bagNumber}" tabindex="0" style="background:var(--surface);border:1px solid ${highlighted ? 'var(--info)' : 'var(--border)'};border-radius:8px;padding:14px 16px;${outline}transition:all .2s">
+    <div style="display:flex;align-items:flex-start;gap:12px">
+      <div style="width:40px;height:40px;border-radius:50%;background:rgba(251,146,60,.1);border:1px solid rgba(251,146,60,.3);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">💰</div>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">
+          <span style="font-family:'DM Mono',monospace;font-weight:700;font-size:16px">${b.bagNumber}</span>
+          <span style="font-size:12px;color:var(--muted)">${b.machineName}${b.sublocation ? ' · ' + b.sublocation : ''}</span>
+          <span style="font-size:11px;color:var(--muted);margin-left:auto">${dateStr}</span>
+        </div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px">DEX expected: <strong style="color:var(--text)">$${expectedDol.toFixed(2)}</strong></div>
+        <!-- Cash entry row -->
+        <div style="display:flex;gap:8px;margin-top:10px;align-items:center">
+          <div style="flex:1;position:relative">
+            <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:13px">$</span>
+            <input type="number" step="0.01" min="0" placeholder="0.00"
+              id="bag-input-${b.bagNumber}"
+              style="width:100%;padding:7px 10px 7px 22px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;font-size:14px"
+              onkeydown="if(event.key==='Enter') saveBagCount('${b.mid}','${b.key}','${b.bagNumber}')">
+          </div>
+          <input type="text" placeholder="Note (optional)" id="bag-note-${b.bagNumber}"
+            style="flex:1.5;padding:7px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:12px">
+          <button class="btn btn-primary btn-sm" onclick="saveBagCount('${b.mid}','${b.key}','${b.bagNumber}')">
+            ✓ Confirm
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function filterBagList(query) {
+  const q = (query || '').toLowerCase().trim();
+  if (!q) { renderBagList(_allBags); return; }
+  const filtered = _allBags.filter(b =>
+    b.bagNumber.toLowerCase().includes(q) ||
+    b.machineName.toLowerCase().includes(q)
+  );
+  renderBagList(filtered, q.length >= 3 ? _allBags.find(b => b.bagNumber.toLowerCase() === q)?.bagNumber : null);
+}
+
+function confirmBagScan(query) {
+  const q = (query || '').trim();
+  if (!q) return;
+  const match = _allBags.find(b => b.bagNumber === q);
+  if (!match) {
+    showToast('Bag ' + q + ' not found');
+    return;
+  }
+  filterBagList(q);
+  // Focus the amount input
+  setTimeout(() => {
+    const inp = document.getElementById('bag-input-' + q);
+    if (inp) inp.focus();
+  }, 200);
+}
+
+async function saveBagCount(mid, key, bagNumber) {
+  const amountEl = document.getElementById('bag-input-' + bagNumber);
+  const noteEl   = document.getElementById('bag-note-' + bagNumber);
+  const amount   = parseFloat(amountEl?.value);
+  if (isNaN(amount) || amount < 0) { showToast('Enter a valid amount'); amountEl?.focus(); return; }
+
+  const note = noteEl?.value?.trim() || '';
+  const updates = {
+    cashCounted:    amount,
+    cashRoomStatus: 'complete',
+    cashRoomAt:     new Date().toISOString(),
+    cashRoomNote:   note,
+  };
+
+  if (fbReady && fbDb) {
+    await fbDb.ref('vynd/reconciliation/' + mid + '/' + key).update(updates)
+      .then(() => showToast('✓ Bag ' + bagNumber + ' counted — $' + amount.toFixed(2)))
+      .catch(() => showToast('⚠ Save failed — check connection'));
+  }
+
+  // Update in-memory and re-render
+  const bag = _allBags.find(b => b.key === key && b.mid === mid);
+  if (bag) {
+    bag.cashCounted    = amount;
+    bag.cashRoomStatus = 'complete';
+    bag.cashRoomAt     = new Date().toISOString();
+    bag.cashRoomNote   = note;
+    bag.variance       = amount - bag.expectedCents / 100;
+  }
+
+  // Re-sort and re-render
+  _allBags.sort((a, b) => {
+    if (a.cashRoomStatus !== b.cashRoomStatus) return a.cashRoomStatus === 'outstanding' ? -1 : 1;
+    return b.createdAt.localeCompare(a.createdAt);
+  });
+
+  renderBagList(_allBags);
+  updateBagStats(_allBags);
+
+  // Clear scan input
+  const scanEl = document.getElementById('bag-scan-input');
+  if (scanEl) scanEl.value = '';
+}
 
 function loadReconciliation() {
   if (!fbReady || !fbDb) {
@@ -13468,34 +13788,38 @@ function initPricingPage() {
   // showPlanogram sets dexPrice when a planogram is opened, but if none have been opened
   // this session the pricing page would show "No DEX" for every lane.
   if (fbReady && fbDb) {
-    const mids = Object.keys(MACHINE_META).filter(mid => {
-      const pog = PLANOGRAMS[mid];
-      if (!pog?.slots?.length) return true; // no slots at all — definitely need to fetch
-      return pog.slots.some(s => s.dexPrice === undefined); // any slot missing dexPrice
-    });
-
-    if (mids.length === 0) { renderPricingPage(); return; }
+    // Always refresh from Firebase — product names, prices and dexPrices can change
+    // between sessions (swaps completed, price changes applied)
+    const mids = Object.keys(MACHINE_META);
 
     // Show a loading state then render once all fetches complete
     const tbody = document.getElementById('pricing-tbody');
     if (tbody) tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:32px;color:var(--muted)">Loading DEX prices…</td></tr>';
 
     Promise.all(mids.map(mid =>
-      fbDb.ref('vynd/dexReadings/' + mid + '/last/slots').once('value')
-        .then(snap => ({ mid, slots: snap.val() }))
-        .catch(() => ({ mid, slots: null }))
+      Promise.all([
+        fbDb.ref('vynd/dexReadings/' + mid + '/last/slots').once('value').catch(() => null),
+        fbDb.ref('vynd/planograms/'  + mid + '/slots').once('value').catch(() => null),
+      ]).then(([dexSnap, pogSnap]) => ({ mid, dexSlots: dexSnap?.val(), pogSlots: pogSnap?.val() }))
     )).then(results => {
-      results.forEach(({ mid, slots }) => {
-        if (!slots) return;
+      results.forEach(({ mid, dexSlots, pogSlots }) => {
         const pog = PLANOGRAMS[mid];
         if (!pog?.slots) return;
-        // Stamp dexPrice onto every matching slot
         pog.slots.forEach(slot => {
-          const d = slots[slot.id];
-          if (!d) return;
-          slot.dexPrice = parseFloat(d.priceDollars) || parseFloat(d.priceCents) / 100 || 0;
-          // Also stamp hasPlanogramPrice so mismatch filter works
-          if (slot.price > 0) slot.hasPlanogramPrice = true;
+          // Refresh product/price from planogram Firebase (catches swaps, price changes)
+          const p = pogSlots?.[slot.id];
+          if (p) {
+            if (p.product) slot.product = p.product;
+            const vmsP = parseFloat(p.price) || parseFloat(p.priceDollars) || 0;
+            if (vmsP > 0) { slot.price = vmsP; slot.hasPlanogramPrice = true; }
+            if (p.pendingChange !== undefined) slot.pendingChange = p.pendingChange || null;
+            if (p.overflow !== undefined) slot.overflow = p.overflow;
+          }
+          // Stamp dexPrice from DEX reading
+          const d = dexSlots?.[slot.id];
+          if (d) {
+            slot.dexPrice = parseFloat(d.priceDollars) || parseFloat(d.priceCents) / 100 || 0;
+          }
         });
       });
       renderPricingPage();
@@ -13526,11 +13850,17 @@ function renderPricingPage() {
 
     pog.slots.forEach(slot => {
       if (!slot.product || slot.product === 'Empty') return;
+      // Skip overflow slots — they share a physical column with their parent slot
+      // and don't get an independent DEX row, so price/SOH data isn't meaningful
+      if (slot.overflow) return;
       machineSet.add(mid);
 
       const rrp      = parseFloat(PRODUCTS[slot.product]?.rrp || PRODUCTS[slot.product]?.priceCents / 100 || 0) || 0;
-      const vmsPrice = parseFloat(slot.price) || 0;
-      const dexPrice = parseFloat(slot.dexPrice) || null;
+      const vmsPrice = parseFloat(slot.price) || parseFloat(slot.priceDollars) || 0;
+      const dexPrice = (slot.dexPrice > 0) ? slot.dexPrice : null;
+
+      // Skip slots that have no DEX data and no VMS price — phantom planogram entries
+      if (dexPrice === null && vmsPrice === 0) return;
       const hasMismatch = dexPrice !== null && slot.hasPlanogramPrice &&
                           Math.abs(dexPrice - vmsPrice) > 0.005;
       const hasPending  = !!(slot.pendingChange?.changeType === 'queue');
@@ -14120,6 +14450,7 @@ function openProductModal(name) {
     delBtn.style.display = '';
     document.getElementById('prod-m-name').value         = name;
     document.getElementById('prod-m-barcode').value      = p.barcode      || '';
+    document.getElementById('prod-m-altbarcodes').value   = Array.isArray(p.altBarcodes) ? p.altBarcodes.join(', ') : (p.altBarcodes || '');
     document.getElementById('prod-m-brand').value        = p.brand        || '';
     document.getElementById('prod-m-manufacturer').value = p.manufacturer || '';
     document.getElementById('prod-m-family').value       = p.family       || '';
@@ -14187,14 +14518,52 @@ function closeProdModal() {
   editingProductName = null;
 }
 
+// Cascade product info changes to all micromarket catalogues
+// Called after saving a product — ensures image, name and alt barcodes flow to every market
+async function cascadeProductUpdate(barcode, name, imageUrl, altBarcodes) {
+  if (!fbReady || !fbDb || !barcode) return;
+  try {
+    const mktsSnap = await fbDb.ref('vynd/micromarkets').once('value');
+    const mkts = mktsSnap.val() || {};
+    const updates = {};
+    let count = 0;
+
+    Object.keys(mkts).forEach(marketId => {
+      const cat = mkts[marketId]?.catalogue || {};
+      if (cat[barcode]) {
+        // Update name and image in the catalogue entry
+        if (name)     updates[`vynd/micromarkets/${marketId}/catalogue/${barcode}/name`]  = name;
+        if (imageUrl) updates[`vynd/micromarkets/${marketId}/catalogue/${barcode}/image`] = imageUrl;
+        if (altBarcodes?.length > 0) {
+          updates[`vynd/micromarkets/${marketId}/catalogue/${barcode}/altBarcodes`] = altBarcodes;
+        }
+        count++;
+      }
+    });
+
+    if (count > 0) {
+      await fbDb.ref().update(updates);
+      console.log(`[Product] Cascaded update to ${count} market catalogue${count > 1 ? 's' : ''}`);
+    }
+  } catch(e) {
+    console.warn('[Product] Cascade update failed:', e.message);
+  }
+}
+
 function saveProductModal() {
   const name = document.getElementById('prod-m-name')?.value.trim();
   if (!name) { showToast('Product name is required'); return; }
 
   const minPickPct = parseInt(document.getElementById('prod-m-minpick')?.value) || 0;
   const imageUrl   = document.getElementById('prod-m-image-url')?.value.trim() || undefined;
+
+  // Parse alternate barcodes — comma separated, trimmed, non-empty
+  const altBarcodesRaw = document.getElementById('prod-m-altbarcodes')?.value || '';
+  const altBarcodes = altBarcodesRaw.split(',').map(s => s.trim()).filter(Boolean);
+
   const p = {
     barcode:       document.getElementById('prod-m-barcode')?.value.trim()      || undefined,
+    altBarcodes:   altBarcodes.length > 0 ? altBarcodes : undefined,
     brand:         document.getElementById('prod-m-brand')?.value.trim()        || undefined,
     manufacturer:  document.getElementById('prod-m-manufacturer')?.value.trim() || undefined,
     family:        document.getElementById('prod-m-family')?.value.trim()       || undefined,
@@ -14225,6 +14594,13 @@ function saveProductModal() {
   if (editingProductName && editingProductName !== name) delete PRODUCTS[editingProductName];
 
   saveProductToRegistry(name, p);
+
+  // Cascade product info changes to all micromarket catalogues and planograms
+  // This ensures image, name, and alt barcodes flow everywhere automatically
+  if (fbReady && fbDb && p.barcode) {
+    cascadeProductUpdate(p.barcode, name, imageUrl, altBarcodes);
+  }
+
   closeProdModal();
   renderProductsPage();
   showToast(editingProductName ? 'Product updated ✓' : 'Product added ✓');
@@ -16533,7 +16909,7 @@ window.saveCurrentMarket=async function(){
       // Catalogue entry — only write if not already written (first slot wins for priceCents)
       if(!catalogue[slot.barcode]){
         const prod=MKT.products[slot.barcode];
-        catalogue[slot.barcode]={ name:prod?.name||slot.barcode, priceCents:slot.priceCents||prod?.priceCents||0, stock:slot.stock??0, lowStockAt:slot.par||0, capacity:slot.capacity||0, active:true };
+        catalogue[slot.barcode]={ name:prod?.name||slot.barcode, priceCents:slot.priceCents||prod?.priceCents||0, stock:slot.stock??0, lowStockAt:slot.par||0, capacity:slot.capacity||0, active:true, image: prod?.imageUrl||prod?.image||null };
       } else {
         // Multi-lane: accumulate capacity and update lowStockAt (sum of par)
         catalogue[slot.barcode].capacity=(catalogue[slot.barcode].capacity||0)+(slot.capacity||0);

@@ -306,11 +306,11 @@
       <div class="shop-header-title" id="shop-title">Products</div>
       <div class="search-wrap">
         <span class="search-icon">🔍</span>
-        <input id="search-input" type="text" placeholder="Scan or type to search…" oninput="filterProducts(this.value)" autocomplete="off" inputmode="search" enterkeyhint="search" onclick="this.focus()">
+        <input id="search-input" type="text" placeholder="Search products…" oninput="filterProducts(this.value)" autocomplete="off">
       </div>
       <button class="scan-badge" id="scan-toggle" onclick="toggleScanMode()">📷 Scan</button>
     </div>
-    <div class="product-grid" id="product-grid" onclick="if(document.activeElement===el('search-input'))el('search-input').blur()">
+    <div class="product-grid" id="product-grid">
       <div style="grid-column:1/-1;text-align:center;padding:60px;color:var(--muted);">Loading products…</div>
     </div>
     <div class="scan-hint">🔲 Scan product barcodes or tap any item above</div>
@@ -404,19 +404,17 @@
 <!-- ─── SUCCESS ─── -->
 <div id="screen-success" class="screen" style="align-items:center;justify-content:center;background:linear-gradient(145deg,#0a1628 0%,#0d2818 60%,#0a1628 100%)">
   <div class="success-inner">
-    <div class="success-tick-wrap" id="success-tick-wrap">
-      <svg id="success-tick-svg" viewBox="0 0 120 120" width="220" height="220">
-        <circle cx="60" cy="60" r="54" fill="none" stroke="#10b981" stroke-width="6" opacity="0.25"/>
-        <circle cx="60" cy="60" r="54" fill="none" stroke="#10b981" stroke-width="6"
-          stroke-dasharray="339" stroke-dashoffset="339"
-          style="transition:stroke-dashoffset 0.6s cubic-bezier(.4,0,.2,1);transform:rotate(-90deg);transform-origin:60px 60px"
-          id="success-circle"/>
-        <polyline points="34,62 52,80 86,42" fill="none" stroke="#10b981" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"
-          stroke-dasharray="80" stroke-dashoffset="80"
-          style="transition:stroke-dashoffset 0.4s 0.5s cubic-bezier(.4,0,.2,1)"
-          id="success-check"/>
-      </svg>
-    </div>
+    <svg viewBox="0 0 120 120" width="220" height="220">
+      <circle cx="60" cy="60" r="54" fill="none" stroke="#10b981" stroke-width="6" opacity="0.25"/>
+      <circle cx="60" cy="60" r="54" fill="none" stroke="#10b981" stroke-width="6"
+        stroke-dasharray="339" stroke-dashoffset="339"
+        style="transition:stroke-dashoffset 0.6s cubic-bezier(.4,0,.2,1);transform:rotate(-90deg);transform-origin:60px 60px"
+        id="success-circle"/>
+      <polyline points="34,62 52,80 86,42" fill="none" stroke="#10b981" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"
+        stroke-dasharray="80" stroke-dashoffset="80"
+        style="transition:stroke-dashoffset 0.4s 0.5s cubic-bezier(.4,0,.2,1)"
+        id="success-check"/>
+    </svg>
     <div class="success-title">Thank you!</div>
     <div class="success-ref" id="success-ref"></div>
     <div class="success-summary" id="success-summary"></div>
@@ -429,7 +427,7 @@
 <!-- ─── DECLINED ─── -->
 <div id="screen-declined" class="screen" style="align-items:center;justify-content:center;background:linear-gradient(145deg,#0a1628 0%,#1a0a0a 60%,#0a1628 100%)">
   <div class="declined-inner">
-    <svg viewBox="0 0 120 120" width="200" height="200" id="declined-x-svg">
+    <svg viewBox="0 0 120 120" width="200" height="200">
       <circle cx="60" cy="60" r="54" fill="none" stroke="#ef4444" stroke-width="6" opacity="0.25"/>
       <circle cx="60" cy="60" r="54" fill="none" stroke="#ef4444" stroke-width="6"
         stroke-dasharray="339" stroke-dashoffset="339"
@@ -1035,45 +1033,13 @@ window.startSession = function() {
   push(fRef('sessions'),{
     startedAt: STATE.session.startedAt,
     status:    'active',
-    kioskId:   KIOSK_CONFIG.kioskId,
+    kioskId:   KIOSK_CONFIG.kioskId,   // ← which terminal started this session
   }).then(r => {
     STATE.session.id = r.key;
-    writeHeartbeat(r.key);
+    writeHeartbeat(r.key);             // update heartbeat with live sessionId
   });
   showScreen('shopping'); recalcPromotions(); renderProducts(''); renderBasket(); resetIdleTimer();
-  // Focus search so virtual keyboard is available immediately
-  setTimeout(() => { const inp = el('search-input'); if(inp) inp.focus(); }, 300);
 };
-
-// ── Virtual keyboard (Windows touch keyboard / tabtip) ────────────────
-// On touchscreen Windows kiosks the on-screen keyboard doesn't auto-appear
-// for non-touch-enabled Chrome inputs. Intercept focus on text inputs and
-// invoke the Windows touch keyboard (TabTIP) via a hidden iframe trick.
-(function() {
-  function showWinKeyboard() {
-    try {
-      // Windows 10/11 touch keyboard — works when tablet mode or touch input detected
-      const tf = document.getElementById('_kb_frame') || (() => {
-        const f = document.createElement('iframe');
-        f.id = '_kb_frame';
-        f.style.cssText = 'position:fixed;bottom:0;left:0;width:1px;height:1px;opacity:0;pointer-events:none;border:none;z-index:-1';
-        f.src = 'about:blank';
-        document.body.appendChild(f);
-        return f;
-      })();
-      // Navigate to the Windows TabTIP protocol — triggers touch keyboard
-      tf.src = 'ms-its:C:\\windows\\help\\mui\\0409\\TabTip.chm';
-      setTimeout(() => { tf.src = 'about:blank'; }, 500);
-    } catch(e) {}
-  }
-
-  document.addEventListener('focusin', e => {
-    const tag = e.target.tagName;
-    if (tag === 'INPUT' || tag === 'TEXTAREA') {
-      showWinKeyboard();
-    }
-  });
-})();
 
 window.resetToIdle = function() {
   clearTimeout(STATE.idleTimer); clearInterval(STATE.countdownInterval); cancelConfirm();
@@ -1137,8 +1103,6 @@ window.filterProducts=v=>renderProducts(v);
    BASKET
    ═══════════════════════════════ */
 window.addToBasket=function(barcode,flagType){
-  const inp = document.getElementById('search-input');
-  if (inp && inp.value) { inp.value = ''; filterProducts(''); inp.blur(); }
   const cat=STATE.catalogue[barcode], dbp=STATE.productDB[barcode], src=cat||dbp;
   const name=src?.name||`Unknown (${barcode})`;
   const priceCents=flagType==='unknown'?KIOSK_CONFIG.fallbackPriceCents:cat?.priceCents??dbp?.priceCents??KIOSK_CONFIG.fallbackPriceCents;
@@ -1163,10 +1127,7 @@ window.clearBasket=function(){
   if(!STATE.basket.length)return;
   STATE.basket=[];
   recalcPromotions();
-  renderBasket(); renderProducts('');
-  // Clear and blur search so scanner keydown handler works immediately
-  const inp = el('search-input');
-  if(inp){ inp.value=''; inp.blur(); }
+  renderBasket(); renderProducts(el('search-input').value);
 };
 
 function renderBasket(){
@@ -1250,56 +1211,32 @@ function renderBasket(){
 /* ═══════════════════════════════
    SCAN — THREE-TIER LOGIC
    ═══════════════════════════════ */
-
-// ── Smart scanner detection ───────────────────────────────────────────
-// Scanner sends chars in <20ms bursts. Human typing is >100ms between keys.
-// We intercept rapid-fire input as a scan regardless of what has focus,
-// so scanner and virtual keyboard can coexist without fighting each other.
-const SCAN_CHAR_MS = 30; // max ms between scanner chars
-let scanBuf='', scanLast=0, scanTimer=null;
-
-document.addEventListener('keydown', e => {
-  if (STATE.screen !== 'shopping') return;
-  const now = Date.now();
-  const gap  = now - scanLast;
-  scanLast   = now;
-
-  if (e.key === 'Enter') {
-    // If we have a buffer that came in fast — it's a scan
-    if (scanBuf.length > 6) {
+let scanBuf='', scanLast=0;
+const SCAN_MS=80;
+document.addEventListener('keydown',e=>{
+  if(STATE.screen!=='shopping')return;
+  const now=Date.now();
+  if(e.key==='Enter'){
+    if(scanBuf.length>2){
+      const code=scanBuf.trim();
+      scanBuf='';
+      // Clear search box if it has content from the scan
+      const inp=el('search-input');
+      if(inp&&inp.value)inp.value='';
+      filterProducts('');
       e.preventDefault();
-      e.stopImmediatePropagation();
-      const code = scanBuf.trim();
-      scanBuf = '';
-      if (scanTimer) { clearTimeout(scanTimer); scanTimer = null; }
       handleScan(code);
     } else {
-      scanBuf = '';
+      scanBuf='';
     }
     return;
   }
-
-  if (e.key.length !== 1) return; // ignore Shift, Ctrl etc
-
-  if (gap < SCAN_CHAR_MS || scanBuf.length === 0) {
-    // Fast keystroke — accumulate as scanner input
-    scanBuf += e.key;
-    // If search input is focused and this is scanner input, prevent it going to the box
-    if (document.activeElement === el('search-input') && gap < SCAN_CHAR_MS) {
-      e.preventDefault();
-    }
-    // Auto-flush if scanner doesn't send Enter (some configs)
-    if (scanTimer) clearTimeout(scanTimer);
-    scanTimer = setTimeout(() => {
-      if (scanBuf.length > 6) handleScan(scanBuf.trim());
-      scanBuf = '';
-      scanTimer = null;
-    }, 100);
-  } else {
-    // Slow keystroke — human typing, let it go to search input naturally
-    scanBuf = e.key; // start fresh in case they type then scan
+  if(e.key.length===1){
+    if(now-scanLast>SCAN_MS*3&&scanBuf.length>0)scanBuf='';
+    scanBuf+=e.key;
+    scanLast=now;
   }
-}, true); // useCapture=true so we intercept before input element
+});
 
 function handleScan(barcode){
   if(STATE.scanMode==='awaiting-confirm'){
@@ -1429,12 +1366,11 @@ function handlePaymentResult(msg){
   else{
     el('declined-msg').textContent=msg.status==='timeout'?'No card was detected. Please try again.':`Payment declined: ${msg.responseText||'Please try a different card.'}`;
     showScreen('declined');
-    // Animate X
     requestAnimationFrame(()=>{
-      const circle=el('declined-circle'), l1=el('declined-line1'), l2=el('declined-line2');
-      if(circle) circle.style.strokeDashoffset='0';
-      if(l1) l1.style.strokeDashoffset='0';
-      if(l2) l2.style.strokeDashoffset='0';
+      const c=el('declined-circle'),l1=el('declined-line1'),l2=el('declined-line2');
+      if(c)c.style.strokeDashoffset='0';
+      if(l1)l1.style.strokeDashoffset='0';
+      if(l2)l2.style.strokeDashoffset='0';
     });
     playDeclinedSound();
   }
@@ -1546,40 +1482,6 @@ async function writeSaleToFirebase(txn){
   }
 }
 
-function playSuccessSound(){
-  try{
-    const ctx=new (window.AudioContext||window.webkitAudioContext)();
-    // Three ascending tones — classic success chime
-    [[523,0],[659,0.18],[784,0.36]].forEach(([freq,delay])=>{
-      const o=ctx.createOscillator(), g=ctx.createGain();
-      o.connect(g); g.connect(ctx.destination);
-      o.type='sine'; o.frequency.value=freq;
-      g.gain.setValueAtTime(0,ctx.currentTime+delay);
-      g.gain.linearRampToValueAtTime(0.35,ctx.currentTime+delay+0.04);
-      g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+delay+0.5);
-      o.start(ctx.currentTime+delay);
-      o.stop(ctx.currentTime+delay+0.5);
-    });
-  }catch(e){}
-}
-
-function playDeclinedSound(){
-  try{
-    const ctx=new (window.AudioContext||window.webkitAudioContext)();
-    // Two descending tones — negative sound
-    [[300,0],[220,0.25]].forEach(([freq,delay])=>{
-      const o=ctx.createOscillator(), g=ctx.createGain();
-      o.connect(g); g.connect(ctx.destination);
-      o.type='sawtooth'; o.frequency.value=freq;
-      g.gain.setValueAtTime(0,ctx.currentTime+delay);
-      g.gain.linearRampToValueAtTime(0.25,ctx.currentTime+delay+0.04);
-      g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+delay+0.4);
-      o.start(ctx.currentTime+delay);
-      o.stop(ctx.currentTime+delay+0.4);
-    });
-  }catch(e){}
-}
-
 function showSuccessScreen(txn){
   const {grandTotal,totalSavings}=calcTotals();
   el('success-ref').textContent=txn.txnRef?`Transaction ref: ${txn.txnRef}`:'';
@@ -1595,11 +1497,10 @@ function showSuccessScreen(txn){
   if(totalSavings>0){savEl.textContent=`🏷 You saved ${fmt(totalSavings)}`;savEl.style.display='block';}
   else savEl.style.display='none';
   showScreen('success');
-  // Animate tick
   requestAnimationFrame(()=>{
-    const circle=el('success-circle'), check=el('success-check');
-    if(circle) circle.style.strokeDashoffset='0';
-    if(check)  check.style.strokeDashoffset='0';
+    const circle=el('success-circle'),check=el('success-check');
+    if(circle)circle.style.strokeDashoffset='0';
+    if(check)check.style.strokeDashoffset='0';
   });
   playSuccessSound();
   let secs=10;
@@ -1618,6 +1519,32 @@ function showToast(msg,type){
   clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),2800);
 }
 window.showToast=showToast;
+function playSuccessSound(){
+  try{
+    const ctx=new(window.AudioContext||window.webkitAudioContext)();
+    [[523,0],[659,0.18],[784,0.36]].forEach(([freq,delay])=>{
+      const o=ctx.createOscillator(),g=ctx.createGain();
+      o.connect(g);g.connect(ctx.destination);o.type='sine';o.frequency.value=freq;
+      g.gain.setValueAtTime(0,ctx.currentTime+delay);
+      g.gain.linearRampToValueAtTime(0.35,ctx.currentTime+delay+0.04);
+      g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+delay+0.5);
+      o.start(ctx.currentTime+delay);o.stop(ctx.currentTime+delay+0.5);
+    });
+  }catch(e){}
+}
+function playDeclinedSound(){
+  try{
+    const ctx=new(window.AudioContext||window.webkitAudioContext)();
+    [[300,0],[220,0.25]].forEach(([freq,delay])=>{
+      const o=ctx.createOscillator(),g=ctx.createGain();
+      o.connect(g);g.connect(ctx.destination);o.type='sawtooth';o.frequency.value=freq;
+      g.gain.setValueAtTime(0,ctx.currentTime+delay);
+      g.gain.linearRampToValueAtTime(0.25,ctx.currentTime+delay+0.04);
+      g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+delay+0.4);
+      o.start(ctx.currentTime+delay);o.stop(ctx.currentTime+delay+0.4);
+    });
+  }catch(e){}
+}
 
 </script>
 </body>

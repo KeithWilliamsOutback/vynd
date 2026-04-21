@@ -32,15 +32,20 @@
     .screen.active { display:flex; }
 
     /* ── IDLE ── */
-    #screen-idle { background:linear-gradient(145deg,#0f172a 0%,#1a2744 50%,#0f172a 100%); align-items:center; justify-content:center; cursor:pointer; position:relative; user-select:none; }
-    .idle-inner  { text-align:center; pointer-events:none; }
+    #screen-idle { background:linear-gradient(145deg,#0f172a 0%,#1a2744 50%,#0f172a 100%); align-items:center; justify-content:center; cursor:pointer; position:fixed; inset:0; }
+    .idle-inner  { text-align:center; }
     .idle-logo   { font-size:96px; font-weight:900; letter-spacing:-4px; color:var(--text); margin-bottom:8px; }
     .idle-logo span { color:var(--primary); }
     .idle-location { font-size:28px; color:var(--muted); margin-bottom:60px; }
     .idle-tap    { font-size:36px; font-weight:600; color:var(--primary); animation:pulse 2.2s ease-in-out infinite; }
-    .idle-time   { position:absolute; bottom:32px; font-size:18px; color:var(--muted); }
+    .idle-time   { position:absolute; bottom:120px; font-size:18px; color:var(--muted); }
     @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.6;transform:scale(.97)} }
-    #idle-banner { display:none !important; } /* Banner removed — full screen tap starts session */
+
+    /* ── IDLE PROMO BANNER — only rendered when URL exists, sits at very bottom ── */
+    /* 1920×400px recommended. Absent = no element, no gap */
+    #idle-banner { display:none; position:absolute; bottom:0; left:0; right:0; height:120px; overflow:hidden; }
+    #idle-banner.show { display:block; }
+    #idle-banner img { width:100%; height:100%; object-fit:cover; object-position:center; }
 
     /* ── SHOPPING ── */
     #screen-shopping { flex-direction:row; }
@@ -301,7 +306,7 @@
       <div class="shop-header-title" id="shop-title">Products</div>
       <div class="search-wrap">
         <span class="search-icon">🔍</span>
-        <input id="search-input" type="text" placeholder="🔍 Scan or type to search…" autocomplete="off" inputmode="none" readonly onfocus="this.removeAttribute('readonly')" onblur="this.setAttribute('readonly','')" oninput="filterProducts(this.value)">
+        <input id="search-input" type="text" placeholder="Scan or type to search…" oninput="filterProducts(this.value)" autocomplete="off" inputmode="search" enterkeyhint="search" onclick="this.focus()">
       </div>
       <button class="scan-badge" id="scan-toggle" onclick="toggleScanMode()">📷 Scan</button>
     </div>
@@ -631,13 +636,6 @@ function initMarket(assignment) {
   // Planogram catalogue (real-time)
   STATE.marketListeners.push(onValue(fRef('catalogue'), snap => {
     STATE.catalogue = snap.val() || {};
-    // Build alternate barcode lookup — maps old/secondary barcodes → primary barcode
-    STATE.altBarcodes = {};
-    Object.entries(STATE.catalogue).forEach(([bc, item]) => {
-      if (Array.isArray(item.altBarcodes)) {
-        item.altBarcodes.forEach(alt => { STATE.altBarcodes[alt] = bc; });
-      }
-    });
     recalcPromotions();
     if (STATE.screen === 'shopping') renderProducts(el('search-input').value);
   }));
@@ -1011,13 +1009,43 @@ window.startSession = function() {
   push(fRef('sessions'),{
     startedAt: STATE.session.startedAt,
     status:    'active',
-    kioskId:   KIOSK_CONFIG.kioskId,   // ← which terminal started this session
+    kioskId:   KIOSK_CONFIG.kioskId,
   }).then(r => {
     STATE.session.id = r.key;
-    writeHeartbeat(r.key);             // update heartbeat with live sessionId
+    writeHeartbeat(r.key);
   });
   showScreen('shopping'); recalcPromotions(); renderProducts(''); renderBasket(); resetIdleTimer();
 };
+
+// ── Virtual keyboard (Windows touch keyboard / tabtip) ────────────────
+// On touchscreen Windows kiosks the on-screen keyboard doesn't auto-appear
+// for non-touch-enabled Chrome inputs. Intercept focus on text inputs and
+// invoke the Windows touch keyboard (TabTIP) via a hidden iframe trick.
+(function() {
+  function showWinKeyboard() {
+    try {
+      // Windows 10/11 touch keyboard — works when tablet mode or touch input detected
+      const tf = document.getElementById('_kb_frame') || (() => {
+        const f = document.createElement('iframe');
+        f.id = '_kb_frame';
+        f.style.cssText = 'position:fixed;bottom:0;left:0;width:1px;height:1px;opacity:0;pointer-events:none;border:none;z-index:-1';
+        f.src = 'about:blank';
+        document.body.appendChild(f);
+        return f;
+      })();
+      // Navigate to the Windows TabTIP protocol — triggers touch keyboard
+      tf.src = 'ms-its:C:\\windows\\help\\mui\\0409\\TabTip.chm';
+      setTimeout(() => { tf.src = 'about:blank'; }, 500);
+    } catch(e) {}
+  }
+
+  document.addEventListener('focusin', e => {
+    const tag = e.target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') {
+      showWinKeyboard();
+    }
+  });
+})();
 
 window.resetToIdle = function() {
   clearTimeout(STATE.idleTimer); clearInterval(STATE.countdownInterval); cancelConfirm();
@@ -1193,22 +1221,9 @@ let scanBuf='', scanLast=0;
 const SCAN_MS=80;
 document.addEventListener('keydown',e=>{
   if(STATE.screen!=='shopping')return;
-  const searchFocused = document.activeElement===el('search-input');
+  if(document.activeElement===el('search-input'))return;
   const now=Date.now();
-  if(e.key==='Enter'){
-    if(scanBuf.length>2){
-      if(searchFocused){
-        // Scanner fired while search was focused — add product, clear search, blur field
-        el('search-input').value='';
-        renderProducts('');
-        el('search-input').blur();
-      }
-      handleScan(scanBuf.trim());
-    }
-    scanBuf='';
-    return;
-  }
-  // Accumulate scanner characters regardless of search focus
+  if(e.key==='Enter'){if(scanBuf.length>2)handleScan(scanBuf.trim());scanBuf='';return;}
   if(e.key.length===1){if(now-scanLast>SCAN_MS*3&&scanBuf.length>0)scanBuf='';scanBuf+=e.key;scanLast=now;}
 });
 
@@ -1216,13 +1231,6 @@ function handleScan(barcode){
   if(STATE.scanMode==='awaiting-confirm'){
     if(barcode===STATE.pendingBarcode){cancelConfirm();addToBasket(barcode,'unknown');writeFlagUnknown(barcode);showToast('Added at default price — flagged for review','unknown');flashScan('warn');}
     else{cancelConfirm();handleScan(barcode);}
-    return;
-  }
-  // Resolve alternate barcodes → primary barcode
-  const resolvedBarcode = STATE.altBarcodes?.[barcode] || barcode;
-  if (resolvedBarcode !== barcode) {
-    console.log(`[Scan] Alt barcode ${barcode} → ${resolvedBarcode}`);
-    handleScan(resolvedBarcode);
     return;
   }
   const cat=STATE.catalogue[barcode];

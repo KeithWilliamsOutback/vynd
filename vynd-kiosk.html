@@ -41,7 +41,39 @@
     .idle-time   { position:absolute; bottom:120px; font-size:18px; color:var(--muted); }
     @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.6;transform:scale(.97)} }
 
-    /* ── IDLE PROMO BANNER — only rendered when URL exists, sits at very bottom ── */
+    /* ── IDLE SCAN PROMPT — bottom-left pointing to scanner ── */
+    .idle-scan-prompt {
+      position:absolute;
+      bottom:40px;
+      left:48px;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      gap:10px;
+      pointer-events:none;
+    }
+    .idle-scan-prompt-text {
+      font-size:15px;
+      font-weight:600;
+      color:rgba(255,255,255,0.55);
+      letter-spacing:.4px;
+      text-align:center;
+      line-height:1.4;
+    }
+    .idle-scan-arrow {
+      width:36px;
+      height:36px;
+      border-left:3px solid var(--primary);
+      border-bottom:3px solid var(--primary);
+      transform:rotate(-45deg);
+      border-radius:2px;
+      animation:bounceDown 1.6s ease-in-out infinite;
+      opacity:0.7;
+    }
+    @keyframes bounceDown {
+      0%,100%{ transform:rotate(-45deg) translateY(0);   opacity:.7; }
+      50%    { transform:rotate(-45deg) translateY(8px);  opacity:1;  }
+    }
     /* 1920×400px recommended. Absent = no element, no gap */
     #idle-banner { display:none; position:absolute; bottom:0; left:0; right:0; height:120px; overflow:hidden; }
     #idle-banner.show { display:block; }
@@ -139,7 +171,7 @@
 
     /* ── REVIEW ── */
     #screen-review { align-items:center; justify-content:center; padding:40px; overflow-y:auto; }
-    .review-card { background:var(--surface); border-radius:24px; padding:40px; max-width:680px; width:100%; }
+    .review-card { background:var(--surface); border-radius:24px; padding:40px; max-width:680px; width:100%; max-height:90vh; display:flex; flex-direction:column; }
 
     /* Checkout banner — 800×200px recommended. Hidden when no URL. */
     #checkout-banner { display:none; width:100%; border-radius:12px; overflow:hidden; margin-bottom:24px; }
@@ -147,7 +179,7 @@
     #checkout-banner img { width:100%; height:auto; display:block; border-radius:12px; }
 
     .review-title  { font-size:28px; font-weight:800; margin-bottom:24px; }
-    .review-items  { display:flex; flex-direction:column; gap:10px; margin-bottom:24px; max-height:280px; overflow-y:auto; }
+    .review-items  { display:flex; flex-direction:column; gap:10px; margin-bottom:24px; overflow-y:auto; flex:1; min-height:60px; }
     .review-item   { display:flex; justify-content:space-between; align-items:flex-start; padding:10px 0; border-bottom:1px solid var(--border); font-size:15px; gap:12px; }
     .review-item:last-child { border-bottom:none; }
     .review-item-left { flex:1; }
@@ -247,8 +279,14 @@
     <div class="idle-logo">V<span>Y</span>ND</div>
     <div class="idle-location" id="idle-location">Loading…</div>
     <div class="idle-tap">👆 Tap anywhere to start shopping</div>
+    <div class="idle-scan-hint" id="idle-scan-hint" style="margin-top:10px;font-size:14px;color:rgba(255,255,255,0.4);letter-spacing:.5px">or scan a product to add it directly</div>
   </div>
   <div class="idle-time" id="idle-clock"></div>
+  <!-- Bottom-left scan prompt pointing to scanner window -->
+  <div class="idle-scan-prompt">
+    <div class="idle-scan-prompt-text">Scan a product<br>to add to cart</div>
+    <div class="idle-scan-arrow"></div>
+  </div>
   <!-- Idle promo banner — only rendered when a promo has idleBannerUrl set -->
   <div id="idle-banner"><img id="idle-banner-img" src="" alt="Promotion"></div>
 </div>
@@ -1039,6 +1077,7 @@ window.startSession = function() {
     writeHeartbeat(r.key);             // update heartbeat with live sessionId
   });
   showScreen('shopping'); recalcPromotions(); renderProducts(''); renderBasket(); resetIdleTimer();
+  requestAnimationFrame(() => { const g=el('product-grid'),b=el('basket-items'); if(g)g.scrollTop=0; if(b)b.scrollTop=0; });
 };
 
 window.resetToIdle = function() {
@@ -1209,6 +1248,8 @@ function renderBasket(){
       </div>
     </div>`;
   }).join('');
+  // Auto-scroll to bottom so last added item is always visible
+  requestAnimationFrame(() => { cont.scrollTop = cont.scrollHeight; });
 }
 
 /* ═══════════════════════════════
@@ -1217,18 +1258,23 @@ function renderBasket(){
 let scanBuf='', scanLast=0;
 const SCAN_MS=80;
 document.addEventListener('keydown',e=>{
-  if(STATE.screen!=='shopping')return;
+  if(STATE.screen!=='shopping' && STATE.screen!=='idle')return;
   const now=Date.now();
   if(e.key==='Enter'){
     if(scanBuf.length>2){
       const code=scanBuf.trim();
       scanBuf='';
-      // Clear search box if it has content from the scan
-      const inp=el('search-input');
-      if(inp&&inp.value)inp.value='';
-      filterProducts('');
-      e.preventDefault();
-      handleScan(code);
+      if(STATE.screen==='idle'){
+        // Wake up and add scanned product in one motion
+        startSession();
+        setTimeout(()=>handleScan(code), 400);
+      } else {
+        const inp=el('search-input');
+        if(inp&&inp.value)inp.value='';
+        filterProducts('');
+        e.preventDefault();
+        handleScan(code);
+      }
     } else {
       scanBuf='';
     }
@@ -1242,6 +1288,13 @@ document.addEventListener('keydown',e=>{
 });
 
 function handleScan(barcode){
+  // Reject QR codes and non-barcode input
+  // Valid retail barcodes: all digits, 6–18 chars (EAN-8, EAN-13, UPC-A, ITF-14 etc)
+  // QR codes contain letters, slashes, colons, URLs — always fail this check
+  if(!/^\d{6,18}$/.test(barcode)){
+    flashScan('bad'); // silent red flash — no toast, customer will naturally try the barcode
+    return;
+  }
   if(STATE.scanMode==='awaiting-confirm'){
     if(barcode===STATE.pendingBarcode){cancelConfirm();addToBasket(barcode,'unknown');writeFlagUnknown(barcode);showToast('Added at default price — flagged for review','unknown');flashScan('warn');}
     else{cancelConfirm();handleScan(barcode);}

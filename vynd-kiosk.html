@@ -1504,7 +1504,7 @@ async function writeSaleToFirebase(txn){
     subtotalBeforeDiscounts:itemSubtotal,
     itemDiscountTotal, basketDiscount, totalSavings,
     grandTotal, gstCents,
-    windcaveTxnRef:txn.txnRef||'', authCode:txn.authCode||'', cardType:txn.cardType||'Unknown',
+    windcaveTxnRef:txn.txnRef||'', authCode:txn.authCode||'', cardType:txn.cardType||txn.cardName||'Unknown',
     hasFlags:STATE.basket.some(b=>b.flagType),
     hasPromotions:totalSavings>0,
     promoAttribution:Object.values(promoAttribution),

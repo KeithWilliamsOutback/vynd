@@ -856,12 +856,10 @@ showScreenDirect('booting');
 connectBridge();
 function resetIdleTimer() {
   clearTimeout(STATE.idleTimer);
-  if (STATE.screen!=='idle') STATE.idleTimer=setTimeout(()=>{
-    // If timing out during payment — cancel the transaction on the bridge first
-    if (STATE.screen==='payment' && STATE.wsReady && STATE.pendingTxnRef) {
-      STATE.ws.send(JSON.stringify({ type:'cancelTransaction', txnRef: STATE.pendingTxnRef }));
-      STATE.pendingTxnRef = null;
-    }
+  // Never idle-timeout on payment screen — Windcave handles its own 30s card timeout
+  // and sends back a CARD SWIPE TIMEOUT result which we handle as declined
+  if (STATE.screen === 'idle' || STATE.screen === 'payment') return;
+  STATE.idleTimer = setTimeout(() => {
     showToast('Session timed out');
     resetToIdle();
   }, KIOSK_CONFIG.idleTimeout*1000);
@@ -1638,4 +1636,3 @@ function playDeclinedSound(){
 </script>
 </body>
 </html>
-

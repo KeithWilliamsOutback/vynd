@@ -2172,44 +2172,49 @@ async function showStop(machineId) {
     ? currentRunData.plannedDate
     : new Date().toLocaleDateString('en-CA');
 
-  // Load live slot SOH from Firebase
+  // Load live slot SOH from Firebase — also refreshes product names and prices
+  // so driver always sees current data without needing a manual pull-to-refresh
   let slotSOH    = {}; // slotId → currentSOH
   let slotVends  = {}; // slotId → vendsSinceLastRead
   if (fbDb) {
     try {
-      const dexSnap = await fbDb.ref('vynd/dexReadings/' + machineId + '/last/slots').once('value');
-      if (dexSnap && dexSnap.val()) {
-        Object.entries(dexSnap.val()).forEach(([id, sl]) => {
-          if (sl.currentSOH        != null) slotSOH[id]   = sl.currentSOH;
-          if (sl.vendsSinceLastRead != null) slotVends[id] = sl.vendsSinceLastRead;
-          // Always refresh dexPrice from live DEX data — never derive from VMS price
-          const dexP = parseFloat(sl.priceDollars) || parseFloat(sl.priceCents) / 100 || 0;
-          const slot = s.slots && s.slots.find(slot => slot.id === id);
-          if (slot && dexP > 0) slot.dexPrice = dexP;
-        });
-      }
-      const pogSnap = await fbDb.ref('vynd/planograms/' + machineId + '/slots').once('value');
-      if (pogSnap && pogSnap.val()) {
-        Object.entries(pogSnap.val()).forEach(([id, sl]) => {
-          // Fill in missing SOH from planogram
-          if (slotSOH[id] == null) {
-            const soh = sl.currentSOH ?? sl.current;
-            if (soh != null) slotSOH[id] = soh;
-          }
-          // Overlay VMS price and pendingChange — never touch dexPrice here
-          const slot = s.slots && s.slots.find(slot => slot.id === id);
-          if (slot) {
-            if (sl.pendingChange) slot.pendingChange = sl.pendingChange;
-            if (sl.price != null) {
-              const vmsP = parseFloat(sl.price) || 0;
-              if (vmsP > 0) {
-                slot.price = vmsP;
-                slot.hasPlanogramPrice = true;
-              }
-            }
-          }
-        });
-      }
+      const [dexSnap, pogSnap] = await Promise.all([
+        fbDb.ref('vynd/dexReadings/' + machineId + '/last/slots').once('value'),
+        fbDb.ref('vynd/planograms/'  + machineId + '/slots').once('value'),
+      ]);
+      const dexSlots = dexSnap?.val() || {};
+      const pogSlots = pogSnap?.val() || {};
+
+      // DEX pass — SOH, vends, dexPrice (never derive from VMS)
+      Object.entries(dexSlots).forEach(([id, sl]) => {
+        if (sl.currentSOH        != null) slotSOH[id]   = sl.currentSOH;
+        if (sl.vendsSinceLastRead != null) slotVends[id] = sl.vendsSinceLastRead;
+        const slot = s.slots && s.slots.find(s => s.id === id);
+        if (!slot) return;
+        const dexP = parseFloat(sl.priceDollars) || parseFloat(sl.priceCents) / 100 || 0;
+        if (dexP > 0) slot.dexPrice = dexP;
+        // Update product from DEX only as a fallback (planogram wins below)
+        if (sl.product && sl.product !== 'Empty') slot._dexProduct = sl.product;
+      });
+
+      // Planogram pass — product name, VMS price, pendingChange (authoritative)
+      Object.entries(pogSlots).forEach(([id, sl]) => {
+        // SOH fallback if DEX didn't report this slot
+        if (slotSOH[id] == null) {
+          const soh = sl.currentSOH ?? sl.current;
+          if (soh != null) slotSOH[id] = soh;
+        }
+        const slot = s.slots && s.slots.find(s => s.id === id);
+        if (!slot) return;
+        // Product — planogram is authoritative (reflects swaps, updates)
+        if (sl.product) slot.product = sl.product;
+        else if (slot._dexProduct) slot.product = slot._dexProduct;
+        // VMS price
+        const vmsP = parseFloat(sl.price) || parseFloat(sl.priceDollars) || 0;
+        if (vmsP > 0) { slot.price = vmsP; slot.hasPlanogramPrice = true; }
+        // pendingChange — clear if removed, set if present
+        slot.pendingChange = sl.pendingChange || null;
+      });
     } catch(e) { console.warn('SOH load:', e.message); }
   }
 

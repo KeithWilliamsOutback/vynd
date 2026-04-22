@@ -14355,6 +14355,7 @@ function exportReportCSV() {
 
 let prodFilter = 'all';
 let editingProductName = null;
+let editingProductBarcode = null;
 
 function setProdFilter(f, btn) {
   prodFilter = f;
@@ -14438,7 +14439,8 @@ function renderProductsPage() {
 }
 
 function openProductModal(name) {
-  editingProductName = name || null;
+  editingProductName    = name || null;
+  editingProductBarcode = (name && PRODUCTS[name]?.barcode) || null;
   const modal  = document.getElementById('prod-modal');
   const title  = document.getElementById('prod-modal-title');
   const delBtn = document.getElementById('prod-delete-btn');
@@ -14520,6 +14522,63 @@ function closeProdModal() {
 
 // Cascade product info changes to all micromarket catalogues
 // Called after saving a product — ensures image, name and alt barcodes flow to every market
+// When a product barcode changes, update all planogram slots and micromarket
+// catalogue entries that reference the old barcode so nothing goes blank.
+async function migrateBarcodeInPlanograms(oldBarcode, newBarcode, productName) {
+  if (!fbReady || !fbDb || !oldBarcode || !newBarcode || oldBarcode === newBarcode) return;
+  try {
+    const updates = {};
+    let count = 0;
+
+    // ── Vending machine planograms ─────────────────────────────────
+    const pogSnap = await fbDb.ref('vynd/planograms').once('value');
+    const pogs = pogSnap.val() || {};
+    Object.entries(pogs).forEach(([mid, pog]) => {
+      Object.entries(pog.slots || {}).forEach(([slotId, slot]) => {
+        if (slot.barcode === oldBarcode) {
+          updates[`vynd/planograms/${mid}/slots/${slotId}/barcode`] = newBarcode;
+          count++;
+        }
+      });
+    });
+
+    // ── Micromarket catalogues ─────────────────────────────────────
+    const mktSnap = await fbDb.ref('vynd/micromarkets').once('value');
+    const mkts = mktSnap.val() || {};
+    Object.entries(mkts).forEach(([marketId, mkt]) => {
+      const cat = mkt.catalogue || {};
+      if (cat[oldBarcode]) {
+        // Copy old entry under new barcode key, remove old key
+        updates[`vynd/micromarkets/${marketId}/catalogue/${newBarcode}`] = {
+          ...cat[oldBarcode],
+          name: productName || cat[oldBarcode].name,
+        };
+        updates[`vynd/micromarkets/${marketId}/catalogue/${oldBarcode}`] = null; // delete old
+        count++;
+      }
+      // Also update planogram assets in micromarket if barcode referenced
+      const assets = mkt.planogramAssets || {};
+      Object.entries(assets).forEach(([assetId, asset]) => {
+        Object.entries(asset.slots || {}).forEach(([slotId, slot]) => {
+          if (slot.barcode === oldBarcode) {
+            updates[`vynd/micromarkets/${marketId}/planogramAssets/${assetId}/slots/${slotId}/barcode`] = newBarcode;
+            count++;
+          }
+        });
+      });
+    });
+
+    if (count > 0) {
+      await fbDb.ref().update(updates);
+      showToast(`✓ Barcode updated in ${count} slot${count !== 1 ? 's' : ''} across planograms`);
+      console.log(`[Product] Barcode migration: ${oldBarcode} → ${newBarcode}, ${count} slots updated`);
+    }
+  } catch(e) {
+    console.warn('[Product] Barcode migration failed:', e.message);
+    showToast('⚠ Barcode migration failed — check planograms manually');
+  }
+}
+
 async function cascadeProductUpdate(barcode, name, imageUrl, altBarcodes) {
   if (!fbReady || !fbDb || !barcode) return;
   try {
@@ -14596,10 +14655,14 @@ function saveProductModal() {
   saveProductToRegistry(name, p);
 
   // Cascade product info changes to all micromarket catalogues and planograms
-  // This ensures image, name, and alt barcodes flow everywhere automatically
   if (fbReady && fbDb && p.barcode) {
+    // If barcode changed — migrate all planogram slots and catalogue entries
+    if (editingProductBarcode && editingProductBarcode !== p.barcode) {
+      migrateBarcodeInPlanograms(editingProductBarcode, p.barcode, name);
+    }
     cascadeProductUpdate(p.barcode, name, imageUrl, altBarcodes);
   }
+  editingProductBarcode = p.barcode || null;
 
   closeProdModal();
   renderProductsPage();
@@ -16439,8 +16502,19 @@ window.mktSaveSlot=function(){
   const barcode=MKT.pickerSel||null;
   if(!barcode){ delete a.slots[slotIdx]; }
   else {
-    const raw=parseFloat(document.getElementById('mkt-slot-price').value);
-    a.slots[slotIdx]={ barcode, priceCents:isFinite(raw)?Math.round(raw*100):0, capacity:parseInt(document.getElementById('mkt-slot-capacity').value)||12, par:parseInt(document.getElementById('mkt-slot-par').value)||4, stock:parseInt(document.getElementById('mkt-slot-stock').value)||0 };
+    const raw      = parseFloat(document.getElementById('mkt-slot-price').value);
+    const capacity = parseInt(document.getElementById('mkt-slot-capacity').value)||12;
+    const par      = parseInt(document.getElementById('mkt-slot-par').value)||4;
+    const stock    = parseInt(document.getElementById('mkt-slot-stock').value)||0;
+    a.slots[slotIdx]={ barcode, priceCents:isFinite(raw)?Math.round(raw*100):0, capacity, par, stock };
+
+    // Also write stock to catalogue so pick list and kiosk SOH are correct
+    if(fbReady && fbDb && MKT.currentId) {
+      fbDb.ref(`vynd/micromarkets/${MKT.currentId}/catalogue/${barcode}/stock`).set(stock).catch(()=>{});
+      // Also update par (lowStockAt) and capacity in catalogue
+      fbDb.ref(`vynd/micromarkets/${MKT.currentId}/catalogue/${barcode}/lowStockAt`).set(par).catch(()=>{});
+      fbDb.ref(`vynd/micromarkets/${MKT.currentId}/catalogue/${barcode}/capacity`).set(capacity).catch(()=>{});
+    }
   }
   mktCloseSlotModal();
   mktRenderAssetList();
@@ -16906,13 +16980,14 @@ window.saveCurrentMarket=async function(){
     Object.entries(a.slots||{}).forEach(([idx,slot])=>{
       if(!slot.barcode) return;
       assetNode.slots[idx]={ barcode:slot.barcode, priceCents:slot.priceCents||0, capacity:slot.capacity||0, par:slot.par||0, stock:slot.stock??0 };
-      // Catalogue entry — only write if not already written (first slot wins for priceCents)
+      // Catalogue entry — sum stock across all lanes
       if(!catalogue[slot.barcode]){
         const prod=MKT.products[slot.barcode];
         catalogue[slot.barcode]={ name:prod?.name||slot.barcode, priceCents:slot.priceCents||prod?.priceCents||0, stock:slot.stock??0, lowStockAt:slot.par||0, capacity:slot.capacity||0, active:true, image: prod?.imageUrl||prod?.image||null };
       } else {
-        // Multi-lane: accumulate capacity and update lowStockAt (sum of par)
-        catalogue[slot.barcode].capacity=(catalogue[slot.barcode].capacity||0)+(slot.capacity||0);
+        // Multi-lane: sum stock, capacity and par across all lanes
+        catalogue[slot.barcode].stock    =(catalogue[slot.barcode].stock||0)   +(slot.stock??0);
+        catalogue[slot.barcode].capacity =(catalogue[slot.barcode].capacity||0)+(slot.capacity||0);
         catalogue[slot.barcode].lowStockAt=(catalogue[slot.barcode].lowStockAt||0)+(slot.par||0);
       }
     });

@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛒</text></svg>">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>VYND Kiosk</title>
   <style>
@@ -555,6 +555,7 @@ const STATE = {
   wsReady:      false,
   session:      null,
   lastTxn:      null,
+  pendingTxnRef: null,
   idleTimer:    null,
   countdownInterval: null,
   scanMode:       'idle',
@@ -563,8 +564,9 @@ const STATE = {
   confirmInterval:null,
   // Registry
   serial:         null,
-  marketListeners:[],   // unsubscribe functions — cleared on reassignment
+  marketListeners:[],
 };
+window.STATE = STATE; // expose for console debugging
 
 /* ═══════════════════════════════
    FIREBASE
@@ -843,7 +845,15 @@ showScreenDirect('booting');
 connectBridge();
 function resetIdleTimer() {
   clearTimeout(STATE.idleTimer);
-  if (STATE.screen!=='idle') STATE.idleTimer=setTimeout(()=>{ showToast('Session timed out'); resetToIdle(); }, KIOSK_CONFIG.idleTimeout*1000);
+  if (STATE.screen!=='idle') STATE.idleTimer=setTimeout(()=>{
+    // If timing out during payment — cancel the transaction on the bridge first
+    if (STATE.screen==='payment' && STATE.wsReady && STATE.pendingTxnRef) {
+      STATE.ws.send(JSON.stringify({ type:'cancelTransaction', txnRef: STATE.pendingTxnRef }));
+      STATE.pendingTxnRef = null;
+    }
+    showToast('Session timed out');
+    resetToIdle();
+  }, KIOSK_CONFIG.idleTimeout*1000);
 }
 document.addEventListener('touchstart',resetIdleTimer,{passive:true});
 document.addEventListener('mousedown', resetIdleTimer);
@@ -1121,7 +1131,7 @@ function renderProducts(filter) {
     .sort((a,b)=>(a[1].name||'').localeCompare(b[1].name||''));
   if (!items.length){grid.innerHTML=`<div style="grid-column:1/-1;text-align:center;padding:60px;color:var(--muted);">${q?`No products match "${q}"`:'No products available'}</div>`;return;}
   grid.innerHTML=items.map(([bc,p])=>{
-    const inB=STATE.basket.find(b=>b.barcode===bc), oos=(p.stock||0)<=0;
+    const inB=STATE.basket.find(b=>b.barcode===bc);
     const promo=getItemPromo(bc);
     const discAmt=promo?calcDisc(promo.discount,p.priceCents):0;
     const img=p.image||p.imageUrl?`<img class="product-img" src="${p.image||p.imageUrl}" alt="${p.name}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="product-img-placeholder" style="display:none">📦</div>`:`<div class="product-img-placeholder">📦</div>`;
@@ -1130,9 +1140,9 @@ function renderProducts(filter) {
       :`<div class="product-price">$${(p.priceCents/100).toFixed(2)}</div>`;
     const badge=promo?`<div class="promo-badge-card">${promo.display?.badgeText||autoBadge(promo)}</div>`:'';
     const basketBadge=inB?`<div class="basket-qty-badge">${inB.qty}</div>`:'';
-    return `<div class="product-card${oos?' out-of-stock':''}${inB?' in-basket':''}${promo?' on-promo':''}" onclick="${oos?'':`addToBasket('${bc}',null)`}">
+    return `<div class="product-card${inB?' in-basket':''}${promo?' on-promo':''}" onclick="addToBasket('${bc}',null)">
       ${badge}${img}<div class="product-name">${p.name||bc}</div>${priceHtml}
-      ${oos?'<div class="product-oos">Out of stock</div>':''}${basketBadge}
+      ${basketBadge}
     </div>`;
   }).join('');
 }
@@ -1302,7 +1312,7 @@ function handleScan(barcode){
   }
   const cat=STATE.catalogue[barcode];
   if(cat&&cat.active!==false){
-    if((cat.stock||0)<=0){showToast('Out of stock');flashScan('bad');return;}
+    if((cat.stock||0)<=0){ /* allow sale even at zero SOH — stock counts may lag */ }
     addToBasket(barcode,null);
     const disc=STATE.basket.find(b=>b.barcode===barcode)?.discountCentsPerUnit||0;
     showToast(disc>0?`Added: ${cat.name} — ${cat.discountCentsPerUnit?autoBadge(STATE.basket.find(b=>b.barcode===barcode)):'saving '+fmt(disc)}`:`Added: ${cat.name}`,'ok');
@@ -1417,14 +1427,15 @@ window.initiatePayment=function(){
 window.cancelPayment=function(){if(STATE.wsReady)STATE.ws.send(JSON.stringify({type:'cancelTransaction'}));backToShopping();};
 
 function handlePaymentResult(msg){
-  // Reject stale results — must match the current pending transaction reference
-  if (STATE.pendingTxnRef && msg.txnRef && msg.txnRef !== STATE.pendingTxnRef) {
-    console.warn('[Payment] Ignoring stale result for', msg.txnRef, '— expected', STATE.pendingTxnRef);
+  console.log('[Payment] Result received — screen:', STATE.screen, 'pendingTxnRef:', STATE.pendingTxnRef, 'msg.txnRef:', msg.txnRef, 'status:', msg.status);
+  // Reject if not on payment screen
+  if (STATE.screen !== 'payment') {
+    console.warn('[Payment] REJECTED — not on payment screen (screen:', STATE.screen, ')');
     return;
   }
-  // Must be on payment screen — ignore results that arrive after timeout/reset
-  if (STATE.screen !== 'payment') {
-    console.warn('[Payment] Ignoring result — not on payment screen (screen:', STATE.screen, ')');
+  // Reject stale results
+  if (STATE.pendingTxnRef && msg.txnRef && msg.txnRef !== STATE.pendingTxnRef) {
+    console.warn('[Payment] REJECTED — stale txnRef', msg.txnRef, 'expected', STATE.pendingTxnRef);
     return;
   }
   STATE.pendingTxnRef = null;

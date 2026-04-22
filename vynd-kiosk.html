@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛒</text></svg>">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>VYND Kiosk</title>
   <style>
@@ -555,6 +555,7 @@ const STATE = {
   wsReady:      false,
   session:      null,
   lastTxn:      null,
+  pendingTxnRef: null,
   idleTimer:    null,
   countdownInterval: null,
   scanMode:       'idle',
@@ -563,8 +564,9 @@ const STATE = {
   confirmInterval:null,
   // Registry
   serial:         null,
-  marketListeners:[],   // unsubscribe functions — cleared on reassignment
+  marketListeners:[],
 };
+window.STATE = STATE; // expose for console debugging
 
 /* ═══════════════════════════════
    FIREBASE
@@ -843,7 +845,15 @@ showScreenDirect('booting');
 connectBridge();
 function resetIdleTimer() {
   clearTimeout(STATE.idleTimer);
-  if (STATE.screen!=='idle') STATE.idleTimer=setTimeout(()=>{ showToast('Session timed out'); resetToIdle(); }, KIOSK_CONFIG.idleTimeout*1000);
+  if (STATE.screen!=='idle') STATE.idleTimer=setTimeout(()=>{
+    // If timing out during payment — cancel the transaction on the bridge first
+    if (STATE.screen==='payment' && STATE.wsReady && STATE.pendingTxnRef) {
+      STATE.ws.send(JSON.stringify({ type:'cancelTransaction', txnRef: STATE.pendingTxnRef }));
+      STATE.pendingTxnRef = null;
+    }
+    showToast('Session timed out');
+    resetToIdle();
+  }, KIOSK_CONFIG.idleTimeout*1000);
 }
 document.addEventListener('touchstart',resetIdleTimer,{passive:true});
 document.addEventListener('mousedown', resetIdleTimer);
@@ -1417,14 +1427,15 @@ window.initiatePayment=function(){
 window.cancelPayment=function(){if(STATE.wsReady)STATE.ws.send(JSON.stringify({type:'cancelTransaction'}));backToShopping();};
 
 function handlePaymentResult(msg){
-  // Reject stale results — must match the current pending transaction reference
-  if (STATE.pendingTxnRef && msg.txnRef && msg.txnRef !== STATE.pendingTxnRef) {
-    console.warn('[Payment] Ignoring stale result for', msg.txnRef, '— expected', STATE.pendingTxnRef);
+  console.log('[Payment] Result received — screen:', STATE.screen, 'pendingTxnRef:', STATE.pendingTxnRef, 'msg.txnRef:', msg.txnRef, 'status:', msg.status);
+  // Reject if not on payment screen
+  if (STATE.screen !== 'payment') {
+    console.warn('[Payment] REJECTED — not on payment screen (screen:', STATE.screen, ')');
     return;
   }
-  // Must be on payment screen — ignore results that arrive after timeout/reset
-  if (STATE.screen !== 'payment') {
-    console.warn('[Payment] Ignoring result — not on payment screen (screen:', STATE.screen, ')');
+  // Reject stale results
+  if (STATE.pendingTxnRef && msg.txnRef && msg.txnRef !== STATE.pendingTxnRef) {
+    console.warn('[Payment] REJECTED — stale txnRef', msg.txnRef, 'expected', STATE.pendingTxnRef);
     return;
   }
   STATE.pendingTxnRef = null;

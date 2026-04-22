@@ -1084,7 +1084,7 @@ window.resetToIdle = function() {
   clearTimeout(STATE.idleTimer); clearInterval(STATE.countdownInterval); cancelConfirm();
   if (STATE.session?.id && STATE.screen!=='success')
     set(ref(db,`${MKT}/sessions/${STATE.session.id}/status`),'abandoned');
-  STATE.basket=[]; STATE.session=null; STATE.lastTxn=null;
+  STATE.basket=[]; STATE.session=null; STATE.lastTxn=null; STATE.pendingTxnRef=null;
   recalcPromotions(); showScreen('idle');
 };
 
@@ -1402,7 +1402,6 @@ window.backToShopping=()=>{showScreen('shopping');resetIdleTimer();};
    ═══════════════════════════════ */
 window.initiatePayment=function(){
   const {grandTotal}=calcTotals();
-  // Safety guard — should never reach here at limit but belt-and-braces
   if (grandTotal >= KIOSK_CONFIG.tapLimitCents) { backToShopping(); return; }
   el('payment-total-display').textContent=fmt(grandTotal);
   el('payment-status').textContent='';
@@ -1410,6 +1409,7 @@ window.initiatePayment=function(){
   showScreen('payment');
   if(!STATE.wsReady){el('payment-status').textContent='Waiting for payment reader…';return;}
   const mref=`VYND-${KIOSK_CONFIG.marketId}-${Date.now()}`;
+  STATE.pendingTxnRef = mref; // track so we can validate the result
   STATE.ws.send(JSON.stringify({type:'startTransaction',amountCents:grandTotal,reference:mref}));
   el('payment-status').textContent='Waiting for card tap…';
   resetIdleTimer();
@@ -1417,6 +1417,17 @@ window.initiatePayment=function(){
 window.cancelPayment=function(){if(STATE.wsReady)STATE.ws.send(JSON.stringify({type:'cancelTransaction'}));backToShopping();};
 
 function handlePaymentResult(msg){
+  // Reject stale results — must match the current pending transaction reference
+  if (STATE.pendingTxnRef && msg.txnRef && msg.txnRef !== STATE.pendingTxnRef) {
+    console.warn('[Payment] Ignoring stale result for', msg.txnRef, '— expected', STATE.pendingTxnRef);
+    return;
+  }
+  // Must be on payment screen — ignore results that arrive after timeout/reset
+  if (STATE.screen !== 'payment') {
+    console.warn('[Payment] Ignoring result — not on payment screen (screen:', STATE.screen, ')');
+    return;
+  }
+  STATE.pendingTxnRef = null;
   STATE.lastTxn=msg;
   if(msg.status==='approved'){writeSaleToFirebase(msg).then(()=>showSuccessScreen(msg));}
   else{

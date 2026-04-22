@@ -697,12 +697,23 @@ function initMarket(assignment) {
     if (c.tapWarnCents   != null)    KIOSK_CONFIG.tapWarnCents          = c.tapWarnCents;
   }));
 
-  // Planogram catalogue (real-time)
-  STATE.marketListeners.push(onValue(fRef('catalogue'), snap => {
+  // Catalogue — one-time load then targeted per-barcode stock listeners
+  // Using onValue on the whole catalogue means every stock write re-downloads
+  // the entire catalogue for every connected kiosk — expensive at scale.
+  get(fRef('catalogue')).then(snap => {
     STATE.catalogue = snap.val() || {};
     recalcPromotions();
     if (STATE.screen === 'shopping') renderProducts(el('search-input').value);
-  }));
+    // Now attach lightweight per-barcode stock listeners
+    Object.keys(STATE.catalogue).forEach(bc => {
+      STATE.marketListeners.push(onValue(fRef(`catalogue/${bc}/stock`), snap => {
+        if (STATE.catalogue[bc]) {
+          STATE.catalogue[bc].stock = snap.val() ?? 0;
+          if (STATE.screen === 'shopping') renderProducts(el('search-input').value);
+        }
+      }));
+    });
+  });
 
   // Promotions — global node, filtered to this market
   STATE.marketListeners.push(onValue(ref(db, 'vynd/promotions'), snap => {

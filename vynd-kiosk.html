@@ -215,6 +215,8 @@
     #payment-status { font-size:18px; color:var(--primary); font-weight:600; min-height:28px; }
     .btn-cancel-pay { background:none; border:1px solid var(--border); color:var(--muted); padding:12px 32px; border-radius:12px; font-size:16px; cursor:pointer; margin-top:8px; }
     .reader-offline { background:var(--warn); color:#000; padding:12px 24px; border-radius:12px; font-size:15px; font-weight:600; }
+    .reader-offline-mode { background:rgba(255,255,255,0.08); color:var(--muted); padding:8px 18px; border-radius:10px; font-size:13px; font-weight:500; border:1px solid var(--border); }
+    .offline-badge { display:inline-block; background:rgba(255,255,255,0.1); color:var(--muted); padding:4px 10px; border-radius:8px; font-size:12px; font-weight:500; margin-top:8px; }
 
     /* ── SUCCESS ── */
     #screen-success { align-items:center; justify-content:center; }
@@ -435,6 +437,7 @@
     <div class="payment-sub">Visa, Mastercard, Apple Pay, Google Pay accepted</div>
     <div id="payment-status"></div>
     <div id="reader-offline-msg" style="display:none" class="reader-offline">⚠️ Payment reader offline — please wait</div>
+    <div id="reader-offline-mode" style="display:none" class="reader-offline-mode">📡 Operating in offline mode — payment will settle automatically</div>
     <button class="btn-cancel-pay" onclick="cancelPayment()">Cancel</button>
   </div>
 </div>
@@ -458,6 +461,7 @@
     <div class="success-summary" id="success-summary"></div>
     <div class="success-savings" id="success-savings" style="display:none"></div>
     <div class="success-total" id="success-total"></div>
+    <div class="offline-badge" id="success-offline-badge" style="display:none">📡 Approved offline — will settle when online</div>
     <div class="success-countdown" id="success-countdown"></div>
   </div>
 </div>
@@ -553,6 +557,9 @@ const STATE = {
   marketName:   'Micromarket',
   ws:           null,
   wsReady:      false,
+  readerOnline: false,    // bridge can talk to PxScrController/terminal (local)
+  hostOnline:   false,    // terminal is logged on to Windcave host (depends on WAN)
+                          //   when false but readerOnline=true → Deferred Auth (offline approvals work)
   session:      null,
   lastTxn:      null,
   pendingTxnRef: null,
@@ -770,23 +777,27 @@ function connectBridge() {
 
     STATE.ws.onopen = () => {
       STATE.wsReady = true;
-      el('reader-dot').classList.add('online');
+      // Don't assume reader/host are up — wait for bridge to send status.
+      // updateReaderBanners() will be called when status/identity arrives.
       STATE.ws.send(JSON.stringify({ type: 'ping' }));
       // Request identity — bridge will respond with { type:'identity', serial:'...' }
       STATE.ws.send(JSON.stringify({ type: 'getIdentity' }));
+      updateReaderBanners();
     };
 
     STATE.ws.onclose = () => {
       STATE.wsReady = false;
-      el('reader-dot').classList.remove('online');
-      const om = el('reader-offline-msg');
-      if (om) om.style.display = 'block';
+      STATE.readerOnline = false;   // bridge gone — we don't know reader state
+      STATE.hostOnline   = false;
+      updateReaderBanners();
       setTimeout(connectBridge, 5000);
     };
 
     STATE.ws.onerror = () => {
       STATE.wsReady = false;
-      el('reader-dot').classList.remove('online');
+      STATE.readerOnline = false;
+      STATE.hostOnline   = false;
+      updateReaderBanners();
       // If still booting and bridge unreachable, try cache with unknown serial
       if (STATE.screen === 'booting') {
         setBootMsg('Bridge offline — trying cache…', 30);
@@ -818,12 +829,24 @@ function handleBridgeMessage(msg) {
         KIOSK_CONFIG.serial = msg.serial;
         lookupRegistry(msg.serial);
       }
+      // identity message also carries reader/host status
+      if (typeof msg.readerOnline === 'boolean') STATE.readerOnline = msg.readerOnline;
+      if (typeof msg.hostOnline   === 'boolean') STATE.hostOnline   = msg.hostOnline;
+      updateReaderBanners();
       break;
 
+    case 'status': {
+      // Bridge pushes this whenever reader/host connectivity changes
+      if (typeof msg.readerOnline === 'boolean') STATE.readerOnline = msg.readerOnline;
+      if (typeof msg.hostOnline   === 'boolean') STATE.hostOnline   = msg.hostOnline;
+      updateReaderBanners();
+      break;
+    }
+
     case 'readerStatus': {
-      const dot = el('reader-dot'), om = el('reader-offline-msg');
-      if (msg.connected) { dot.classList.add('online'); if (om) om.style.display = 'none'; }
-      else               { dot.classList.remove('online'); if (om) om.style.display = 'block'; }
+      // Legacy — kept for backwards compatibility
+      STATE.readerOnline = !!msg.connected;
+      updateReaderBanners();
       break;
     }
 
@@ -834,6 +857,31 @@ function handleBridgeMessage(msg) {
     case 'pong':
       break;
   }
+}
+
+// Reflect current connectivity state on the UI.
+// Three states the user can see:
+//   1. Bridge gone        — STATE.wsReady = false                              → red dot, warning bar, transactions blocked
+//   2. Reader gone        — wsReady=true, readerOnline=false                   → red dot, warning bar, transactions blocked
+//   3. Offline mode       — wsReady=true, readerOnline=true, hostOnline=false  → green dot, subtle "offline mode" badge,
+//                                                                                transactions ALLOWED (Deferred Auth)
+//   4. Fully online       — all true                                           → green dot, no banners
+function updateReaderBanners() {
+  const dot           = el('reader-dot');
+  const offlineMsg    = el('reader-offline-msg');
+  const offlineMode   = el('reader-offline-mode');
+
+  const bridgeUp = STATE.wsReady;
+  const readerUp = STATE.readerOnline;
+  const hostUp   = STATE.hostOnline;
+
+  // The "reader is genuinely unavailable" condition — bridge gone OR reader gone.
+  // This is the only state where we should block transactions.
+  const readerUnavailable = !bridgeUp || !readerUp;
+
+  if (dot) dot.classList.toggle('online', !readerUnavailable);
+  if (offlineMsg)  offlineMsg.style.display  = readerUnavailable ? 'block' : 'none';
+  if (offlineMode) offlineMode.style.display = (!readerUnavailable && !hostUp) ? 'block' : 'none';
 }
 
 /* ═══════════════════════════════
@@ -1424,9 +1472,12 @@ window.initiatePayment=function(){
   if (grandTotal >= KIOSK_CONFIG.tapLimitCents) { backToShopping(); return; }
   el('payment-total-display').textContent=fmt(grandTotal);
   el('payment-status').textContent='';
-  const om=el('reader-offline-msg');if(om)om.style.display=STATE.wsReady?'none':'block';
+  // Refresh banners — reader may have come back/gone away since this screen was last shown.
+  // Note: offline mode (host down but reader up) is OK — Deferred Auth handles it.
+  updateReaderBanners();
   showScreen('payment');
-  if(!STATE.wsReady){el('payment-status').textContent='Waiting for payment reader…';return;}
+  const readerAvailable = STATE.wsReady && STATE.readerOnline;
+  if(!readerAvailable){el('payment-status').textContent='Waiting for payment reader…';return;}
   const mref=`VYND-${KIOSK_CONFIG.marketId}-${Date.now()}`;
   STATE.pendingTxnRef = mref; // track so we can validate the result
   STATE.ws.send(JSON.stringify({type:'startTransaction',amountCents:grandTotal,reference:mref}));
@@ -1505,6 +1556,7 @@ async function writeSaleToFirebase(txn){
     itemDiscountTotal, basketDiscount, totalSavings,
     grandTotal, gstCents,
     windcaveTxnRef:txn.txnRef||'', authCode:txn.authCode||'', cardType:txn.cardType||txn.cardName||'Unknown',
+    isOfflineApproval: !!txn.isOffline,   // Deferred Auth — settled separately, flag for reconciliation
     hasFlags:STATE.basket.some(b=>b.flagType),
     hasPromotions:totalSavings>0,
     promoAttribution:Object.values(promoAttribution),
@@ -1573,6 +1625,9 @@ function showSuccessScreen(txn){
   const {grandTotal,totalSavings}=calcTotals();
   el('success-ref').textContent=txn.txnRef?`Transaction ref: ${txn.txnRef}`:'';
   el('success-total').textContent=fmt(grandTotal);
+  // Offline-approval badge — Deferred Auth: terminal approved without contacting host, will settle later
+  const offlineBadge = el('success-offline-badge');
+  if (offlineBadge) offlineBadge.style.display = txn.isOffline ? 'inline-block' : 'none';
   el('success-summary').innerHTML=STATE.basket.map(b=>{
     const final=(b.priceCents-b.discountCentsPerUnit)*b.qty;
     return `<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:14px">

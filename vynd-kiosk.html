@@ -229,6 +229,16 @@
     .success-savings{ font-size:14px; color:var(--promo); font-weight:600; text-align:center; }
     .success-total  { font-size:24px; font-weight:800; color:var(--primary); text-align:center; }
     .success-countdown { font-size:16px; color:var(--muted); }
+    /* ── Receipt QR ── */
+    .receipt-qr-block {
+      display:flex; flex-direction:row; align-items:center; gap:14px;
+      background:var(--surface); border:1px solid var(--border); border-radius:14px;
+      padding:14px 18px;
+    }
+    .receipt-qr-block .qr-canvas { background:#fff; border-radius:8px; padding:6px; flex:0 0 auto; }
+    .receipt-qr-block .qr-text   { text-align:left; color:var(--text); font-size:15px; line-height:1.35; }
+    .receipt-qr-block .qr-text .qr-title { font-weight:700; margin-bottom:2px; }
+    .receipt-qr-block .qr-text .qr-sub   { color:var(--muted); font-size:13px; }
 
     /* ── DECLINED ── */
     #screen-declined { align-items:center; justify-content:center; }
@@ -462,6 +472,13 @@
     <div class="success-savings" id="success-savings" style="display:none"></div>
     <div class="success-total" id="success-total"></div>
     <div class="offline-badge" id="success-offline-badge" style="display:none">📡 Approved offline — will settle when online</div>
+    <div class="receipt-qr-block" id="receipt-qr-block" style="display:none">
+      <canvas class="qr-canvas" id="receipt-qr-canvas" width="128" height="128"></canvas>
+      <div class="qr-text">
+        <div class="qr-title">📱 Scan for receipt</div>
+        <div class="qr-sub">Point your phone camera at the code</div>
+      </div>
+    </div>
     <div class="success-countdown" id="success-countdown"></div>
   </div>
 </div>
@@ -500,6 +517,13 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js';
 import { getDatabase, ref, onValue, push, set, update, get, runTransaction, serverTimestamp }
                          from 'https://www.gstatic.com/firebasejs/10.11.0/firebase-database.js';
+// QR code generation — used on success screen to give the customer a way to
+// retrieve their EFTPOS receipt. Pure-JS, no dependencies, ~3KB gzipped.
+import QRCode from 'https://cdn.jsdelivr.net/npm/qrcode@1.5.3/+esm';
+
+// Base URL of the hosted receipt viewer (Firebase Hosting for vynd-pilot).
+// Receipts are served as: RECEIPT_BASE_URL + '?m=<marketId>&id=<saleId>'
+const RECEIPT_BASE_URL = 'https://vynd-pilot.web.app/r/';
 
 /* ═══════════════════════════════════════════════════
    CONFIGURATION
@@ -1500,7 +1524,7 @@ function handlePaymentResult(msg){
   }
   STATE.pendingTxnRef = null;
   STATE.lastTxn=msg;
-  if(msg.status==='approved'){writeSaleToFirebase(msg).then(()=>showSuccessScreen(msg));}
+  if(msg.status==='approved'){writeSaleToFirebase(msg).then(saleKey=>showSuccessScreen(msg,saleKey));}
   else{
     el('declined-msg').textContent=msg.status==='timeout'?'No card was detected. Please try again.':`Payment declined: ${msg.responseText||'Please try a different card.'}`;
     showScreen('declined');
@@ -1571,7 +1595,8 @@ async function writeSaleToFirebase(txn){
     kioskId: KIOSK_CONFIG.kioskId,   // ← which terminal processed this sale
   };
 
-  await push(fRef('sales'),sale);
+  const saleRef = await push(fRef('sales'), sale);
+  const saleKey = saleRef.key; // Firebase-generated ID — used in the receipt QR URL
 
   // ── Atomic SOH decrement (runTransaction) ──
   // runTransaction is safe for multiple kiosks sharing a stock pool.
@@ -1619,15 +1644,35 @@ async function writeSaleToFirebase(txn){
     await set(ref(db,`${MKT}/sessions/${STATE.session.id}/status`),'completed');
     await set(ref(db,`${MKT}/sessions/${STATE.session.id}/completedAt`),new Date().toISOString());
   }
+
+  return saleKey; // used by showSuccessScreen() to build the receipt QR URL
 }
 
-function showSuccessScreen(txn){
+function showSuccessScreen(txn, saleKey){
   const {grandTotal,totalSavings}=calcTotals();
   el('success-ref').textContent=txn.txnRef?`Transaction ref: ${txn.txnRef}`:'';
   el('success-total').textContent=fmt(grandTotal);
   // Offline-approval badge — Deferred Auth: terminal approved without contacting host, will settle later
   const offlineBadge = el('success-offline-badge');
   if (offlineBadge) offlineBadge.style.display = txn.isOffline ? 'inline-block' : 'none';
+
+  // Receipt QR — hide by default, only show if we have a sale key and a market.
+  // The QR encodes a URL the cardholder can scan with their phone camera to
+  // view the full EFTPOS receipt on our hosted viewer page.
+  const qrBlock  = el('receipt-qr-block');
+  const qrCanvas = el('receipt-qr-canvas');
+  if (qrBlock && qrCanvas) {
+    if (saleKey && KIOSK_CONFIG.marketId) {
+      const url = `${RECEIPT_BASE_URL}?m=${encodeURIComponent(KIOSK_CONFIG.marketId)}&id=${encodeURIComponent(saleKey)}`;
+      QRCode.toCanvas(qrCanvas, url, {
+        width: 128, margin: 1,
+        color: { dark: '#111827', light: '#ffffff' },
+      }).then(() => { qrBlock.style.display = 'flex'; })
+        .catch(err => { console.warn('[QR] Generation failed:', err); qrBlock.style.display = 'none'; });
+    } else {
+      qrBlock.style.display = 'none';
+    }
+  }
   el('success-summary').innerHTML=STATE.basket.map(b=>{
     const final=(b.priceCents-b.discountCentsPerUnit)*b.qty;
     return `<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:14px">

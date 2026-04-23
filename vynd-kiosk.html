@@ -246,6 +246,7 @@
     .declined-icon   { font-size:100px; }
     .declined-title  { font-size:36px; font-weight:800; color:var(--danger); }
     .declined-msg    { font-size:18px; color:var(--muted); line-height:1.5; }
+    .declined-countdown { font-size:14px; color:var(--muted); margin-top:16px; opacity:0.75; }
     .declined-actions { display:flex; gap:12px; width:100%; }
     .btn-try-again  { flex:2; background:var(--primary); color:#fff; border:none; border-radius:14px; padding:18px; font-size:18px; font-weight:700; cursor:pointer; }
     .btn-cancel-all { flex:1; background:var(--surface); border:1px solid var(--border); color:var(--text); border-radius:14px; padding:18px; font-size:16px; cursor:pointer; }
@@ -507,6 +508,7 @@
       <button class="btn-try-again" onclick="goToReview()">Try again</button>
       <button class="btn-cancel-all" onclick="resetToIdle()">Cancel</button>
     </div>
+    <div class="declined-countdown" id="declined-countdown"></div>
   </div>
 </div>
 
@@ -1430,6 +1432,9 @@ window.toggleScanMode=()=>showToast('Point the scanner at a product barcode');
    ═══════════════════════════════ */
 window.goToReview=function(){
   if(!STATE.basket.length)return;
+  // Clear any running countdown (e.g. from declined screen) so it doesn't
+  // fire resetToIdle() while the customer is mid-review.
+  clearInterval(STATE.countdownInterval);
   const {itemSubtotal,itemDiscountTotal,basketDiscount,grandTotal,gstCents,totalSavings}=calcTotals();
   const hasFlags = STATE.basket.some(b=>b.flagType);
   const atLimit  = grandTotal >= KIOSK_CONFIG.tapLimitCents;
@@ -1535,6 +1540,22 @@ function handlePaymentResult(msg){
       if(l2)l2.style.strokeDashoffset='0';
     });
     playDeclinedSound();
+    // Auto-return to home after 30 seconds so the kiosk doesn't sit on a
+    // declined screen indefinitely if the customer walks away. Customer can
+    // still press Try Again or Cancel at any time — goToReview() and
+    // resetToIdle() both clear this interval.
+    clearInterval(STATE.countdownInterval);
+    let secs = 30;
+    el('declined-countdown').textContent = `Returning to home in ${secs}s`;
+    STATE.countdownInterval = setInterval(() => {
+      secs--;
+      if (secs <= 0) {
+        clearInterval(STATE.countdownInterval);
+        resetToIdle();
+      } else {
+        el('declined-countdown').textContent = `Returning to home in ${secs}s`;
+      }
+    }, 1000);
   }
 }
 

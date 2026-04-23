@@ -1579,7 +1579,10 @@ async function writeSaleToFirebase(txn){
     subtotalBeforeDiscounts:itemSubtotal,
     itemDiscountTotal, basketDiscount, totalSavings,
     grandTotal, gstCents,
-    windcaveTxnRef:txn.txnRef||'', authCode:txn.authCode||'', cardType:txn.cardType||txn.cardName||'Unknown',
+    windcaveTxnRef: txn.dpsTxnRef || '',    // Windcave's DpsTxnRef — appears on bank statement / Vineel's QA
+    posTxnRef:      txn.txnRef    || '',    // Our MerchantReference (VYND-MKT-001-...) — used for internal reconciliation
+    authCode:       txn.authCode  || '',
+    cardType:       txn.cardType  || txn.cardName || 'Unknown',
     isOfflineApproval: !!txn.isOffline,   // Deferred Auth — settled separately, flag for reconciliation
     hasFlags:STATE.basket.some(b=>b.flagType),
     hasPromotions:totalSavings>0,
@@ -1650,7 +1653,10 @@ async function writeSaleToFirebase(txn){
 
 function showSuccessScreen(txn, saleKey){
   const {grandTotal,totalSavings}=calcTotals();
-  el('success-ref').textContent=txn.txnRef?`Transaction ref: ${txn.txnRef}`:'';
+  // Prefer Windcave's DpsTxnRef on the customer-facing success screen
+  // (matches their bank statement), fall back to our POS ref if unavailable.
+  const displayRef = txn.dpsTxnRef || txn.txnRef || '';
+  el('success-ref').textContent = displayRef ? `Transaction ref: ${displayRef}` : '';
   el('success-total').textContent=fmt(grandTotal);
   // Offline-approval badge — Deferred Auth: terminal approved without contacting host, will settle later
   const offlineBadge = el('success-offline-badge');

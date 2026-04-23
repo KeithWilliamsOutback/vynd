@@ -40,6 +40,7 @@
     .idle-tap    { font-size:36px; font-weight:600; color:var(--primary); animation:pulse 2.2s ease-in-out infinite; }
     .idle-time   { position:absolute; bottom:120px; font-size:18px; color:var(--muted); }
     @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.6;transform:scale(.97)} }
+    @keyframes recovery-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
     /* ── IDLE SCAN PROMPT — bottom-left pointing to scanner ── */
     .idle-scan-prompt {
@@ -512,6 +513,29 @@
   </div>
 </div>
 
+<!-- ─── RECOVERY (interrupted transaction) ─── -->
+<div id="screen-recovery" class="screen" style="align-items:center;justify-content:center;background:linear-gradient(145deg,#0a1628 0%,#1a0a0a 60%,#0a1628 100%)">
+  <div class="declined-inner">
+    <svg viewBox="0 0 120 120" width="200" height="200" id="recovery-icon">
+      <circle cx="60" cy="60" r="54" fill="none" stroke="#f59e0b" stroke-width="6" opacity="0.25"/>
+      <circle cx="60" cy="60" r="54" fill="none" stroke="#f59e0b" stroke-width="6"
+        stroke-dasharray="339" stroke-dashoffset="0"
+        style="transform-origin:60px 60px;animation:recovery-spin 1.2s linear infinite"
+        id="recovery-spinner"/>
+    </svg>
+    <div class="declined-title" id="recovery-title">Transaction declined</div>
+    <div class="declined-msg" id="recovery-msg">
+      The previous transaction was interrupted.<br>
+      If your card was charged, we're reversing it now.<br>
+      Please wait…
+    </div>
+    <div class="declined-actions" id="recovery-actions" style="display:none">
+      <button class="btn-try-again" onclick="resetToIdle()">OK</button>
+    </div>
+    <div class="declined-countdown" id="recovery-ref" style="margin-top:12px;font-family:monospace;font-size:12px;opacity:0.5"></div>
+  </div>
+</div>
+
 <div id="toast"></div>
 <div id="reader-dot" title="Payment reader status"></div>
 
@@ -566,6 +590,138 @@ const FB_CONFIG = {
 
 // Local cache key — used when Firebase is unreachable on boot
 const CACHE_KEY = 'vynd_assignment';
+
+// Pending-payment key — written when we send a transaction to the bridge,
+// cleared on any result (approved, declined, timeout). If it's still present
+// when the kiosk restarts, the transaction was interrupted: the card may have
+// been charged but the sale not recorded. Recovery flow triggers a VOID.
+const PENDING_PAYMENT_KEY = 'vynd_pending_payment';
+
+// How long after startedAt we treat a pending payment as "abandoned" and
+// trigger recovery. Short enough that crashes are detected quickly; long
+// enough that a fast Chrome reload during a live transaction isn't misread.
+const PENDING_PAYMENT_STALE_MS = 30_000;
+
+function savePendingPayment(record) {
+  try { localStorage.setItem(PENDING_PAYMENT_KEY, JSON.stringify(record)); }
+  catch (e) { console.warn('[Recovery] Could not persist pending payment:', e); }
+}
+
+function clearPendingPayment() {
+  try { localStorage.removeItem(PENDING_PAYMENT_KEY); } catch (e) {}
+}
+
+function getPendingPayment() {
+  try { const raw = localStorage.getItem(PENDING_PAYMENT_KEY); return raw ? JSON.parse(raw) : null; }
+  catch (e) { return null; }
+}
+
+// ── INTERRUPTED-TRANSACTION RECOVERY ────────────────────────────────────
+// Called once the WebSocket to the bridge is open. If the previous kiosk
+// run left a pending-payment marker in localStorage, the transaction was
+// interrupted — possibly after the card was charged. Recovery:
+//   1. Show the recovery screen (warm-amber spinner, "Transaction declined")
+//   2. Ask the bridge to VOID the transaction by TxnRef
+//   3. When the bridge responds, reveal the OK button so the next customer
+//      can start a fresh transaction.
+//
+// If the pending-payment marker is younger than PENDING_PAYMENT_STALE_MS
+// (30s default), we assume we're mid-transaction and a normal result will
+// arrive shortly — no recovery needed.
+function checkForInterruptedTransaction() {
+  const pending = getPendingPayment();
+  if (!pending) return;
+
+  const age = Date.now() - (pending.startedAt || 0);
+  if (age < PENDING_PAYMENT_STALE_MS) {
+    // Too fresh — could just be a quick reload during an in-flight txn.
+    // Let it play out; if no result arrives, the next kiosk load will
+    // catch it (marker will be older then).
+    console.warn('[Recovery] Pending payment marker is fresh (' + age + 'ms) — not triggering recovery yet');
+    return;
+  }
+
+  console.warn('[Recovery] Interrupted transaction detected: ' + pending.txnRef + ' (age ' + Math.round(age/1000) + 's)');
+
+  // Show recovery UI
+  showScreen('recovery');
+  const refEl = el('recovery-ref');
+  if (refEl) refEl.textContent = 'Ref: ' + pending.txnRef;
+  const actionsEl = el('recovery-actions');
+  if (actionsEl) actionsEl.style.display = 'none';
+
+  // Ask the bridge to void this transaction.
+  // If the bridge isn't ready yet for some reason, retry briefly.
+  requestVoid(pending, 0);
+}
+
+function requestVoid(pending, attempt) {
+  const MAX_ATTEMPTS = 5;
+  if (!STATE.wsReady || STATE.ws?.readyState !== 1) {
+    if (attempt >= MAX_ATTEMPTS) {
+      console.error('[Recovery] Bridge unreachable — showing manual-escalation message');
+      showRecoveryFailed(pending, 'Bridge unavailable — unable to auto-reverse. Please contact support.');
+      return;
+    }
+    setTimeout(() => requestVoid(pending, attempt + 1), 1000);
+    return;
+  }
+  STATE.ws.send(JSON.stringify({
+    type:   'voidTransaction',
+    txnRef: pending.txnRef,        // our merchant reference (e.g. VYND-MKT-001-…)
+    dpsTxnRef: pending.dpsTxnRef || null,   // Windcave ref — we usually don't have this on recovery
+  }));
+}
+
+function handleVoidResult(msg) {
+  // msg: { type:'voidResult', success:bool, reco:string, responseText:string, txnRef:string }
+  const pending = getPendingPayment();
+  if (msg.success) {
+    // Void accepted by SCR. Card charge (if any) will be reversed.
+    clearPendingPayment();
+    el('recovery-title').textContent = 'Transaction declined';
+    el('recovery-msg').innerHTML =
+      'The previous transaction was reversed.<br>' +
+      'No funds have been charged to your card.<br>' +
+      'You may start a new purchase.';
+    // Stop the spinner, reveal OK
+    const spin = el('recovery-spinner');
+    if (spin) spin.style.animation = 'none';
+    const actions = el('recovery-actions');
+    if (actions) actions.style.display = 'flex';
+  } else {
+    // Void failed. ReCo VF = transaction not found (no charge to reverse — safe)
+    // Other ReCos are more concerning.
+    if (msg.reco === 'VF') {
+      // No matching transaction on the SCR — nothing was actually charged.
+      clearPendingPayment();
+      el('recovery-title').textContent = 'Transaction declined';
+      el('recovery-msg').innerHTML =
+        'The previous transaction was not completed.<br>' +
+        'No funds have been charged to your card.<br>' +
+        'You may start a new purchase.';
+      const spin = el('recovery-spinner');
+      if (spin) spin.style.animation = 'none';
+      const actions = el('recovery-actions');
+      if (actions) actions.style.display = 'flex';
+    } else {
+      showRecoveryFailed(pending, 'Automatic reversal failed (ReCo ' + (msg.reco || 'unknown') + '). Please contact support.');
+    }
+  }
+}
+
+function showRecoveryFailed(pending, detail) {
+  // Do NOT clear the pending-payment marker — next kiosk load will retry.
+  // Surface a clear message for the operator/support to act on.
+  el('recovery-title').textContent = 'Unable to reverse';
+  el('recovery-msg').innerHTML =
+    detail + '<br><br>' +
+    'Reference: <code>' + (pending?.txnRef || 'unknown') + '</code>';
+  const spin = el('recovery-spinner');
+  if (spin) spin.style.animation = 'none';
+  const actions = el('recovery-actions');
+  if (actions) actions.style.display = 'flex';
+}
 
 /* ═══════════════════════════════
    STATE
@@ -809,6 +965,9 @@ function connectBridge() {
       // Request identity — bridge will respond with { type:'identity', serial:'...' }
       STATE.ws.send(JSON.stringify({ type: 'getIdentity' }));
       updateReaderBanners();
+      // Recovery check — if a payment was in flight when this kiosk last ran
+      // (and never got a result), trigger the recovery flow.
+      checkForInterruptedTransaction();
     };
 
     STATE.ws.onclose = () => {
@@ -878,6 +1037,10 @@ function handleBridgeMessage(msg) {
 
     case 'result':
       handlePaymentResult(msg);
+      break;
+
+    case 'voidResult':
+      handleVoidResult(msg);
       break;
 
     case 'pong':
@@ -1509,11 +1672,27 @@ window.initiatePayment=function(){
   if(!readerAvailable){el('payment-status').textContent='Waiting for payment reader…';return;}
   const mref=`VYND-${KIOSK_CONFIG.marketId}-${Date.now()}`;
   STATE.pendingTxnRef = mref; // track so we can validate the result
+  // Persist pending-payment marker BEFORE sending to bridge. If anything crashes
+  // from this moment onwards (kiosk, bridge, browser, PC power) and a charge
+  // succeeds on the Windcave side, recovery on restart will trigger a VOID.
+  savePendingPayment({
+    txnRef:      mref,
+    startedAt:   Date.now(),
+    amountCents: grandTotal,
+    marketId:    KIOSK_CONFIG.marketId,
+    kioskId:     KIOSK_CONFIG.kioskId,
+    sessionId:   STATE.session?.id || null,
+    itemCount:   STATE.basket.reduce((s, b) => s + b.qty, 0),
+  });
   STATE.ws.send(JSON.stringify({type:'startTransaction',amountCents:grandTotal,reference:mref}));
   el('payment-status').textContent='Waiting for card tap…';
   resetIdleTimer();
 };
-window.cancelPayment=function(){if(STATE.wsReady)STATE.ws.send(JSON.stringify({type:'cancelTransaction'}));backToShopping();};
+window.cancelPayment=function(){
+  clearPendingPayment();
+  if(STATE.wsReady)STATE.ws.send(JSON.stringify({type:'cancelTransaction'}));
+  backToShopping();
+};
 
 function handlePaymentResult(msg){
   console.log('[Payment] Result received — screen:', STATE.screen, 'pendingTxnRef:', STATE.pendingTxnRef, 'msg.txnRef:', msg.txnRef, 'status:', msg.status);
@@ -1529,6 +1708,9 @@ function handlePaymentResult(msg){
   }
   STATE.pendingTxnRef = null;
   STATE.lastTxn=msg;
+  // Clear the pending-payment marker — we got a definitive result, so there's
+  // nothing to recover. (This runs for approved, declined AND timeout.)
+  clearPendingPayment();
   if(msg.status==='approved'){writeSaleToFirebase(msg).then(saleKey=>showSuccessScreen(msg,saleKey));}
   else{
     el('declined-msg').textContent=msg.status==='timeout'?'No card was detected. Please try again.':`Payment declined: ${msg.responseText||'Please try a different card.'}`;

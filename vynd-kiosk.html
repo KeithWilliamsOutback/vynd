@@ -498,7 +498,7 @@
 
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js';
-import { getDatabase, ref, onValue, push, set, update, get, runTransaction, serverTimestamp }
+import { getDatabase, ref, onValue, push, set, update, get, runTransaction, serverTimestamp, goOnline, goOffline }
                          from 'https://www.gstatic.com/firebasejs/10.11.0/firebase-database.js';
 
 /* ═══════════════════════════════════════════════════
@@ -580,6 +580,42 @@ window.STATE = STATE; // expose for console debugging
    ═══════════════════════════════ */
 const app = initializeApp(FB_CONFIG);
 const db  = getDatabase(app);
+
+/* ── Network watcher ──────────────────────────────────────────────
+   When WAN drops, Firebase's Realtime Database client retries 10+
+   times per second indefinitely. That storm of failing requests
+   saturates Chrome's network event loop and tears down the LOCAL
+   bridge WebSocket as collateral damage — locking the kiosk out
+   of payment processing even though the BRF210F can still approve
+   transactions offline via Deferred Auth.
+
+   This watcher calls Firebase's goOffline() when WAN drops to halt
+   the reconnect storm, and goOnline() when it returns. The bridge
+   WebSocket stays alive throughout and the kiosk remains usable.   */
+let __fbOffline = false;
+function suspendFirebase() {
+  if (__fbOffline) return;
+  __fbOffline = true;
+  try { goOffline(db); console.log('[Net] WAN down — Firebase reconnects suspended (bridge WS preserved)'); }
+  catch(e) { console.warn('[Net] goOffline failed:', e.message); }
+}
+function resumeFirebase() {
+  if (!__fbOffline) return;
+  __fbOffline = false;
+  try { goOnline(db); console.log('[Net] WAN back — Firebase resumed'); }
+  catch(e) { console.warn('[Net] goOnline failed:', e.message); }
+}
+window.addEventListener('offline', suspendFirebase);
+window.addEventListener('online',  resumeFirebase);
+// In case Chrome doesn't fire the offline event (sometimes it doesn't with
+// ethernet unplug if a different adapter is technically still "up"), poll
+// every 5 seconds and react to navigator.onLine changes.
+setInterval(() => {
+  if (!navigator.onLine && !__fbOffline) suspendFirebase();
+  else if (navigator.onLine && __fbOffline) resumeFirebase();
+}, 5000);
+// Honour starting state immediately
+if (!navigator.onLine) suspendFirebase();
 
 // These are set dynamically after registry lookup — do NOT use before initMarket()
 let MKT       = null;

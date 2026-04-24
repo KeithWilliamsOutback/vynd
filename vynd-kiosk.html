@@ -937,6 +937,10 @@ function initMarket(assignment) {
   setBootMsg('Ready', 100);
   setTimeout(() => {
     startHeartbeat();
+    // If we've already entered the recovery flow (interrupted-transaction detected
+    // during WS connect), don't clobber it with 'idle'. The recovery screen stays
+    // until the customer dismisses it via OK.
+    if (STATE.screen === 'recovery') return;
     showScreenDirect('idle');
   }, 400);
 }

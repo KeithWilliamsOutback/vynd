@@ -306,6 +306,10 @@
     <div class="idle-location" id="idle-location">Loading…</div>
     <div class="idle-tap">👆 Tap anywhere to start shopping</div>
     <div class="idle-scan-hint" id="idle-scan-hint" style="margin-top:10px;font-size:14px;color:rgba(255,255,255,0.4);letter-spacing:.5px">or scan a product to add it directly</div>
+    <div id="idle-reconnect-chip" style="display:none;margin-top:24px;padding:10px 20px;border-radius:999px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.4);color:#fbbf24;font-size:14px;font-weight:500;letter-spacing:.3px">
+      <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#f59e0b;margin-right:8px;animation:reconnecting-pulse 1.4s ease-in-out infinite"></span>
+      Payment system reconnecting…
+    </div>
   </div>
   <div class="idle-time" id="idle-clock"></div>
   <!-- Bottom-left scan prompt pointing to scanner window -->
@@ -703,9 +707,10 @@ function requestVoid(pending, attempt) {
     return;
   }
   STATE.ws.send(JSON.stringify({
-    type:   'voidTransaction',
-    txnRef: pending.txnRef,        // our merchant reference (e.g. VYND-MKT-001-…)
-    dpsTxnRef: pending.dpsTxnRef || null,   // Windcave ref — we usually don't have this on recovery
+    type:        'voidTransaction',
+    txnRef:      pending.txnRef,             // our merchant reference (e.g. VYND-MKT-001-…)
+    dpsTxnRef:   pending.dpsTxnRef || null,  // Windcave ref — needed for real VOID per Vineel's spec
+    amountCents: pending.amountCents || 0,   // bridge requires this to build the VOID XML
   }));
 }
 
@@ -1259,6 +1264,7 @@ function updateReaderBanners() {
   const offlineMsg    = el('reader-offline-msg');
   const offlineMode   = el('reader-offline-mode');
   const reconnecting  = el('reader-reconnecting');
+  const idleChip      = el('idle-reconnect-chip');
 
   const bridgeUp = STATE.wsReady;
   const readerUp = STATE.readerOnline;
@@ -1278,6 +1284,10 @@ function updateReaderBanners() {
   if (offlineMsg)    offlineMsg.style.display    = (readerUnavailable && !briefDrop) ? 'block' : 'none';
   if (reconnecting)  reconnecting.style.display  = briefDrop ? 'inline-block' : 'none';
   if (offlineMode)   offlineMode.style.display   = (!readerUnavailable && !hostUp) ? 'block' : 'none';
+  // Idle-screen reconnect chip: visible whenever the reader is unavailable,
+  // regardless of brief/sustained, so customers on the idle screen know to
+  // wait rather than tapping/scanning. startSession() also blocks in this state.
+  if (idleChip)      idleChip.style.display      = readerUnavailable ? 'inline-block' : 'none';
 }
 
 /* ═══════════════════════════════
@@ -1540,6 +1550,14 @@ function updateBanners() {
    SESSION
    ═══════════════════════════════ */
 window.startSession = function() {
+  // Block starting a transaction while the bridge/reader is unavailable.
+  // The reconnect banner on the idle screen tells them why; this prevents
+  // them from entering shopping only to hit 'Waiting for payment reader…'
+  // at the point of payment.
+  if (!STATE.wsReady || !STATE.readerOnline) {
+    showToast('Payment system is reconnecting — please wait a moment');
+    return;
+  }
   STATE.basket=[]; STATE.session={startedAt:new Date().toISOString()};
   push(fRef('sessions'),{
     startedAt: STATE.session.startedAt,
@@ -1925,11 +1943,42 @@ function handlePaymentResult(msg){
   }
   STATE.pendingTxnRef = null;
   STATE.lastTxn=msg;
-  // Clear the pending-payment marker — we got a definitive result, so there's
-  // nothing to recover. (This runs for approved, declined AND timeout.)
-  clearPendingPayment();
-  if(msg.status==='approved'){writeSaleToFirebase(msg).then(saleKey=>showSuccessScreen(msg,saleKey));}
+
+  if(msg.status==='approved'){
+    // Upgrade the pending-payment marker with the Windcave DpsTxnRef BEFORE
+    // we attempt the Firebase sale write. If the kiosk crashes between here
+    // and the successful Firebase write, recovery on next startup will read
+    // this record and issue a proper VOID (which needs the DpsTxnRef to build
+    // the XML per Windcave's spec).
+    const existing = getPendingPayment() || {};
+    savePendingPayment({
+      ...existing,
+      dpsTxnRef:  msg.dpsTxnRef || msg.txnRef || '',
+      approvedAt: Date.now(),
+      reco:       msg.reco || '',
+      authCode:   msg.authCode || '',
+    });
+    writeSaleToFirebase(msg)
+      .then(saleKey => {
+        // Sale successfully persisted — clear the marker so we don't trigger
+        // a spurious recovery VOID on next boot. Firebase has its own offline
+        // persistence and retry, so we treat "write returned" as definitive.
+        clearPendingPayment();
+        showSuccessScreen(msg, saleKey);
+      })
+      .catch(err => {
+        // Firebase write threw. The charge IS valid and we shouldn't VOID it —
+        // the Firebase SDK persists writes locally and retries in the background,
+        // so the sale will eventually reach the server. Clear the marker to
+        // prevent a bad VOID on the next startup.
+        console.error('[Payment] Firebase sale write failed — clearing marker anyway to prevent bad VOID:', err);
+        clearPendingPayment();
+        showSuccessScreen(msg, null);
+      });
+  }
   else{
+    // Declined or timeout — no charge existed, nothing to recover. Safe to clear.
+    clearPendingPayment();
     el('declined-msg').textContent=msg.status==='timeout'?'No card was detected. Please try again.':`Payment declined: ${msg.responseText||'Please try a different card.'}`;
     showScreen('declined');
     requestAnimationFrame(()=>{

@@ -549,6 +549,29 @@
   </div>
 </div>
 
+<!-- Shown when the WebSocket to the bridge stays down while the customer is on
+     the payment screen for longer than PAYMENT_OFFLINE_TIMEOUT_MS. This is
+     purely a UI escape hatch — the customer hasn't tapped yet (or if they have
+     and the terminal approved offline, the recovery flow on the next page-load
+     handles the VOID). -->
+<div id="screen-connection-lost" class="screen" style="align-items:center;justify-content:center;background:linear-gradient(145deg,#0a1628 0%,#1a0a0a 60%,#0a1628 100%)">
+  <div class="declined-inner">
+    <svg viewBox="0 0 120 120" width="200" height="200">
+      <circle cx="60" cy="60" r="54" fill="none" stroke="#f59e0b" stroke-width="6" opacity="0.5"/>
+      <line x1="60" y1="36" x2="60" y2="68" stroke="#f59e0b" stroke-width="8" stroke-linecap="round"/>
+      <circle cx="60" cy="82" r="5" fill="#f59e0b"/>
+    </svg>
+    <div class="declined-title">Transaction cancelled</div>
+    <div class="declined-msg">
+      Connection to the payment system was lost.<br>
+      Please try again.
+    </div>
+    <div class="declined-actions">
+      <button class="btn-try-again" onclick="resetToIdle()">Return to home</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 <div id="reader-dot" title="Payment reader status"></div>
 
@@ -758,6 +781,7 @@ const STATE = {
   wsReconnectTimer:    null,   // handle for the scheduled reconnect
   wsBannerPromoteTimer: null,  // handle for the "reconnecting → offline" escalation
   healthPollTimer:     null,   // interval handle for the HTTP health-poll fallback (see startHealthPollingIfNeeded)
+  paymentOfflineTimer: null,   // timeout handle that fires if WS stays down while on payment screen
   readerOnline: false,    // bridge can talk to PxScrController/terminal (local)
   hostOnline:   false,    // terminal is logged on to Windcave host (depends on WAN)
                           //   when false but readerOnline=true → Deferred Auth (offline approvals work)
@@ -981,6 +1005,15 @@ const WS_RECONNECT_INITIAL_MS = 500;   // first retry fires quickly (bridge is o
 const WS_RECONNECT_MAX_MS     = 8000;  // cap backoff so we don't go silent for ages
 const WS_BANNER_PROMOTE_MS    = 5000;  // how long a WS drop persists before we surface the full offline banner
 
+// If the WS stays down for this long WHILE the customer is on the payment
+// screen, we proactively bail out of the transaction and show a "connection
+// lost" screen with a way home. Without this, the customer stares at a stuck
+// "Waiting for card tap…" screen for however long Chrome/Windows takes to
+// re-stabilise the network adapter after a WAN drop (observed up to ~2min).
+// Any VOID needed for an offline-approved transaction is still handled by
+// the interrupted-transaction recovery flow on the next page load.
+const PAYMENT_OFFLINE_TIMEOUT_MS = 30000;
+
 function connectBridge() {
   // Clear any scheduled reconnect — we're attempting now
   if (STATE.wsReconnectTimer) {
@@ -1001,6 +1034,7 @@ function connectBridge() {
         clearTimeout(STATE.wsBannerPromoteTimer);
         STATE.wsBannerPromoteTimer = null;
       }
+      clearPaymentOfflineTimer();   // WS is back — no need to bail out of payment
       stopHealthPolling();   // WS is up — no need for the HTTP fallback
       // Don't assume reader/host are up — wait for bridge to send status.
       STATE.ws.send(JSON.stringify({ type: 'ping' }));
@@ -1019,6 +1053,7 @@ function connectBridge() {
       scheduleReconnect();
       startBannerPromotionTimerIfNeeded();
       startHealthPollingIfNeeded();   // probe HTTP — Chrome may let fetch through even if it blocks WS
+      startPaymentOfflineTimerIfNeeded();   // if on payment screen, give customer a way out after 30s
       updateReaderBanners();
     };
 
@@ -1071,6 +1106,37 @@ function startBannerPromotionTimerIfNeeded() {
     STATE.wsBannerPromoteTimer = null;
     updateReaderBanners();   // will now show the full banner instead of the pill
   }, WS_BANNER_PROMOTE_MS);
+}
+
+// Start the "bail out of payment screen if WS stays down" timer. Idempotent —
+// calling when the timer's already running is a no-op, so it's safe to call
+// from multiple places (payment screen entry, ws.onclose, etc).
+function startPaymentOfflineTimerIfNeeded() {
+  if (STATE.paymentOfflineTimer) return;
+  if (STATE.screen !== 'payment') return;   // only relevant on payment screen
+  if (STATE.wsReady) return;                 // only relevant when WS is down
+  STATE.paymentOfflineTimer = setTimeout(() => {
+    STATE.paymentOfflineTimer = null;
+    // Only fire if conditions still hold — don't clobber a successful reconnect
+    // or a screen change that happened between the timer start and now.
+    if (STATE.screen !== 'payment') return;
+    if (STATE.wsReady) return;
+    console.warn('[Payment] WS down > ' + PAYMENT_OFFLINE_TIMEOUT_MS + 'ms on payment screen — showing connection-lost screen');
+    // Clear any pending-payment localStorage so we don't trigger a recovery
+    // loop on next reconnect; the customer has explicitly been told their
+    // transaction is cancelled, and the bridge will discard any unsolicited
+    // late response for this txnId since pendingTxn gets cleared next time.
+    clearPendingPayment();
+    STATE.pendingTxnRef = null;
+    showScreen('connection-lost');
+  }, PAYMENT_OFFLINE_TIMEOUT_MS);
+}
+
+function clearPaymentOfflineTimer() {
+  if (STATE.paymentOfflineTimer) {
+    clearTimeout(STATE.paymentOfflineTimer);
+    STATE.paymentOfflineTimer = null;
+  }
 }
 
 // Chrome closes localhost WebSockets when the machine loses WAN, even though
@@ -1218,12 +1284,22 @@ function updateReaderBanners() {
    SCREENS
    ═══════════════════════════════ */
 function showScreen(name) {
+  const previousScreen = STATE.screen;
   document.querySelectorAll('.screen').forEach(s => {
     s.classList.remove('active');
     s.style.display = '';
   });
   el('screen-'+name).classList.add('active');
   STATE.screen = name;
+
+  // Payment-screen offline-bailout timer: start when entering payment if WS is
+  // already down, clear when leaving payment. The actual "start on WS drop
+  // while already on payment" case is handled in ws.onclose / updateReaderBanners.
+  if (name === 'payment' && !STATE.wsReady) {
+    startPaymentOfflineTimerIfNeeded();
+  } else if (previousScreen === 'payment' && name !== 'payment') {
+    clearPaymentOfflineTimer();
+  }
 }
 
 /* ═══════════════════════════════

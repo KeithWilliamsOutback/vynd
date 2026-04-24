@@ -757,6 +757,7 @@ const STATE = {
   wsReconnectDelay:    500,    // current backoff delay, reset on successful connect
   wsReconnectTimer:    null,   // handle for the scheduled reconnect
   wsBannerPromoteTimer: null,  // handle for the "reconnecting → offline" escalation
+  healthPollTimer:     null,   // interval handle for the HTTP health-poll fallback (see startHealthPollingIfNeeded)
   readerOnline: false,    // bridge can talk to PxScrController/terminal (local)
   hostOnline:   false,    // terminal is logged on to Windcave host (depends on WAN)
                           //   when false but readerOnline=true → Deferred Auth (offline approvals work)
@@ -1000,6 +1001,7 @@ function connectBridge() {
         clearTimeout(STATE.wsBannerPromoteTimer);
         STATE.wsBannerPromoteTimer = null;
       }
+      stopHealthPolling();   // WS is up — no need for the HTTP fallback
       // Don't assume reader/host are up — wait for bridge to send status.
       STATE.ws.send(JSON.stringify({ type: 'ping' }));
       STATE.ws.send(JSON.stringify({ type: 'getIdentity' }));
@@ -1016,6 +1018,7 @@ function connectBridge() {
       if (STATE.wsDisconnectedAt === null) STATE.wsDisconnectedAt = Date.now();
       scheduleReconnect();
       startBannerPromotionTimerIfNeeded();
+      startHealthPollingIfNeeded();   // probe HTTP — Chrome may let fetch through even if it blocks WS
       updateReaderBanners();
     };
 
@@ -1082,6 +1085,57 @@ window.addEventListener('offline', () => {
   // Log for observability. The ws.onclose handler will do the real work.
   console.log('[WS] Browser reports offline');
 });
+
+// ── HTTP HEALTH POLLING ────────────────────────────────────────────────
+// Chrome's 'online' event can fire late — or not at all — when the machine
+// recovers from a WAN blip. Worse, Chrome silently blocks localhost
+// WebSocket attempts while it thinks navigator.onLine=false, but it allows
+// localhost fetch() calls.  So while the WS is down we poll the bridge's
+// HTTP /health endpoint. The moment a fetch succeeds we know Chrome has
+// released the lock, and we force an immediate WS reconnect attempt.
+const HEALTH_POLL_INTERVAL_MS = 500;
+const HEALTH_URL = KIOSK_CONFIG.bridgeUrl
+  .replace(/^ws:\/\//, 'http://')
+  .replace(/^wss:\/\//, 'https://')
+  .replace(/\/$/, '') + '/health';
+
+function startHealthPollingIfNeeded() {
+  if (STATE.healthPollTimer) return;  // already polling
+  STATE.healthPollTimer = setInterval(async () => {
+    if (STATE.wsReady) {
+      // Someone got the WS open — stop polling.
+      stopHealthPolling();
+      return;
+    }
+    try {
+      // Abort after 1.5s so a slow/hung request doesn't starve the poll
+      const ctrl    = new AbortController();
+      const timer   = setTimeout(() => ctrl.abort(), 1500);
+      const resp    = await fetch(HEALTH_URL, { signal: ctrl.signal, cache: 'no-store' });
+      clearTimeout(timer);
+      if (!resp.ok) return;
+      // Bridge is reachable via HTTP — Chrome has unblocked localhost, so
+      // a WS attempt should now succeed. Force reconnect immediately.
+      console.log('[WS] Health endpoint reachable — forcing immediate WS reconnect');
+      STATE.wsReconnectDelay = WS_RECONNECT_INITIAL_MS;
+      if (STATE.wsReconnectTimer) { clearTimeout(STATE.wsReconnectTimer); STATE.wsReconnectTimer = null; }
+      if (!STATE.wsReady && (!STATE.ws || STATE.ws.readyState !== 0)) {
+        // readyState 0 = CONNECTING — don't spawn a second concurrent attempt
+        connectBridge();
+      }
+    } catch (e) {
+      // Fetch failed (timeout, CORS not set up, or connection refused).
+      // That's fine — we just keep polling.
+    }
+  }, HEALTH_POLL_INTERVAL_MS);
+}
+
+function stopHealthPolling() {
+  if (STATE.healthPollTimer) {
+    clearInterval(STATE.healthPollTimer);
+    STATE.healthPollTimer = null;
+  }
+}
 
 function handleBridgeMessage(msg) {
   switch (msg.type) {

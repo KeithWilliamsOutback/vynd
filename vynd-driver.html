@@ -644,59 +644,6 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
 </div>
 
 <!-- ════════════════════════
-     SCREEN: MARKET STOP
-     Micromarket restock flow
-════════════════════════ -->
-<div class="screen" id="screen-market-stop">
-  <div class="topbar">
-    <button class="back-btn" onclick="showScreen('screen-home')">
-      <svg viewBox="0 0 16 16" fill="none"><path d="M10 4L6 8l4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Route
-    </button>
-    <div style="text-align:right">
-      <div class="topbar-title" id="mkt-stop-title">MKT-001</div>
-      <div class="topbar-sub" id="mkt-stop-sub">Micromarket</div>
-    </div>
-  </div>
-
-  <div class="scroll">
-
-    <!-- Status bar -->
-    <div class="card" style="cursor:default;margin-bottom:0">
-      <div class="row" style="margin-bottom:6px">
-        <div>
-          <div style="font-size:14px;font-weight:600" id="mkt-stop-name">Inland Distributors</div>
-          <div style="font-size:12px;color:var(--muted)" id="mkt-stop-addr">Break Room</div>
-        </div>
-        <span class="pill pill-blue" id="mkt-stop-status"><span class="pill-dot"></span>Pending</span>
-      </div>
-      <div style="display:flex;gap:16px;margin-top:8px">
-        <div><div style="font-family:'DM Mono',monospace;font-size:18px;font-weight:600" id="mkt-stop-low-count">—</div><div style="font-size:10px;color:var(--muted);text-transform:uppercase">Low stock</div></div>
-        <div><div style="font-family:'DM Mono',monospace;font-size:18px;font-weight:600" id="mkt-stop-product-count">—</div><div style="font-size:10px;color:var(--muted);text-transform:uppercase">Products</div></div>
-        <div><div style="font-family:'DM Mono',monospace;font-size:18px;font-weight:600" id="mkt-stop-total-units">—</div><div style="font-size:10px;color:var(--muted);text-transform:uppercase">Units to load</div></div>
-      </div>
-    </div>
-
-    <!-- Pick list — grouped by asset -->
-    <div id="mkt-stop-product-list" style="margin-top:4px">
-      <div style="text-align:center;padding:32px;color:var(--muted)">Loading market…</div>
-    </div>
-
-    <!-- Short supply notice -->
-    <div id="mkt-short-supply-notice" style="display:none;margin:4px 0;padding:10px 14px;background:rgba(251,146,60,.08);border:1px solid rgba(251,146,60,.25);border-radius:10px;font-size:12px;color:var(--warn)">
-      ⚠ Some quantities differ from the pick list — short supply allocation will run on import
-    </div>
-
-    <!-- Actions -->
-    <div style="margin-top:8px;display:flex;flex-direction:column;gap:8px" id="mkt-stop-actions">
-      <button class="btn btn-primary" onclick="completeMktStop()" id="mkt-complete-btn">✓ Confirm restock</button>
-      <button class="btn btn-secondary" onclick="showScreen('screen-home')">Back to route</button>
-    </div>
-
-    <div style="height:20px"></div>
-  </div>
-</div>
-
-<!-- ════════════════════════
      SCREEN: MACHINE DETAIL
 ════════════════════════ -->
 <div class="screen" id="screen-machine-detail">
@@ -1299,16 +1246,15 @@ async function loadHomeScreen() {
         const routeEl = document.getElementById('home-route-label');
         if (routeEl) routeEl.textContent = 'Route ' + (todayRun.routeId || '');
 
-        // Load DEX data + planogram pendingChange for each stop in parallel
+        // Load DEX data for each stop
         const stopPromises = todayRun.stops.map(stop =>
-          Promise.all([
-            db.ref('vynd/dexReadings/' + stop.id + '/last').once('value').catch(() => null),
-            db.ref('vynd/planograms/'  + stop.id + '/slots').once('value').catch(() => null),
-          ]).then(([dexSnap, pogSnap]) => ({ stop, dex: dexSnap?.val(), pog: pogSnap?.val() }))
+          db.ref('vynd/dexReadings/' + stop.id + '/last').once('value')
+            .then(snap => ({ stop, dex: snap.val() }))
+            .catch(() => ({ stop, dex: null }))
         );
         const stopData = await Promise.all(stopPromises);
 
-        stopData.forEach(({ stop, dex, pog }) => {
+        stopData.forEach(({ stop, dex }) => {
           const seed = MACHINE_META_DRIVER[stop.id] || {};
           if (!STOPS[stop.id]) {
             STOPS[stop.id] = {
@@ -1330,38 +1276,16 @@ async function loadHomeScreen() {
             STOPS[stop.id].status = stop.status || STOPS[stop.id].status;
           }
           if (dex?.slots) {
-            STOPS[stop.id].slots = Object.entries(dex.slots).map(([id, s]) => {
-              const pogSlot = pog?.[id] || {};
-              const dexPriceDollars  = parseFloat(s.priceDollars) || parseFloat(s.priceCents) / 100 || 0;
-              const vmsPog = parseFloat(pogSlot.price) || parseFloat(pogSlot.priceDollars) || parseFloat(pogSlot.priceCents) / 100 || 0;
-              const vmsPriceDollars  = vmsPog > 0 ? vmsPog : dexPriceDollars;
-              const hasPlanogramPrice = vmsPog > 0;
-              return {
-                id,
-                product:            pogSlot.product  || s.product  || '',
-                price:              vmsPriceDollars,    // VMS price for display (falls back to DEX only for display)
-                dexPrice:           dexPriceDollars,    // machine DEX price
-                hasPlanogramPrice,                     // only flag mismatch when planogram price is known
-                current:            s.currentSOH ?? 0,
-                par:                pogSlot.par      ?? s.par ?? 10,
-                capacity:           pogSlot.capacity ?? s.capacity ?? 12,
-                dexVends:           s.vendsSinceLastRead || 0,
-                barcode:            pogSlot.barcode  || s.barcode  || '',
-                pendingChange:      (pog && pog[id] && pog[id].pendingChange) || null,
-              };
-            });
-          } else if (pog) {
-            // No DEX data yet — build from planogram only
-            STOPS[stop.id].slots = Object.entries(pog).map(([id, p]) => ({
+            STOPS[stop.id].slots = Object.entries(dex.slots).map(([id, s]) => ({
               id,
-              product:       p.product   || '',
-              price:         p.price     || 0,
-              current:       p.currentSOH ?? 0,
-              par:           p.par       || 0,
-              capacity:      p.capacity  || 0,
-              barcode:       p.barcode   || '',
-              pendingChange: p.pendingChange || null,
-            })).filter(s => s.par > 0);
+              product:  s.product  || '',
+              price:    (s.priceCents || 0) / 100,
+              current:  s.currentSOH ?? 0,
+              par:      s.par        || 10,
+              capacity: s.capacity   || 12,
+              dexVends: s.vendsSinceLastRead || 0,
+              barcode:  s.barcode    || '',
+            }));
           }
           STOPS[stop.id].serviceOrder = stop.serviceOrder;
         });
@@ -1418,10 +1342,9 @@ function renderHomeStops(stops) {
     const slots      = s.slots || [];
     const lowSlots   = slots.filter(sl => sl.current < sl.par * 0.3).length;
     const emptySlots = slots.filter(sl => sl.current === 0).length;
-    const priceSlots = slots.filter(sl => sl.hasPlanogramPrice && sl.dexPrice > 0 && Math.abs((sl.dexPrice || 0) - (sl.price || 0)) > 0.005).length;
 
     // Pending pog changes
-    const pogChangeCount = slots.filter(sl => sl.pendingChange && sl.pendingChange.changeType === 'queue').length;
+    const hasPogChanges = slots.some(sl => sl.pendingChange);
 
     const numStyle = isDone
       ? 'background:rgba(74,222,128,.15);border-color:rgba(74,222,128,.3);color:var(--accent)'
@@ -1440,8 +1363,7 @@ function renderHomeStops(stops) {
     else if (lowSlots > 0)   tags.push('<span class="pill pill-orange">' + lowSlots + ' slots low</span>');
     else                     tags.push('<span class="pill pill-blue">Pending</span>');
 
-    if (pogChangeCount > 0)   tags.push('<span class="pill" style="background:rgba(245,158,11,.15);color:#f59e0b;border:1px solid rgba(245,158,11,.35);font-size:10px">⚠ ' + pogChangeCount + ' change' + (pogChangeCount > 1 ? 's' : '') + '</span>');
-    if (priceSlots > 0)       tags.push('<span class="pill" style="background:rgba(251,146,60,.12);color:var(--warn);border:1px solid rgba(251,146,60,.3);font-size:10px">💰 ' + priceSlots + ' price' + (priceSlots > 1 ? 's' : '') + '</span>');
+    if (hasPogChanges)       tags.push('<span class="pill pill-orange">⚠ Pog change</span>');
     if (!isDone) {
       if (auditRequiredForStop(stop.id))  tags.push('<span class="pill pill-blue">📋 Audit</span>');
       if (photoRequiredForStop(stop.id))  tags.push('<span class="pill pill-blue">📷 Photo</span>');
@@ -1449,15 +1371,13 @@ function renderHomeStops(stops) {
     tags.push('<span class="pill pill-gray">' + cashIcon + '</span>');
 
     return '<div class="stop-card-wrap" id="stop-' + stop.id + '-wrap">' +
-      '<div class="card" onclick="' + (stop.type==='micromarket'?'showMarketStop':'showStop') + '(\'' + stop.id + '\')">' +
+      '<div class="card" onclick="showStop(\'' + stop.id + '\')">' +
         '<div class="stop-card">' +
           '<div class="stop-num ' + (isDone ? 'done' : '') + '" style="' + numStyle + '">' + numContent + '</div>' +
           '<div class="stop-info">' +
             '<div class="stop-name">' + (s.locationName || stop.name || stop.id) + '</div>' +
             '<div class="stop-addr">' + (s.addr || '') + (s.addr ? ' · ' : '') + stop.id + '</div>' +
-            '<div class="stop-tags">' + tags.join('') +
-            (stop.type==='micromarket' ? '<span class="pill" style="background:rgba(96,165,250,.12);color:#60a5fa;border:1px solid rgba(96,165,250,.25);font-size:10px">🏪 Market</span>' : '') +
-            '</div>' +
+            '<div class="stop-tags">' + tags.join('') + '</div>' +
           '</div>' +
           '<div class="stop-right">' +
             '<svg class="arrow-icon" viewBox="0 0 16 16" fill="none" width="16"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
@@ -1551,15 +1471,10 @@ async function loadAllMachinesForLocations() {
         const d = dex[id] || {}, p = pog[id] || {};
         return {
           id,
-          product:       p.product  || d.product  || '',
-          current:       d.currentSOH !== null && d.currentSOH !== undefined ? d.currentSOH : (p.currentSOH || 0),
-          par:           p.par      !== undefined ? p.par      : (d.par      || 0),
-          capacity:      p.capacity !== undefined ? p.capacity : (d.capacity || 12),
-          price:         parseFloat(p.price) || parseFloat(p.priceDollars) || parseFloat(p.priceCents) / 100 || dexP || 0,
-          dexPrice:      dexP,
-          hasPlanogramPrice: !!(parseFloat(p.price) || parseFloat(p.priceDollars) || parseFloat(p.priceCents)),
-          barcode:       p.barcode  || d.barcode  || '',
-          pendingChange: p.pendingChange || null,
+          product:  p.product  || d.product  || '',
+          current:  d.currentSOH !== null && d.currentSOH !== undefined ? d.currentSOH : (p.currentSOH || 0),
+          par:      p.par      !== undefined ? p.par      : (d.par      || 0),
+          capacity: p.capacity !== undefined ? p.capacity : (d.capacity || 12),
         };
       }).filter(s => s.par > 0);
       if (!STOPS[mid]) STOPS[mid] = { ...(MACHINE_META_DRIVER[mid] || {}), id: mid };
@@ -1763,43 +1678,9 @@ function initStopPullToRefresh() {
       // Show brief spinner feedback
       indicator.style.opacity = 1;
       document.getElementById('stop-ptr-spinner').style.animation = 'ptr-spin .7s linear infinite';
-      refreshStopDex(currentStopMachineId, async () => {
+      refreshStopDex(currentStopMachineId, () => {
         indicator.style.opacity = 0;
         document.getElementById('stop-ptr-spinner').style.animation = '';
-        if (!fbDb || !currentStopMachineId) return;
-        const s = STOPS[currentStopMachineId];
-        if (!s) return;
-        try {
-          // Fetch both DEX and planogram in parallel
-          const [dexSnap, pogSnap] = await Promise.all([
-            fbDb.ref('vynd/dexReadings/' + currentStopMachineId + '/last/slots').once('value'),
-            fbDb.ref('vynd/planograms/'  + currentStopMachineId + '/slots').once('value'),
-          ]);
-          const dexSlots = dexSnap.val() || {};
-          const pogSlots = pogSnap.val() || {};
-          if (s.slots) {
-            s.slots.forEach(slot => {
-              const d = dexSlots[slot.id] || {};
-              const p = pogSlots[slot.id]  || {};
-              // Product name — planogram wins, DEX fallback
-              const newProduct = p.product || d.product;
-              if (newProduct) slot.product = newProduct;
-              // SOH — DEX is source of truth
-              if (d.currentSOH !== undefined) slot.current = d.currentSOH;
-              // DEX price — always from DEX
-              const newDexPrice = parseFloat(d.priceDollars) || parseFloat(d.priceCents) / 100 || 0;
-              if (newDexPrice > 0) slot.dexPrice = newDexPrice;
-              // VMS price — planogram
-              const newVmsPrice = parseFloat(p.price) || parseFloat(p.priceDollars) || 0;
-              if (newVmsPrice > 0) { slot.price = newVmsPrice; slot.hasPlanogramPrice = true; }
-              // pendingChange
-              if (p.pendingChange) slot.pendingChange = p.pendingChange;
-              else if (!p.pendingChange && slot.pendingChange) slot.pendingChange = null;
-            });
-          }
-          // Rebuild fill guide with fresh data
-          try { buildPlanogram(s); } catch(e) { console.warn('buildPlanogram error:', e); }
-        } catch(e) { /* silent */ }
       });
     }
   });
@@ -1858,31 +1739,6 @@ function refreshStopDex(machineId, onDone) {
       }
     }
 
-    // ── Cash estimate since last restock ──────────────────────────────────
-    // Find the last restock reading timestamp, then sum totalRevenueSinceLastRead
-    // for all dexHistory entries AFTER that point.
-    function updateCashEstimate(restockTimestamp) {
-      fbDb.ref('vynd/dexHistory/' + machineId).once('value').then(histSnap => {
-        let totalCents = 0;
-        histSnap.forEach(child => {
-          const r = child.val();
-          const ts = parseDexDate(r.transmitTime || r.createdAt);
-          if (!ts) return;
-          // Only include readings after the last restock (or all if no restock found)
-          if (restockTimestamp && ts <= restockTimestamp) return;
-          totalCents += (r.totalRevenueSinceLastRead || 0);
-        });
-        const dollars = totalCents / 100;
-        const cashStr = '$' + dollars.toFixed(2);
-        if (STOPS[machineId]) STOPS[machineId].cash = cashStr;
-        const cashEst = document.getElementById('stop-cash-est');
-        if (cashEst && currentStopMachineId === machineId) {
-          cashEst.textContent = cashStr;
-          cashEst.style.color = dollars > 0 ? 'var(--accent)' : 'var(--muted)';
-        }
-      }).catch(() => {});
-    }
-
     function applyRestockDisplay(date) {
       if (!restockRow || !restockEl) return;
       restockRow.style.display = '';
@@ -1899,267 +1755,28 @@ function refreshStopDex(machineId, onDone) {
 
     if ((dex.dexReason === '1' || dex.dexReason === 1 || dex.dexReasonLabel === 'restock') && restockRow && restockEl) {
       applyRestockDisplay(dexTime);
-      // This dial IS the restock — no prior revenue to sum, cash estimate is $0
-      updateCashEstimate(dexTime);
       if (onDone) onDone();
     } else if (restockRow) {
       // Query by dexReasonLabel ('restock') to avoid type mismatch on dexReason (string vs number)
       fbDb.ref('vynd/dexHistory/' + machineId)
         .orderByChild('dexReasonLabel').equalTo('restock').limitToLast(1).once('value').then(hSnap => {
-          let restockTs = null;
           if (hSnap.exists()) {
             let lastRestock;
             hSnap.forEach(c => { lastRestock = c.val(); });
             if (lastRestock && restockRow && restockEl) {
               const rd = parseDexDate(lastRestock.transmitTime || lastRestock.createdAt);
-              restockTs = rd;
               applyRestockDisplay(rd);
             }
           }
-          updateCashEstimate(restockTs);
           if (onDone) onDone();
-        }).catch(() => { updateCashEstimate(null); if (onDone) onDone(); });
+        }).catch(() => { if (onDone) onDone(); });
     } else {
-      updateCashEstimate(null);
       if (onDone) onDone();
     }
   }).catch(() => {
     if (dexEl) dexEl.textContent = '—';
     if (onDone) onDone();
   });
-}
-
-// ══════════════════════════════════════════════════════
-// MARKET STOP — micromarket restock flow
-// Reads catalogue from vynd/micromarkets/{id}/catalogue
-// Driver enters total units loaded per product (not per lane)
-// On complete: writes new SOH to Firebase + logs restock event
-// ══════════════════════════════════════════════════════
-
-// Current market stop state
-let currentMarketStop = null; // { stopId, marketId, name, addr, products: [] }
-let mktLoadedQty      = {};   // barcode → units driver loaded this visit
-
-async function showMarketStop(stopId) {
-  // Find the stop definition from the run
-  const run = currentRunData;
-  const stopDef = run?.stops?.find(s => s.id === stopId) || {};
-  const marketId = stopDef.marketId || stopId;
-
-  currentMarketStop = { stopId, marketId, name: stopDef.name || stopId, addr: stopDef.addr || 'Micromarket' };
-  mktLoadedQty = {};
-
-  // Update header
-  const el = id => document.getElementById(id);
-  el('mkt-stop-title').textContent  = stopId;
-  el('mkt-stop-sub').textContent    = 'Micromarket';
-  el('mkt-stop-name').textContent   = stopDef.name || stopId;
-  el('mkt-stop-addr').textContent   = stopDef.addr || 'Break Room';
-  el('mkt-stop-product-list').innerHTML = '<div style="text-align:center;padding:32px;color:var(--muted)">Loading market…</div>';
-  el('mkt-short-supply-notice').style.display = 'none';
-  showScreen('screen-market-stop');
-
-  // Load catalogue + planogram assets from Firebase
-  let catalogue = {}, assets = [];
-  if (fbDb) {
-    try {
-      const [catSnap, assetSnap] = await Promise.all([
-        fbDb.ref('vynd/micromarkets/' + marketId + '/catalogue').once('value'),
-        fbDb.ref('vynd/micromarkets/' + marketId + '/planogramAssets').once('value'),
-      ]);
-      catalogue = catSnap.val() || {};
-      const rawAssets = assetSnap.val() || {};
-
-      // Build per-barcode product summary with lane placements
-      const barcodeMap = {};
-      Object.entries(rawAssets).forEach(([aid, asset]) => {
-        Object.values(asset.slots || {}).forEach(slot => {
-          if (!slot.barcode) return;
-          const bc = slot.barcode;
-          const catEntry = catalogue[bc] || {};
-          if (!barcodeMap[bc]) {
-            barcodeMap[bc] = {
-              barcode:       bc,
-              name:          catEntry.name || bc,
-              stock:         catEntry.stock ?? 0,
-              totalPar:      0,
-              totalCapacity: 0,
-              lanes:         [],
-            };
-          }
-          barcodeMap[bc].totalPar      += (slot.par      || 0);
-          barcodeMap[bc].totalCapacity += (slot.capacity || 0);
-          barcodeMap[bc].lanes.push({ assetLabel: asset.label || 'Asset', par: slot.par || 0, capacity: slot.capacity || 0 });
-        });
-      });
-      assets = Object.values(barcodeMap);
-    } catch(e) { console.warn('[Market stop] load:', e.message); }
-  }
-
-  currentMarketStop.products = assets;
-
-  // Load pick export quantities for this stop if available
-  const pickQtyByBarcode = {};
-  let hasPickExport = false;
-  if (fbDb && run) {
-    try {
-      const dateKey = (run.plannedDate || new Date().toLocaleDateString('en-CA')).replace(/-/g,'');
-      const exportKey = dateKey + '_' + (run.routeId || 'all');
-      const snap = await fbDb.ref('vynd/pickExports/' + exportKey).once('value');
-      const data = snap.val();
-      if (data?.lockedLines) {
-        data.lockedLines.filter(l => l.machineId === stopId || l.machineId === marketId).forEach(l => {
-          const qty = Math.max(0, l.pickQty - (l.shortSupply || 0));
-          pickQtyByBarcode[l.barcode] = qty;
-        });
-        hasPickExport = Object.keys(pickQtyByBarcode).length > 0;
-      }
-    } catch(e) {}
-  }
-
-  // Pre-fill loaded qty from pick export if available, else from par - soh
-  assets.forEach(p => {
-    const pickQty = pickQtyByBarcode[p.barcode];
-    mktLoadedQty[p.barcode] = pickQty != null ? pickQty : Math.max(0, p.totalPar - p.stock);
-  });
-
-  renderMktStopProducts(assets, hasPickExport);
-}
-
-function renderMktStopProducts(products, hasPickExport) {
-  const el = id => document.getElementById(id);
-  const low = products.filter(p => p.stock < p.totalPar).length;
-  const totalUnits = products.reduce((sum, p) => sum + (mktLoadedQty[p.barcode] || 0), 0);
-
-  el('mkt-stop-low-count').textContent  = low;
-  el('mkt-stop-product-count').textContent = products.length;
-  el('mkt-stop-total-units').textContent = totalUnits;
-
-  if (!products.length) {
-    el('mkt-stop-product-list').innerHTML = '<div class="card" style="text-align:center;color:var(--muted);font-size:13px">No products in this market.<br>Check the planogram in the portal.</div>';
-    return;
-  }
-
-  // Sort: low stock first, then alphabetically
-  const sorted = [...products].sort((a, b) => {
-    const aLow = a.stock < a.totalPar ? 0 : 1;
-    const bLow = b.stock < b.totalPar ? 0 : 1;
-    return aLow - bLow || (a.name||'').localeCompare(b.name||'');
-  });
-
-  el('mkt-stop-product-list').innerHTML = sorted.map(p => {
-    const loaded    = mktLoadedQty[p.barcode] || 0;
-    const isLow     = p.stock < p.totalPar;
-    const newSOH    = p.stock + loaded;
-    const overCap   = p.totalCapacity > 0 && newSOH > p.totalCapacity;
-    const laneHint  = p.lanes.length > 1 ? `<div style="font-size:10px;color:var(--muted);margin-top:2px">Spread across ${p.lanes.length} lanes in ${[...new Set(p.lanes.map(l=>l.assetLabel))].join(', ')}</div>` : p.lanes.length===1?`<div style="font-size:10px;color:var(--muted);margin-top:2px">${p.lanes[0].assetLabel}</div>`:'';
-
-    return `<div class="card" style="cursor:default;margin-bottom:4px;${isLow?'border-left:3px solid var(--warn)':''}">
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
-        <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:600;color:var(--text)">${p.name}</div>
-          <div style="font-size:11px;font-family:'DM Mono',monospace;color:var(--muted);margin-top:2px">${p.barcode}</div>
-          ${laneHint}
-          <div style="display:flex;gap:12px;margin-top:8px">
-            <div><div style="font-family:'DM Mono',monospace;font-size:15px;font-weight:600;color:${isLow?'var(--warn)':'var(--text)'}">${p.stock}</div><div style="font-size:9px;color:var(--muted);text-transform:uppercase">Current SOH</div></div>
-            <div><div style="font-family:'DM Mono',monospace;font-size:15px;font-weight:600;color:var(--muted)">${p.totalPar}</div><div style="font-size:9px;color:var(--muted);text-transform:uppercase">Par</div></div>
-            <div><div style="font-family:'DM Mono',monospace;font-size:15px;font-weight:600;color:${overCap?'var(--danger)':newSOH>p.totalPar?'var(--accent)':'var(--text)'}">${newSOH}</div><div style="font-size:9px;color:var(--muted);text-transform:uppercase">After load</div></div>
-          </div>
-          ${overCap?`<div style="font-size:10px;color:var(--danger);margin-top:4px">⚠ Exceeds shelf capacity (${p.totalCapacity})</div>`:''}
-        </div>
-        <!-- Qty adjuster -->
-        <div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0">
-          <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Load</div>
-          <div style="display:flex;align-items:center;gap:6px">
-            <button onclick="mktAdjQty('${p.barcode}',-1)" style="width:32px;height:32px;border-radius:50%;background:var(--surface);border:1px solid var(--border2);color:var(--text);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-weight:700">−</button>
-            <div style="font-family:'DM Mono',monospace;font-size:22px;font-weight:600;min-width:36px;text-align:center;color:${loaded>0?'var(--accent)':'var(--muted)'}">${loaded}</div>
-            <button onclick="mktAdjQty('${p.barcode}',1)" style="width:32px;height:32px;border-radius:50%;background:var(--surface);border:1px solid var(--border2);color:var(--text);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-weight:700">+</button>
-          </div>
-          <div style="font-size:9px;color:var(--muted)">units</div>
-        </div>
-      </div>
-    </div>`;
-  }).join('');
-
-  // Short supply notice — show if any loaded qty differs from pick export qty
-  if (hasPickExport) {
-    const hasDiff = products.some(p => {
-      const loaded = mktLoadedQty[p.barcode] || 0;
-      const needed = Math.max(0, p.totalPar - p.stock);
-      return loaded > 0 && loaded < needed;
-    });
-    el('mkt-short-supply-notice').style.display = hasDiff ? '' : 'none';
-  }
-}
-
-window.mktAdjQty = function(barcode, delta) {
-  mktLoadedQty[barcode] = Math.max(0, (mktLoadedQty[barcode] || 0) + delta);
-  if (currentMarketStop?.products) renderMktStopProducts(currentMarketStop.products, false);
-};
-
-async function completeMktStop() {
-  if (!currentMarketStop) return;
-  const { stopId, marketId, products } = currentMarketStop;
-  const btn = document.getElementById('mkt-complete-btn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
-
-  const updates = {};
-  const restockedAt = new Date().toISOString();
-
-  // Write updated SOH for each product and log restock line
-  const restockLines = [];
-  products.forEach(p => {
-    const loaded = mktLoadedQty[p.barcode] || 0;
-    if (loaded === 0) return; // only write products that were actually loaded
-    const newSOH = p.stock + loaded;
-    updates['vynd/micromarkets/' + marketId + '/catalogue/' + p.barcode + '/stock'] = newSOH;
-    restockLines.push({ barcode: p.barcode, name: p.name, soHBefore: p.stock, unitsLoaded: loaded, sohAfter: newSOH });
-  });
-
-  // Restock event log
-  const eventKey = 'restock_' + Date.now();
-  updates['vynd/micromarkets/' + marketId + '/restockEvents/' + eventKey] = {
-    restockedAt,
-    driverId:   userPrefs?.driverId || 'unknown',
-    driverName: userPrefs?.driverName || 'Driver',
-    marketId,
-    stopId,
-    lines:      restockLines,
-    runId:      currentRunData?.id || null,
-  };
-
-  if (fbDb && restockLines.length) {
-    try {
-      await fbDb.ref().update(updates);
-    } catch(e) { console.warn('[Market stop] SOH write failed:', e.message); }
-  }
-
-  // Mark stop done in STOPS
-  if (!STOPS[stopId]) STOPS[stopId] = {};
-  STOPS[stopId].status = 'done';
-  STOPS[stopId].restockedAt = restockedAt;
-
-  // Mark run stop done in Firebase
-  if (fbDb && currentRunData?.id) {
-    fbDb.ref('vynd/runs/' + currentRunData.id + '/stops').once('value').then(snap => {
-      const stops = snap.val() || [];
-      const idx = Array.isArray(stops) ? stops.findIndex(s => s.id === stopId) : -1;
-      if (idx >= 0) fbDb.ref('vynd/runs/' + currentRunData.id + '/stops/' + idx + '/status').set('done');
-    }).catch(() => {});
-  }
-
-  // Update home stop card
-  const wrap = document.getElementById('stop-' + stopId + '-wrap');
-  if (wrap) {
-    const numEl = wrap.querySelector('.stop-num');
-    if (numEl) { numEl.classList.add('done'); numEl.textContent = '✓'; numEl.style.cssText += ';background:rgba(74,222,128,.15);border-color:rgba(74,222,128,.3);color:var(--accent)'; }
-    const tagsEl = wrap.querySelector('.stop-tags');
-    if (tagsEl) tagsEl.innerHTML = '<span class="pill pill-green">Done</span><span class="pill" style="background:rgba(96,165,250,.12);color:#60a5fa;border:1px solid rgba(96,165,250,.25);font-size:10px">🏪 Market</span>';
-  }
-
-  showScreen('screen-home');
-  if (currentRunData?.stops) updateHomeProgress(currentRunData.stops);
-  showToast('Restock saved — ' + restockLines.length + ' product' + (restockLines.length !== 1 ? 's' : '') + ' updated ✓');
 }
 
 async function showStop(machineId) {
@@ -2172,49 +1789,27 @@ async function showStop(machineId) {
     ? currentRunData.plannedDate
     : new Date().toLocaleDateString('en-CA');
 
-  // Load live slot SOH from Firebase — also refreshes product names and prices
-  // so driver always sees current data without needing a manual pull-to-refresh
+  // Load live slot SOH from Firebase
   let slotSOH    = {}; // slotId → currentSOH
   let slotVends  = {}; // slotId → vendsSinceLastRead
   if (fbDb) {
     try {
-      const [dexSnap, pogSnap] = await Promise.all([
-        fbDb.ref('vynd/dexReadings/' + machineId + '/last/slots').once('value'),
-        fbDb.ref('vynd/planograms/'  + machineId + '/slots').once('value'),
-      ]);
-      const dexSlots = dexSnap?.val() || {};
-      const pogSlots = pogSnap?.val() || {};
-
-      // DEX pass — SOH, vends, dexPrice (never derive from VMS)
-      Object.entries(dexSlots).forEach(([id, sl]) => {
-        if (sl.currentSOH        != null) slotSOH[id]   = sl.currentSOH;
-        if (sl.vendsSinceLastRead != null) slotVends[id] = sl.vendsSinceLastRead;
-        const slot = s.slots && s.slots.find(s => s.id === id);
-        if (!slot) return;
-        const dexP = parseFloat(sl.priceDollars) || parseFloat(sl.priceCents) / 100 || 0;
-        if (dexP > 0) slot.dexPrice = dexP;
-        // Update product from DEX only as a fallback (planogram wins below)
-        if (sl.product && sl.product !== 'Empty') slot._dexProduct = sl.product;
-      });
-
-      // Planogram pass — product name, VMS price, pendingChange (authoritative)
-      Object.entries(pogSlots).forEach(([id, sl]) => {
-        // SOH fallback if DEX didn't report this slot
-        if (slotSOH[id] == null) {
-          const soh = sl.currentSOH ?? sl.current;
-          if (soh != null) slotSOH[id] = soh;
-        }
-        const slot = s.slots && s.slots.find(s => s.id === id);
-        if (!slot) return;
-        // Product — planogram is authoritative (reflects swaps, updates)
-        if (sl.product) slot.product = sl.product;
-        else if (slot._dexProduct) slot.product = slot._dexProduct;
-        // VMS price
-        const vmsP = parseFloat(sl.price) || parseFloat(sl.priceDollars) || 0;
-        if (vmsP > 0) { slot.price = vmsP; slot.hasPlanogramPrice = true; }
-        // pendingChange — clear if removed, set if present
-        slot.pendingChange = sl.pendingChange || null;
-      });
+      const dexSnap = await fbDb.ref('vynd/dexReadings/' + machineId + '/last/slots').once('value');
+      if (dexSnap && dexSnap.val()) {
+        Object.entries(dexSnap.val()).forEach(([id, sl]) => {
+          if (sl.currentSOH    != null) slotSOH[id]   = sl.currentSOH;
+          if (sl.vendsSinceLastRead != null) slotVends[id] = sl.vendsSinceLastRead;
+        });
+      }
+      const pogSnap = await fbDb.ref('vynd/planograms/' + machineId + '/slots').once('value');
+      if (pogSnap && pogSnap.val()) {
+        Object.entries(pogSnap.val()).forEach(([id, sl]) => {
+          if (slotSOH[id] == null) {
+            const soh = sl.currentSOH ?? sl.current;
+            if (soh != null) slotSOH[id] = soh;
+          }
+        });
+      }
     } catch(e) { console.warn('SOH load:', e.message); }
   }
 
@@ -2399,7 +1994,7 @@ async function showStop(machineId) {
   if(ft) ft.classList.toggle('on', hideFilledOn);
   if(fl) fl.textContent = hideFilledOn ? 'Show all' : 'Hide filled';
 
-  try { buildPlanogram(s); } catch(e) { console.warn('buildPlanogram error:', e); }
+  buildPlanogram(s);
   updateSOH(s);
   updateWasteSummary();
   initStopPhotoSection(machineId);
@@ -2411,7 +2006,6 @@ async function showStop(machineId) {
 function buildPlanogram(s) {
   const container = document.getElementById('planogram-slots');
   if (!container) return;
-  if (!s) { container.innerHTML = '<div class="text-muted" style="text-align:center;padding:24px">No stop data — go back and tap the stop again.</div>'; return; }
   container.innerHTML = '';
 
   // If no slots yet — try loading from Firebase dexReadings
@@ -2458,53 +2052,19 @@ function buildPlanogram(s) {
   }
 
   // Count mismatches for the summary banner
-  const slots = Array.isArray(s.slots) ? s.slots : [];
-  const mismatchSlots  = slots.filter(sl => sl.hasPlanogramPrice && sl.dexPrice > 0 && Math.abs((sl.dexPrice || 0) - (sl.price || 0)) > 0.005);
-  const prekitSlots    = slots.filter(sl => sl.prekit);
-  const pogChangeSlots = slots.filter(sl => sl.pendingChange && sl.pendingChange.changeType === 'queue');
+  const mismatchSlots = s.slots.filter(sl => sl.dexPrice !== undefined && Math.abs(sl.dexPrice - sl.price) > 0.001);
+  const prekitSlots   = s.slots.filter(sl => sl.prekit);
 
-  // Price mismatch pill — shown above fill guide when machine price ≠ VMS price
-  const existingPricePill = document.getElementById('price-mismatch-pill');
-  if (existingPricePill) existingPricePill.remove();
+  // Price mismatch banner
+  const existingBanner = document.getElementById('price-mismatch-banner');
+  if (existingBanner) existingBanner.remove();
   if (mismatchSlots.length > 0) {
-    const pricePill = document.createElement('div');
-    pricePill.id = 'price-mismatch-pill';
-    pricePill.style.cssText = 'display:flex;align-items:center;gap:10px;padding:10px 14px;margin-bottom:-4px;background:rgba(251,146,60,.1);border:1px solid rgba(251,146,60,.35);border-radius:8px';
-    pricePill.innerHTML =
-      '<span style="font-size:18px;flex-shrink:0">💰</span>' +
-      '<div style="flex:1;min-width:0">' +
-        '<div style="font-size:13px;font-weight:700;color:var(--warn)">' + mismatchSlots.length + ' price mismatch' + (mismatchSlots.length > 1 ? 'es' : '') + '</div>' +
-        '<div style="font-size:11px;color:var(--muted);margin-top:1px">Machine price differs from VMS — update keypad &amp; label at affected slots</div>' +
-      '</div>' +
-      '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">' +
-        mismatchSlots.map(sl =>
-          '<div style="font-size:10px;font-family:\'DM Mono\',monospace;color:var(--warn);background:rgba(251,146,60,.15);padding:1px 6px;border-radius:3px">' +
-          'Slot ' + sl.id + ' · DEX $' + (sl.dexPrice || 0).toFixed(2) + ' → VMS $' + (sl.price || 0).toFixed(2) +
-          '</div>'
-        ).join('') +
-      '</div>';
-    container.parentNode.insertBefore(pricePill, container);
-  }
-
-  // Planogram changes pill — shown above fill guide when swaps are queued
-  const existingPogPill = document.getElementById('pog-changes-pill');
-  if (existingPogPill) existingPogPill.remove();
-  if (pogChangeSlots.length > 0) {
-    const pogPill = document.createElement('div');
-    pogPill.id = 'pog-changes-pill';
-    pogPill.style.cssText = 'display:flex;align-items:center;gap:10px;padding:10px 14px;margin-bottom:-4px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.35);border-radius:8px';
-    pogPill.innerHTML =
-      '<span style="font-size:18px;flex-shrink:0">⚠️</span>' +
-      '<div style="flex:1;min-width:0">' +
-        '<div style="font-size:13px;font-weight:700;color:#f59e0b">' + pogChangeSlots.length + ' planogram change' + (pogChangeSlots.length > 1 ? 's' : '') + ' at this stop</div>' +
-        '<div style="font-size:11px;color:var(--muted);margin-top:1px">Slots marked <strong style="color:#f59e0b">SWAP</strong> below — complete before filling regular stock</div>' +
-      '</div>' +
-      '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">' +
-        pogChangeSlots.map(sl =>
-          '<div style="font-size:10px;font-family:\'DM Mono\',monospace;color:#f59e0b;background:rgba(245,158,11,.15);padding:1px 6px;border-radius:3px">Slot ' + sl.id + '</div>'
-        ).join('') +
-      '</div>';
-    container.parentNode.insertBefore(pogPill, container);
+    const banner = document.createElement('div');
+    banner.id = 'price-mismatch-banner';
+    banner.className = 'flag-row warn';
+    banner.style.cssText = 'margin-bottom:-4px';
+    banner.innerHTML = `<span class="flag-icon">💰</span><span class="flag-text"><strong>${mismatchSlots.length} price mismatch${mismatchSlots.length>1?'es':''} detected</strong> — DEX price differs from VMS. Update machine price labels and keypad for flagged slots.</span>`;
+    container.parentNode.insertBefore(banner, container);
   }
 
   // Fresh / prekit banner
@@ -2519,13 +2079,13 @@ function buildPlanogram(s) {
     container.parentNode.insertBefore(freshBanner, container);
   }
 
-  slots.forEach((slot, i) => {
+  s.slots.forEach((slot, i) => {
     const state    = stopSlotState[slot.id] || { added: 0, spoilt: 0, damaged: 0 };
     const capacity = slot.capacity || 12;
     const par      = slot.par || capacity;
     const current  = slot.current;
     const isPrekit = !!slot.prekit;
-    const isLast   = i === slots.length - 1;
+    const isLast   = i === s.slots.length - 1;
     const pct      = Math.min(current / capacity, 1);
     const barColor = pct > .5 ? 'var(--accent)' : pct > .2 ? 'var(--warn)' : 'var(--danger)';
     const maxAdd   = isPrekit ? par : Math.max(0, capacity - current);
@@ -2537,9 +2097,7 @@ function buildPlanogram(s) {
     }
 
     const isFull      = isPrekit ? false : (current >= par);
-    // Swap slots always count as "on pick" — driver must COLLECT + LOAD regardless of pick list
-    const isSwapSlot  = slot.pendingChange?.changeType === 'queue' && !!slot.pendingChange?.newProduct;
-    const notOnPick   = isSwapSlot ? false : !!stopSlotState[slot.id]?.notOnPick;
+    const notOnPick   = !!stopSlotState[slot.id]?.notOnPick;
 
     // Price mismatch: DEX price from machine vs VMS price
     const hasDex      = slot.dexPrice !== undefined;
@@ -2547,12 +2105,7 @@ function buildPlanogram(s) {
     const dexLower    = isPriceMismatch && slot.dexPrice < slot.price;
 
     const row = document.createElement('div');
-    row.className = 'fg-row'
-      + (isLast ? ' fg-last' : '')
-      + (isFull && !isPrekit ? ' fg-filled' : '')
-      + (isPriceMismatch ? ' fg-price-mismatch' : '')
-      + (isPrekit ? ' fg-prekit' : '')
-      + (notOnPick ? ' not-on-pick' : '');
+    row.className = 'fg-row' + (isLast ? ' fg-last' : '') + (isFull && !isPrekit ? ' fg-filled' : '') + (isPriceMismatch ? ' fg-price-mismatch' : '') + (isPrekit ? ' fg-prekit' : '');
     row.dataset.slotId = slot.id;
     row.dataset.filled = (isFull && !isPrekit) ? '1' : '0';
 
@@ -2600,8 +2153,7 @@ function buildPlanogram(s) {
     infoDiv.appendChild(barWrap);
 
     const stepper = document.createElement('div');
-    stepper.style.cssText = 'display:flex;align-items:center;border:1px solid var(--border2);border-radius:8px;overflow:hidden'
-      + ((isPrekit || notOnPick) ? ';opacity:.35;pointer-events:none' : '');
+    stepper.style.cssText = 'display:flex;align-items:center;border:1px solid var(--border2);border-radius:8px;overflow:hidden' + (isPrekit ? ';opacity:.5;pointer-events:none' : '');
 
     const btnMinus = document.createElement('button');
     btnMinus.style.cssText = 'width:30px;height:30px;background:var(--surface);border:none;color:var(--text);font-size:17px;cursor:pointer;font-family:inherit';
@@ -2611,7 +2163,7 @@ function buildPlanogram(s) {
     const valDiv = document.createElement('div');
     valDiv.id = 'fg-val-' + slot.id;
     valDiv.style.cssText = "width:32px;text-align:center;font-family:'DM Mono',monospace;font-size:13px;font-weight:500;background:var(--surface);color:var(--text);border-left:1px solid var(--border2);border-right:1px solid var(--border2);height:30px;line-height:30px";
-    valDiv.textContent = isPrekit ? par : (isFull ? '✓' : (notOnPick ? '—' : state.added));
+    valDiv.textContent = isPrekit ? par : (isFull ? '✓' : state.added);
 
     const btnPlus = document.createElement('button');
     btnPlus.style.cssText = 'width:30px;height:30px;background:var(--surface);border:none;color:var(--text);font-size:17px;cursor:pointer;font-family:inherit';
@@ -2653,87 +2205,6 @@ function buildPlanogram(s) {
       freshBadge.style.cssText = 'display:inline-flex;align-items:center;gap:3px;font-size:10px;padding:2px 8px;border-radius:99px;font-weight:600;background:rgba(74,222,128,.12);color:var(--accent);border:1px solid rgba(74,222,128,.25)';
       freshBadge.innerHTML = `🥬 ${current} units auto-spoilt`;
       tagsRow.appendChild(freshBadge);
-    }
-
-    // ── Planogram change — shown inline in the fill guide ─────────────
-    const pc = slot.pendingChange;
-    if (pc && pc.changeType === 'queue') {
-      const newPar        = pc.newPar || par;
-      const loadQty       = pc.pickQty || 0;
-      const moveQty       = (pc.isMove && pc.existingSOHofNew > 0) ? pc.existingSOHofNew : 0;
-      const totalIncoming = loadQty + moveQty;
-
-      // Style row with amber left border
-      inner.style.cssText = (inner.style.cssText || '') + ';border-left:3px solid #f59e0b;background:rgba(245,158,11,.04)';
-
-      // Show NEW product in name — driver is loading this
-      prodDiv.innerHTML = `<span style="font-size:9px;font-weight:700;color:#f59e0b;background:rgba(245,158,11,.15);padding:1px 5px;border-radius:3px;margin-right:5px;vertical-align:middle;letter-spacing:.3px">SWAP</span>${pc.newProduct}`;
-      subDiv.textContent = `New par ${newPar} · load ${totalIncoming} unit${totalIncoming !== 1 ? 's' : ''}`;
-
-      // Clean step-by-step action cards
-      const changeBanner = document.createElement('div');
-      changeBanner.style.cssText = 'margin-top:10px;display:flex;flex-direction:column;gap:5px;width:100%';
-
-      const makeStep = (num, icon, color, bg, border, actionLabel, qty, productName) => {
-        const row = document.createElement('div');
-        row.style.cssText = `display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:7px;background:${bg};border:1px solid ${border}`;
-        row.innerHTML = `
-          <div style="width:18px;height:18px;border-radius:50%;background:${color};color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${num}</div>
-          <div style="font-size:11px;color:${color};font-weight:700;flex-shrink:0">${icon} ${actionLabel}</div>
-          <div style="flex:1;min-width:0;font-size:11px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${productName}</div>
-          <div style="font-family:'DM Mono',monospace;font-size:13px;font-weight:700;color:${color};flex-shrink:0">×${qty}</div>`;
-        return row;
-      };
-
-      // ── Actual collect qty = live slot SOH, not the planned qty at queue time ──
-      // If Coolridge Water sold 1 unit between picking and filling, slot.current = 3
-      // (not 4), so the driver collects 3 and the audit stays correct automatically.
-      const actualCollectQty = slot.current !== undefined ? (slot.current || 0) : (pc.collectQty || 0);
-
-      let step = 1;
-
-      // Step 1: COLLECT old product — quantity reflects live SOH, not planned qty
-      if (actualCollectQty > 0) {
-        changeBanner.appendChild(makeStep(step++, '🔄', '#ef4444', 'rgba(248,113,113,.08)', 'rgba(248,113,113,.2)',
-          'COLLECT', actualCollectQty, slot.product));
-      }
-
-      // Step N: MOVE from another slot
-      if (pc.isMove && moveQty > 0) {
-        const srcSlots = s.slots.filter(sl => sl.product === pc.newProduct && sl.id !== slot.id);
-        const srcLabel = srcSlots.length > 0 ? 'from slot ' + srcSlots.map(sl => sl.id).join(', ') : '';
-        changeBanner.appendChild(makeStep(step++, '↔', '#a78bfa', 'rgba(167,139,250,.08)', 'rgba(167,139,250,.2)',
-          'MOVE ' + srcLabel, moveQty, pc.newProduct));
-      }
-
-      // Step N: LOAD from van
-      if (loadQty > 0) {
-        changeBanner.appendChild(makeStep(step++, '📦', '#3b82f6', 'rgba(96,165,250,.08)', 'rgba(96,165,250,.2)',
-          'LOAD from van', loadQty, pc.newProduct));
-      } else if (moveQty > 0) {
-        const okRow = document.createElement('div');
-        okRow.style.cssText = 'font-size:11px;color:var(--accent);padding:4px 8px;border-radius:6px;background:rgba(74,222,128,.06);border:1px solid rgba(74,222,128,.15)';
-        okRow.textContent = '✓ Moved stock covers par — no van pick needed';
-        changeBanner.appendChild(okRow);
-      }
-
-      infoDiv.appendChild(changeBanner);
-
-      // Stepper pre-loaded with total incoming qty for new product
-      valDiv.textContent = totalIncoming || 0;
-      stopSlotState[slot.id] = {
-        added:     totalIncoming,
-        spoilt:    0,
-        damaged:   0,
-        notOnPick: false,
-        // Use live SOH as collected — auto-adjusts if sales occurred since picking
-        collected: actualCollectQty,
-      };
-
-      // Stepper bounds: max = newPar (can't overfill), min = 0
-      btnPlus.onclick  = () => fgAdj(slot.id, 1, newPar, 0);
-      btnMinus.onclick = () => fgAdj(slot.id, -1, newPar, 0);
-      confirmBtn.onclick = () => fgConfirm(slot.id, newPar, capacity, 0);
     }
 
     inner.appendChild(slotIdDiv);
@@ -2840,16 +2311,16 @@ function buildPlanogram(s) {
 
   // Show toggle only when audit is NOT required (audit forces all lanes visible)
   const isAudit = auditRequiredForStop(currentStopId);
-  showUnpickedOn = isAudit; // audit mode = show all lanes; normal mode = pick list only
+  showUnpickedOn = isAudit; // treat as "show all" mode when auditing
   const unpickedCount = s.slots.filter(sl => stopSlotState[sl.id]?.notOnPick).length;
   const unpickedWrap  = document.getElementById('unpicked-toggle-wrap');
   const unpickedTrack = document.getElementById('unpicked-toggle');
   const unpickedLabel = document.getElementById('unpicked-toggle-lbl');
   if (unpickedWrap) {
-    // Show toggle when there are not-on-pick slots and not in audit (audit locks to show-all)
+    // Hide the toggle entirely during audit — "show all" is locked on
     unpickedWrap.style.display = (unpickedCount > 0 && !isAudit) ? '' : 'none';
-    if (unpickedTrack) unpickedTrack.classList.toggle('on', showUnpickedOn);
-    if (unpickedLabel) unpickedLabel.textContent = showUnpickedOn ? 'Hide no-pick' : 'Show all';
+    if (unpickedTrack) unpickedTrack.classList.toggle('on', isAudit);
+    if (unpickedLabel) unpickedLabel.textContent = isAudit ? 'Pick list only' : 'Show all';
   }
 }
 
@@ -2916,9 +2387,7 @@ function fgConfirm(slotId, par, capacity, current) {
     if (isPrekit) {
       subEl.innerHTML = `<span style="color:var(--accent);font-weight:600">Fill to par: ${par}</span> · <span style="color:var(--danger)">Spoilt: ${current}</span> · confirmed ✓`;
     } else {
-      const collectedNote = (state.collected || 0) > 0 ? ' · ' + state.collected + ' collected' : '';
-      const wasteNote = state.spoilt+state.damaged>0 ? ' · '+(state.spoilt+state.damaged)+' removed' : '';
-      subEl.textContent = `$${(slot?.price || 0).toFixed(2)} · SOH ${newSoh} · par ${par} · cap ${capacity}${collectedNote}${wasteNote}`;
+      subEl.textContent = `$${slot.price.toFixed(2)} · SOH ${newSoh} · par ${par} · cap ${capacity}${state.spoilt+state.damaged>0?' · '+(state.spoilt+state.damaged)+' removed':''}`;
     }
   }
 
@@ -2955,13 +2424,10 @@ function fgConfirm(slotId, par, capacity, current) {
 
 function updateSOH(s) {
   let totalCapacity=0, totalCurrent=0, totalAdded=0, totalWaste=0;
-  const slots = Array.isArray(s?.slots) ? s.slots : [];
-  slots.forEach(slot => {
-    const state = stopSlotState[slot.id] || {added:0, spoilt:0, damaged:0, collected:0};
+  s.slots.forEach(slot => {
+    const state = stopSlotState[slot.id] || {added:0,spoilt:0,damaged:0};
     totalCapacity += slot.par || slot.capacity || 12;
-    // For swap slots, opening SOH = current − collected (old stock removed before loading new)
-    const effectiveCurrent = Math.max(0, (slot.current || 0) - (state.collected || 0));
-    totalCurrent  += effectiveCurrent;
+    totalCurrent  += slot.current;
     totalAdded    += state.added;
     totalWaste    += state.spoilt + state.damaged;
   });
@@ -3364,7 +2830,7 @@ function toggleUnpickedSlots() {
   const track = document.getElementById('unpicked-toggle');
   const label = document.getElementById('unpicked-toggle-lbl');
   if (track) track.classList.toggle('on', showUnpickedOn);
-  if (label) label.textContent = showUnpickedOn ? 'Hide no-pick' : 'Show all';
+  if (label) label.textContent = showUnpickedOn ? 'Pick list only' : 'Show all';
   document.querySelectorAll('.fg-row.not-on-pick').forEach(row => {
     row.classList.toggle('fg-hidden', !showUnpickedOn);
   });
@@ -6434,38 +5900,6 @@ function manualSync() {
   } else {
     syncToPortal();
   }
-  // Also refresh DEX prices in case machine keypad was updated and has dialled
-  refreshDexPrices();
-}
-
-// Re-read DEX slot prices from Firebase for all route stops.
-// Clears price mismatch pills/cards once machine price matches VMS after a dial.
-async function refreshDexPrices() {
-  if (!fbDb || !currentRunData?.stops?.length) return;
-  const stops = currentRunData.stops;
-  await Promise.all(stops.map(async stop => {
-    const s = STOPS[stop.id];
-    if (!s || !s.slots || !s.slots.length) return;
-    try {
-      const snap = await fbDb.ref('vynd/dexReadings/' + stop.id + '/last/slots').once('value');
-      const dexSlots = snap.val();
-      if (!dexSlots) return;
-      let changed = false;
-      s.slots.forEach(slot => {
-        const d = dexSlots[slot.id];
-        if (!d) return;
-        const newDexPrice = parseFloat(d.priceDollars) || parseFloat(d.priceCents) / 100 || 0;
-        if (newDexPrice > 0 && newDexPrice !== slot.dexPrice) {
-          slot.dexPrice = newDexPrice;
-          changed = true;
-        }
-      });
-      if (changed) {
-        // Update the stop card pill on the home screen
-        if (currentRunData?.stops) renderHomeStops(currentRunData.stops);
-      }
-    } catch(e) { /* silent — price refresh is best-effort */ }
-  }));
 }
 
 // ── Pull-to-refresh ──
@@ -6506,12 +5940,10 @@ async function refreshDexPrices() {
     if (triggered) {
       triggered = false;
       showToast('Syncing…');
-      setTimeout(async () => {
+      setTimeout(() => {
         const hasPortalData = !!store.get(SYNC_FROM_KEY);
         if (hasPortalData) syncFromPortal();
-        else { updateSyncStatus(); }
-        // Always refresh DEX prices so price mismatch clears after keypad update + dial
-        await refreshDexPrices();
+        else { updateSyncStatus(); showToast('All up to date'); }
       }, 600);
     }
   }, { passive: true });
@@ -6589,39 +6021,16 @@ function listenForRestockDial(machineId) {
     const s        = STOPS[machineId];
     if (!s) return;
 
-    // Update slot SOH from real DEX data + check if prices now match
+    // Update slot SOH from real DEX data
     s.slots.forEach(slot => {
       const dexSlot = slots[slot.id];
       if (!dexSlot) return;
       const truSOH = dexSlot.currentSOH;
       if (truSOH !== null && truSOH !== undefined) {
         slot.current = truSOH;
-        // Reset fill state — dial confirms new SOH so collected/added no longer apply
-        stopSlotState[slot.id] = {
-          ...stopSlotState[slot.id],
-          added:     0,
-          collected: 0,  // swap complete — new product SOH is now the baseline
-        };
+        stopSlotState[slot.id] = { ...stopSlotState[slot.id], added: 0 }; // reset after dial
       }
-      // Restock dial reports the machine's current price — update dexPrice
-      // If the operator updated the keypad, this will now match the VMS price
-      const dialPrice = parseFloat(dexSlot.priceDollars) || parseFloat(dexSlot.priceCents) / 100 || 0;
-      if (dialPrice > 0) slot.dexPrice = dialPrice;
     });
-
-    // Remove price mismatch pill if all slots now match
-    const stillMismatched = s.slots.filter(sl =>
-      sl.hasPlanogramPrice && sl.dexPrice > 0 && Math.abs((sl.dexPrice || 0) - (sl.price || 0)) > 0.005
-    );
-    if (stillMismatched.length === 0) {
-      const pill = document.getElementById('price-mismatch-pill');
-      if (pill) pill.remove();
-    } else {
-      // Rebuild pill with updated mismatch list
-      if (currentStopMachineId === machineId) buildPlanogram(s);
-    }
-    // Update home screen stop card pills
-    if (currentRunData?.stops) renderHomeStops(currentRunData.stops);
 
     // Apply any pending planogram changes now that true SOH is known
     applyPendingPogChangesAfterDial(machineId, slots);

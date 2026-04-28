@@ -467,7 +467,14 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
 <!-- ════════════════════════
      SCREEN: RUN SELECTOR
 ════════════════════════ -->
-<div class="screen" id="screen-run-select">
+<!-- Update available banner -->
+<div id="update-banner" style="display:none;position:fixed;bottom:80px;left:12px;right:12px;z-index:9999;background:#1B4F8A;color:#fff;border-radius:14px;padding:14px 16px;box-shadow:0 4px 20px rgba(0,0,0,.3);display:none;align-items:center;gap:12px">
+  <div style="flex:1">
+    <div style="font-size:13px;font-weight:700">Update available</div>
+    <div style="font-size:11px;opacity:.8;margin-top:2px">A new version of the driver app is ready</div>
+  </div>
+  <button onclick="applyUpdate()" style="background:#00C896;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">Update now</button>
+</div>
   <div class="topbar">
     <div style="display:flex;align-items:center;gap:10px">
       <svg viewBox="0 0 32 32" width="28" height="28" xmlns="http://www.w3.org/2000/svg">
@@ -7019,7 +7026,102 @@ function tryAutoConnect() {
 // Small delay to ensure DOM is fully ready
 setTimeout(tryAutoConnect, 100);
 
-// Show initial pick/photo/audit status on route cards
+// ── Auto-reconnect ──────────────────────────────────────────────
+// Fires when phone comes back online after WiFi/data drop or screen wake
+window.addEventListener('online', () => {
+  console.log('[Net] Back online — reconnecting Firebase');
+  showToast('Back online — reconnecting…');
+  if (!fbReady || !fbDb) {
+    tryAutoConnect();
+  } else {
+    // Firebase SDK handles reconnect internally — just flush offline queue
+    offlineQueueFlush();
+    updateSyncStatus();
+  }
+});
+
+window.addEventListener('offline', () => {
+  const dot   = document.getElementById('topbar-sync-dot');
+  const label = document.getElementById('topbar-sync-label');
+  if (dot)   dot.style.background = 'var(--danger)';
+  if (label) label.textContent    = 'Offline';
+});
+
+// When driver returns to the app after phone was locked/backgrounded
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    if (!fbReady || !fbDb) {
+      console.log('[Visibility] App resumed — reconnecting');
+      tryAutoConnect();
+    } else {
+      // Already connected — just flush queue and refresh sync status
+      offlineQueueFlush();
+      updateSyncStatus();
+    }
+  }
+});
+
+// Periodic connection check every 30 seconds — catches silent drops
+setInterval(() => {
+  if (!fbReady || !fbDb) return;
+  fbDb.ref('.info/connected').once('value').then(snap => {
+    const connected = snap.val() === true;
+    const dot   = document.getElementById('topbar-sync-dot');
+    const label = document.getElementById('topbar-sync-label');
+    if (connected) {
+      if (dot)   dot.style.background = 'var(--accent)';
+      if (label) label.textContent    = 'Synced';
+      offlineQueueFlush();
+    } else {
+      if (dot)   dot.style.background = 'var(--danger)';
+      if (label) label.textContent    = 'Offline';
+    }
+  }).catch(() => {});
+}, 30000);
+
+// ── Service Worker — Auto Update ────────────────────────────────
+let _swReg = null;
+
+function applyUpdate() {
+  const banner = document.getElementById('update-banner');
+  if (banner) banner.style.display = 'none';
+  if (_swReg?.waiting) {
+    _swReg.waiting.postMessage('skipWaiting');
+  }
+}
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').then(reg => {
+    _swReg = reg;
+    console.log('[SW] Registered:', reg.scope);
+
+    // Check for update on every app open
+    reg.update();
+
+    // New SW waiting — show update banner
+    const showBanner = () => {
+      const banner = document.getElementById('update-banner');
+      if (banner) banner.style.display = 'flex';
+    };
+
+    if (reg.waiting) showBanner();
+
+    reg.addEventListener('updatefound', () => {
+      const newSW = reg.installing;
+      newSW.addEventListener('statechange', () => {
+        if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
+          showBanner();
+        }
+      });
+    });
+  }).catch(err => console.warn('[SW] Registration failed:', err));
+
+  // When SW takes control — reload to get fresh app
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    window.location.reload();
+  });
+}
+
 Object.keys(STOPS).forEach(mid => {
   updateStopPickPill(mid);
   updateStopPhotoPill(mid);

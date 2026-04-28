@@ -407,7 +407,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
     <div class="card" style="cursor:default" id="route-progress-card">
       <div class="row" style="margin-bottom:10px">
         <span class="text-sm" id="home-route-label">Today's route</span>
-        <span class="pill pill-blue" id="home-route-status"><span class="pill-dot"></span>Loading…</span>
+        <div style="display:flex;gap:6px;align-items:center">
+          <button id="switch-run-btn" onclick="loadHomeScreen()" style="display:none;font-size:11px;color:var(--accent);background:none;border:none;cursor:pointer;font-family:inherit;padding:0">Switch run</button>
+          <span class="pill pill-blue" id="home-route-status"><span class="pill-dot"></span>Loading…</span>
+        </div>
       </div>
       <div class="progress-wrap" style="margin-bottom:10px"><div class="progress-bar" id="home-progress-bar" style="width:0%"></div></div>
       <div class="row">
@@ -459,6 +462,28 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="10" r="3" stroke="currentColor" stroke-width="1.8"/><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>Locations
     </button>
   </nav>
+</div>
+
+<!-- ════════════════════════
+     SCREEN: RUN SELECTOR
+════════════════════════ -->
+<div class="screen" id="screen-run-select">
+  <div class="topbar">
+    <div style="display:flex;align-items:center;gap:10px">
+      <svg viewBox="0 0 32 32" width="28" height="28" xmlns="http://www.w3.org/2000/svg">
+        <rect x="2" y="2" width="28" height="28" rx="6" fill="#1B4F8A"/>
+        <text x="20" y="16" font-family="Georgia, serif" font-weight="700" font-size="14" letter-spacing="0.5" fill="#fff">VYND</text>
+      </svg>
+      <div style="font-size:13px;font-weight:600;color:var(--text)">Select Run</div>
+    </div>
+    <div class="avatar" onclick="navTo('screen-settings',null)" style="cursor:pointer">?</div>
+  </div>
+  <div class="scroll" style="padding:16px">
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Showing all incomplete runs assigned to you</div>
+    <div id="run-select-list">
+      <div style="text-align:center;padding:40px;color:var(--muted)">Loading runs…</div>
+    </div>
+  </div>
 </div>
 
 <!-- ════════════════════════
@@ -1273,107 +1298,55 @@ async function loadHomeScreen() {
         return;
       }
 
-      // Fetch all runs and filter client-side (avoids index requirement)
+      // Fetch all runs and find incomplete ones assigned to this driver
       const runsSnap = await db.ref('vynd/runs').once('value');
-      let todayRun = null;
+      const incompleteRuns = [];
+      const todayStr = today;
+
       runsSnap.forEach(child => {
         const run = child.val();
-        // Normalise plannedDate (handle both YYYY-MM-DD and DD/MM/YYYY)
         let runDate = run.plannedDate || '';
         if (runDate && !runDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
           const parts = runDate.split('/');
           if (parts.length === 3) runDate = `${parts[2]}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`;
         }
-        if (runDate        === today &&
-            run.driverId   === driverId &&
+        if (run.driverId   === driverId &&
             run.status     !== 'cancelled' &&
-            run.status     !== 'complete') {
-          todayRun = { key: child.key, ...run, plannedDate: runDate };
+            run.status     !== 'complete' &&
+            runDate        <= todayStr) {  // today or past — not future
+          // Count remaining stops
+          const stops = run.stops || [];
+          const remaining = stops.filter(s => s.status !== 'done').length;
+          incompleteRuns.push({ key: child.key, ...run, plannedDate: runDate, remaining, totalStops: stops.length });
+        }
+        // Also allow future runs (tomorrow etc) — driver may want to start early
+        if (run.driverId   === driverId &&
+            run.status     !== 'cancelled' &&
+            run.status     !== 'complete' &&
+            runDate        > todayStr) {
+          const stops = run.stops || [];
+          const remaining = stops.filter(s => s.status !== 'done').length;
+          incompleteRuns.push({ key: child.key, ...run, plannedDate: runDate, remaining, totalStops: stops.length, isFuture: true });
         }
       });
 
-      if (todayRun) {
-        currentRunData = todayRun;
+      // Sort — past first, then today, then future
+      incompleteRuns.sort((a, b) => a.plannedDate.localeCompare(b.plannedDate));
 
-        // Update header
-        const routeEl = document.getElementById('home-route-label');
-        if (routeEl) routeEl.textContent = 'Route ' + (todayRun.routeId || '');
-
-        // Load DEX data + planogram pendingChange for each stop in parallel
-        const stopPromises = todayRun.stops.map(stop =>
-          Promise.all([
-            db.ref('vynd/dexReadings/' + stop.id + '/last').once('value').catch(() => null),
-            db.ref('vynd/planograms/'  + stop.id + '/slots').once('value').catch(() => null),
-          ]).then(([dexSnap, pogSnap]) => ({ stop, dex: dexSnap?.val(), pog: pogSnap?.val() }))
-        );
-        const stopData = await Promise.all(stopPromises);
-
-        stopData.forEach(({ stop, dex, pog }) => {
-          const seed = MACHINE_META_DRIVER[stop.id] || {};
-          if (!STOPS[stop.id]) {
-            STOPS[stop.id] = {
-              id:           stop.id,
-              customer:     seed.customer     || stop.name || stop.id,
-              locationName: seed.locationName || stop.name || stop.id,
-              addr:         seed.addr         || '',
-              cash:         '—',
-              cashType:     seed.cashType     || MACHINE_META_DRIVER[stop.id]?.cashType || 'cash',
-              status:       stop.status       || 'pending',
-              fault:        false,
-              lastService:  '—',
-              fillCount:    0,
-              lat:          seed.lat          || 0,
-              lng:          seed.lng          || 0,
-              slots:        [],
-            };
-          } else {
-            STOPS[stop.id].status = stop.status || STOPS[stop.id].status;
-          }
-          if (dex?.slots) {
-            STOPS[stop.id].slots = Object.entries(dex.slots).map(([id, s]) => {
-              const pogSlot = pog?.[id] || {};
-              const dexPriceDollars  = parseFloat(s.priceDollars) || parseFloat(s.priceCents) / 100 || 0;
-              const vmsPog = parseFloat(pogSlot.price) || parseFloat(pogSlot.priceDollars) || parseFloat(pogSlot.priceCents) / 100 || 0;
-              const vmsPriceDollars  = vmsPog > 0 ? vmsPog : dexPriceDollars;
-              const hasPlanogramPrice = vmsPog > 0;
-              return {
-                id,
-                product:            pogSlot.product  || s.product  || '',
-                price:              vmsPriceDollars,    // VMS price for display (falls back to DEX only for display)
-                dexPrice:           dexPriceDollars,    // machine DEX price
-                hasPlanogramPrice,                     // only flag mismatch when planogram price is known
-                current:            s.currentSOH ?? 0,
-                par:                pogSlot.par      ?? s.par ?? 10,
-                capacity:           pogSlot.capacity ?? s.capacity ?? 12,
-                dexVends:           s.vendsSinceLastRead || 0,
-                barcode:            pogSlot.barcode  || s.barcode  || '',
-                pendingChange:      (pog && pog[id] && pog[id].pendingChange) || null,
-              };
-            });
-          } else if (pog) {
-            // No DEX data yet — build from planogram only
-            STOPS[stop.id].slots = Object.entries(pog).map(([id, p]) => ({
-              id,
-              product:       p.product   || '',
-              price:         p.price     || 0,
-              current:       p.currentSOH ?? 0,
-              par:           p.par       || 0,
-              capacity:      p.capacity  || 0,
-              barcode:       p.barcode   || '',
-              pendingChange: p.pendingChange || null,
-            })).filter(s => s.par > 0);
-          }
-          STOPS[stop.id].serviceOrder = stop.serviceOrder;
-        });
-
-        renderHomeStops(todayRun.stops);
-        updateHomeProgress(todayRun.stops);
+      if (incompleteRuns.length === 0) {
+        // No runs at all
+        showNoDriverPrompt();
         return;
       }
 
-      // Logged in but no run today
-      showNoRunToday();
-      return;
+      if (incompleteRuns.length === 1 && !incompleteRuns[0].isFuture) {
+        // Only one run and it's today or past — load it directly, no need for selector
+        loadRun(incompleteRuns[0]);
+        return;
+      }
+
+      // Multiple runs — show selector screen
+      showRunSelector(incompleteRuns);
 
     } catch(e) {
       console.warn('Firebase run load failed:', e.message);
@@ -1386,6 +1359,148 @@ async function loadHomeScreen() {
     return;
   }
   showNoRunToday();
+}
+
+function showRunSelector(runs) {
+  showScreen('screen-run-select');
+  const list = document.getElementById('run-select-list');
+  if (!list) return;
+
+  const today = new Date().toISOString().slice(0,10);
+  const fmtDate = iso => {
+    const d = new Date(iso + 'T00:00:00');
+    const diff = Math.round((new Date(iso) - new Date(today)) / 86400000);
+    const label = diff < -1 ? `${Math.abs(diff)} days ago` : diff === -1 ? 'Yesterday' : diff === 0 ? 'Today' : diff === 1 ? 'Tomorrow' : `In ${diff} days`;
+    return `${label} · ${d.toLocaleDateString('en-AU', {weekday:'short', day:'numeric', month:'short'})}`;
+  };
+
+  list.innerHTML = runs.map(run => {
+    const isOverdue = run.plannedDate < today;
+    const isFuture  = run.plannedDate > today;
+    const pct       = run.totalStops > 0 ? Math.round(((run.totalStops - run.remaining) / run.totalStops) * 100) : 0;
+    const badgeCol  = isOverdue ? '#EF4444' : isFuture ? '#3B82F6' : '#10B981';
+    const badgeTxt  = isOverdue ? 'Overdue' : isFuture ? 'Upcoming' : 'Today';
+
+    return `<div onclick="selectRun('${run.key}')" style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:12px;cursor:pointer;active:opacity:.7">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+        <div>
+          <div style="font-size:15px;font-weight:700;color:var(--text)">Route ${run.routeId || '—'}</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px">${fmtDate(run.plannedDate)}</div>
+        </div>
+        <span style="font-size:11px;font-weight:600;padding:3px 10px;border-radius:99px;background:${badgeCol}22;color:${badgeCol}">${badgeTxt}</span>
+      </div>
+      <div style="background:var(--border);border-radius:99px;height:6px;margin-bottom:8px">
+        <div style="background:${badgeCol};height:6px;border-radius:99px;width:${pct}%;transition:width .3s"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted)">
+        <span>${run.totalStops - run.remaining} of ${run.totalStops} stops done</span>
+        <span style="color:${run.remaining > 0 ? '#EF4444' : '#10B981'};font-weight:600">${run.remaining} remaining</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+const _runCache = {};
+async function selectRun(runKey) {
+  // Find the run from cache or re-fetch
+  const runsSnap = await fbDb.ref('vynd/runs/' + runKey).once('value').catch(() => null);
+  if (!runsSnap || !runsSnap.val()) return;
+  const run = runsSnap.val();
+  let runDate = run.plannedDate || '';
+  if (runDate && !runDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    const parts = runDate.split('/');
+    if (parts.length === 3) runDate = `${parts[2]}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`;
+  }
+  loadRun({ key: runKey, ...run, plannedDate: runDate });
+}
+
+async function loadRun(todayRun) {
+  currentRunData = todayRun;
+
+  // Update header
+  const routeEl = document.getElementById('home-route-label');
+  if (routeEl) routeEl.textContent = 'Route ' + (todayRun.routeId || '');
+
+  // Add date to greeting if not today
+  const today = new Date().toISOString().slice(0,10);
+  const greetEl = document.getElementById('home-greeting');
+  if (greetEl && todayRun.plannedDate !== today) {
+    const d = new Date(todayRun.plannedDate + 'T00:00:00');
+    greetEl.textContent = d.toLocaleDateString('en-AU', {weekday:'long', day:'numeric', month:'short'}) + ' · Route ' + (todayRun.routeId || '');
+  }
+
+  // Load DEX data + planogram pendingChange for each stop in parallel
+  const stopPromises = todayRun.stops.map(stop =>
+    Promise.all([
+      fbDb.ref('vynd/dexReadings/' + stop.id + '/last').once('value').catch(() => null),
+      fbDb.ref('vynd/planograms/'  + stop.id + '/slots').once('value').catch(() => null),
+    ]).then(([dexSnap, pogSnap]) => ({ stop, dex: dexSnap?.val(), pog: pogSnap?.val() }))
+  );
+  const stopData = await Promise.all(stopPromises);
+
+  stopData.forEach(({ stop, dex, pog }) => {
+    const seed = MACHINE_META_DRIVER[stop.id] || {};
+    if (!STOPS[stop.id]) {
+      STOPS[stop.id] = {
+        id:           stop.id,
+        customer:     seed.customer     || stop.name || stop.id,
+        locationName: seed.locationName || stop.name || stop.id,
+        addr:         seed.addr         || '',
+        cash:         '—',
+        cashType:     seed.cashType     || MACHINE_META_DRIVER[stop.id]?.cashType || 'cash',
+        status:       stop.status       || 'pending',
+        fault:        false,
+        lastService:  '—',
+        fillCount:    0,
+        lat:          seed.lat          || 0,
+        lng:          seed.lng          || 0,
+        slots:        [],
+      };
+    } else {
+      STOPS[stop.id].status = stop.status || STOPS[stop.id].status;
+    }
+    if (dex?.slots) {
+      STOPS[stop.id].slots = Object.entries(dex.slots).map(([id, s]) => {
+        const pogSlot = pog?.[id] || {};
+        const dexPriceDollars  = parseFloat(s.priceDollars) || parseFloat(s.priceCents) / 100 || 0;
+        const vmsPog = parseFloat(pogSlot.price) || parseFloat(pogSlot.priceDollars) || parseFloat(pogSlot.priceCents) / 100 || 0;
+        const vmsPriceDollars  = vmsPog > 0 ? vmsPog : dexPriceDollars;
+        const hasPlanogramPrice = vmsPog > 0;
+        return {
+          id,
+          product:            pogSlot.product  || s.product  || '',
+          price:              vmsPriceDollars,
+          dexPrice:           dexPriceDollars,
+          hasPlanogramPrice,
+          current:            s.currentSOH ?? 0,
+          par:                pogSlot.par      ?? s.par ?? 10,
+          capacity:           pogSlot.capacity ?? s.capacity ?? 12,
+          dexVends:           s.vendsSinceLastRead || 0,
+          barcode:            pogSlot.barcode  || s.barcode  || '',
+          pendingChange:      (pog && pog[id] && pog[id].pendingChange) || null,
+        };
+      });
+    } else if (pog) {
+      STOPS[stop.id].slots = Object.entries(pog).map(([id, p]) => ({
+        id,
+        product:       p.product   || '',
+        price:         p.price     || 0,
+        current:       p.currentSOH ?? 0,
+        par:           p.par       || 0,
+        capacity:      p.capacity  || 0,
+        barcode:       p.barcode   || '',
+        pendingChange: p.pendingChange || null,
+      })).filter(s => s.par > 0);
+    }
+    STOPS[stop.id].serviceOrder = stop.serviceOrder;
+  });
+
+  showScreen('screen-home');
+  renderHomeStops(todayRun.stops);
+  updateHomeProgress(todayRun.stops);
+  // Show switch run button so driver can go back and pick a different run
+  const switchBtn = document.getElementById('switch-run-btn');
+  if (switchBtn) switchBtn.style.display = '';
 }
 
 function showNoDriverPrompt() {
@@ -2140,12 +2255,13 @@ async function completeMktStop() {
   STOPS[stopId].restockedAt = restockedAt;
 
   // Mark run stop done in Firebase
-  if (fbDb && currentRunData?.id) {
-    fbDb.ref('vynd/runs/' + currentRunData.id + '/stops').once('value').then(snap => {
+  if (fbDb && currentRunData?.key) {
+    fbDb.ref('vynd/runs/' + currentRunData.key + '/stops').once('value').then(snap => {
       const stops = snap.val() || [];
       const idx = Array.isArray(stops) ? stops.findIndex(s => s.id === stopId) : -1;
-      if (idx >= 0) fbDb.ref('vynd/runs/' + currentRunData.id + '/stops/' + idx + '/status').set('done');
-    }).catch(() => {});
+      if (idx >= 0) fbDb.ref('vynd/runs/' + currentRunData.key + '/stops/' + idx + '/status').set('done');
+      else console.warn('[Driver] Could not find stop', stopId, 'in run stops to mark done');
+    }).catch(e => console.warn('[Driver] Error marking stop done:', e.message));
   }
 
   // Update home stop card

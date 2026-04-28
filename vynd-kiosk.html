@@ -692,25 +692,60 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
 
   <div class="scroll">
 
-    <!-- Status bar -->
+    <!-- Location info card -->
     <div class="card" style="cursor:default;margin-bottom:0">
       <div class="row" style="margin-bottom:6px">
-        <div>
+        <div style="flex:1;min-width:0">
           <div style="font-size:14px;font-weight:600" id="mkt-stop-name">Inland Distributors</div>
           <div style="font-size:12px;color:var(--muted)" id="mkt-stop-addr">Break Room</div>
         </div>
         <span class="pill pill-blue" id="mkt-stop-status"><span class="pill-dot"></span>Pending</span>
       </div>
-      <div style="display:flex;gap:16px;margin-top:8px">
+      <!-- Location details — loaded from market config -->
+      <div id="mkt-location-details" style="display:none;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <div style="display:flex;gap:8px;align-items:flex-start">
+            <span style="font-size:14px;flex-shrink:0">📍</span>
+            <div>
+              <div style="font-size:12px;font-weight:600" id="mkt-loc-address"></div>
+              <div style="font-size:11px;color:var(--muted)" id="mkt-loc-city"></div>
+            </div>
+          </div>
+          <div id="mkt-loc-access-wrap" style="display:none;display:flex;gap:8px;align-items:flex-start">
+            <span style="font-size:14px;flex-shrink:0">🔑</span>
+            <div style="font-size:12px;color:var(--text)" id="mkt-loc-access"></div>
+          </div>
+          <div id="mkt-loc-contact-wrap" style="display:none;display:flex;gap:8px;align-items:center">
+            <span style="font-size:14px;flex-shrink:0">👤</span>
+            <div style="font-size:12px;color:var(--text)" id="mkt-loc-contact"></div>
+          </div>
+          <button id="mkt-maps-btn" onclick="openMktMaps()" style="display:none;margin-top:4px;padding:7px 12px;border-radius:8px;background:var(--surface);border:1px solid var(--border);color:var(--accent);font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;text-align:left">
+            📐 Open in Maps
+          </button>
+        </div>
+      </div>
+      <!-- Stats -->
+      <div style="display:flex;gap:16px;margin-top:10px">
         <div><div style="font-family:'DM Mono',monospace;font-size:18px;font-weight:600" id="mkt-stop-low-count">—</div><div style="font-size:10px;color:var(--muted);text-transform:uppercase">Low stock</div></div>
         <div><div style="font-family:'DM Mono',monospace;font-size:18px;font-weight:600" id="mkt-stop-product-count">—</div><div style="font-size:10px;color:var(--muted);text-transform:uppercase">Products</div></div>
         <div><div style="font-family:'DM Mono',monospace;font-size:18px;font-weight:600" id="mkt-stop-total-units">—</div><div style="font-size:10px;color:var(--muted);text-transform:uppercase">Units to load</div></div>
       </div>
     </div>
 
-    <!-- Pick list — grouped by asset -->
+    <!-- Pick list — grouped by product -->
     <div id="mkt-stop-product-list" style="margin-top:4px">
       <div style="text-align:center;padding:32px;color:var(--muted)">Loading market…</div>
+    </div>
+
+    <!-- Adjustments section -->
+    <div id="mkt-adjustments-section" style="display:none;flex-direction:column;gap:8px;margin-top:4px">
+      <div class="row" style="align-items:center">
+        <div class="section-hd">Stock adjustments</div>
+        <button onclick="addMktAdjustment()" style="background:none;border:none;color:var(--accent);font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;padding:0;display:flex;align-items:center;gap:4px">
+          <svg viewBox="0 0 14 14" fill="none" width="14"><path d="M7 2v10M2 7h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Add
+        </button>
+      </div>
+      <div id="mkt-adjustment-list" style="background:var(--surface);border:1px solid rgba(248,113,113,.2);border-radius:10px;overflow:hidden"></div>
     </div>
 
     <!-- Short supply notice -->
@@ -720,11 +755,72 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
 
     <!-- Actions -->
     <div style="margin-top:8px;display:flex;flex-direction:column;gap:8px" id="mkt-stop-actions">
+      <button class="btn btn-secondary" onclick="showMktAdjustments()" id="mkt-adj-btn">📋 Record adjustment</button>
       <button class="btn btn-primary" onclick="completeMktStop()" id="mkt-complete-btn">✓ Confirm restock</button>
       <button class="btn btn-secondary" onclick="showScreen('screen-home')">Back to route</button>
     </div>
 
     <div style="height:20px"></div>
+  </div>
+</div>
+
+<!-- ════════════════════════
+     MODAL: MKT ADJUSTMENT
+════════════════════════ -->
+<div id="mkt-adj-modal" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.5);align-items:flex-end">
+  <div style="background:var(--card);border-radius:20px 20px 0 0;padding:20px;width:100%;max-height:85vh;overflow-y:auto">
+    <div style="font-size:16px;font-weight:700;margin-bottom:4px">Record adjustment</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:16px">Stock removed from shelves — expired, damaged, or returned to van</div>
+
+    <div class="form-group" style="margin-bottom:12px">
+      <div class="form-label">Product</div>
+      <select class="form-input" id="mkt-adj-product" onchange="onMktAdjProductChange()">
+        <option value="">— Select product —</option>
+      </select>
+    </div>
+    <div class="form-group" style="margin-bottom:12px">
+      <div class="form-label">Reason</div>
+      <select class="form-input" id="mkt-adj-reason">
+        <option value="expired">Expired / out of date</option>
+        <option value="damaged">Damaged</option>
+        <option value="returned">Returned to van</option>
+        <option value="other">Other</option>
+      </select>
+    </div>
+    <div class="form-group" style="margin-bottom:20px">
+      <div class="form-label">Units removed</div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <button onclick="adjQtyStep(-1)" style="width:40px;height:40px;border-radius:50%;border:1px solid var(--border);background:var(--surface);font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text)">−</button>
+        <input type="number" min="1" id="mkt-adj-qty" value="1" style="width:80px;text-align:center;font-size:18px;font-weight:700;border:1px solid var(--border);border-radius:8px;padding:8px;background:var(--surface);color:var(--text)">
+        <button onclick="adjQtyStep(1)" style="width:40px;height:40px;border-radius:50%;border:1px solid var(--border);background:var(--surface);font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text)">+</button>
+        <span style="font-size:12px;color:var(--muted)" id="mkt-adj-stock-hint"></span>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-secondary" style="flex:1" onclick="closeMktAdjModal()">Cancel</button>
+      <button class="btn btn-primary" style="flex:1" onclick="saveMktAdjustment()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════
+     MODAL: MKT PRODUCT SWAP
+════════════════════════ -->
+<div id="mkt-swap-modal" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.5);align-items:flex-end">
+  <div style="background:var(--card);border-radius:20px 20px 0 0;padding:20px;width:100%;max-height:85vh;overflow-y:auto">
+    <div style="font-size:16px;font-weight:700;margin-bottom:4px">Change product</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:4px" id="mkt-swap-slot-label"></div>
+    <div style="font-size:12px;color:var(--danger);background:rgba(239,68,68,.08);border-radius:8px;padding:8px 10px;margin-bottom:16px">
+      ⚠ This will update the planogram. The new product SOH will start at 0 until you load stock.
+    </div>
+    <div class="form-group" style="margin-bottom:12px">
+      <div class="form-label">Search product</div>
+      <input class="form-input" id="mkt-swap-search" placeholder="Type product name or barcode…" oninput="renderMktSwapList()">
+    </div>
+    <div id="mkt-swap-list" style="max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;background:var(--surface)"></div>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button class="btn btn-secondary" style="flex:1" onclick="closeMktSwapModal()">Cancel</button>
+    </div>
   </div>
 </div>
 
@@ -2061,17 +2157,19 @@ function refreshStopDex(machineId, onDone) {
 // Current market stop state
 let currentMarketStop = null; // { stopId, marketId, name, addr, products: [] }
 let mktLoadedQty      = {};   // barcode → units driver loaded this visit
+let mktAdjustments    = [];   // { barcode, name, qty, reason } removals
+let mktSwapSlot       = null; // { assetId, slotIdx, barcode, name }
+let mktAllProducts    = [];   // all products for swap picker
 
 async function showMarketStop(stopId) {
-  // Find the stop definition from the run
   const run = currentRunData;
   const stopDef = run?.stops?.find(s => s.id === stopId) || {};
   const marketId = stopDef.marketId || stopId;
 
   currentMarketStop = { stopId, marketId, name: stopDef.name || stopId, addr: stopDef.addr || 'Micromarket' };
-  mktLoadedQty = {};
+  mktLoadedQty  = {};
+  mktAdjustments = [];
 
-  // Update header
   const el = id => document.getElementById(id);
   el('mkt-stop-title').textContent  = stopId;
   el('mkt-stop-sub').textContent    = 'Micromarket';
@@ -2079,23 +2177,32 @@ async function showMarketStop(stopId) {
   el('mkt-stop-addr').textContent   = stopDef.addr || 'Break Room';
   el('mkt-stop-product-list').innerHTML = '<div style="text-align:center;padding:32px;color:var(--muted)">Loading market…</div>';
   el('mkt-short-supply-notice').style.display = 'none';
+  el('mkt-location-details').style.display = 'none';
+  el('mkt-adjustments-section').style.display = 'none';
+  el('mkt-adjustment-list').innerHTML = '';
   showScreen('screen-market-stop');
 
-  // Load catalogue + planogram assets from Firebase
-  let catalogue = {}, assets = [];
+  // Load catalogue + planogram assets + config from Firebase
+  let catalogue = {}, assets = [], config = {};
   if (fbDb) {
     try {
-      const [catSnap, assetSnap] = await Promise.all([
+      const [catSnap, assetSnap, cfgSnap] = await Promise.all([
         fbDb.ref('vynd/micromarkets/' + marketId + '/catalogue').once('value'),
         fbDb.ref('vynd/micromarkets/' + marketId + '/planogramAssets').once('value'),
+        fbDb.ref('vynd/micromarkets/' + marketId + '/config').once('value'),
       ]);
       catalogue = catSnap.val() || {};
+      config    = cfgSnap.val() || {};
       const rawAssets = assetSnap.val() || {};
 
-      // Build per-barcode product summary with lane placements
+      // Store raw assets on currentMarketStop for product swap
+      currentMarketStop.rawAssets = rawAssets;
+      currentMarketStop.catalogue = catalogue;
+
+      // Build per-barcode product summary
       const barcodeMap = {};
       Object.entries(rawAssets).forEach(([aid, asset]) => {
-        Object.values(asset.slots || {}).forEach(slot => {
+        Object.values(asset.slots || {}).forEach((slot, slotIdx) => {
           if (!slot.barcode) return;
           const bc = slot.barcode;
           const catEntry = catalogue[bc] || {};
@@ -2107,25 +2214,64 @@ async function showMarketStop(stopId) {
               totalPar:      0,
               totalCapacity: 0,
               lanes:         [],
+              assetId:       aid,
+              slotIdx:       slotIdx,
             };
           }
           barcodeMap[bc].totalPar      += (slot.par      || 0);
           barcodeMap[bc].totalCapacity += (slot.capacity || 0);
-          barcodeMap[bc].lanes.push({ assetLabel: asset.label || 'Asset', par: slot.par || 0, capacity: slot.capacity || 0 });
+          barcodeMap[bc].lanes.push({ assetId: aid, assetLabel: asset.label || 'Asset', slotIdx, par: slot.par || 0, capacity: slot.capacity || 0 });
         });
       });
       assets = Object.values(barcodeMap);
+
+      // Build all products list for swap picker from catalogue
+      mktAllProducts = Object.entries(catalogue).map(([bc, p]) => ({ barcode: bc, name: p.name || bc, priceCents: p.priceCents || 0 })).sort((a,b) => a.name.localeCompare(b.name));
+
     } catch(e) { console.warn('[Market stop] load:', e.message); }
   }
 
   currentMarketStop.products = assets;
+  currentMarketStop.config   = config;
 
-  // Load pick export quantities for this stop if available
+  // ── Load location info ──
+  if (config.locationId && fbDb) {
+    try {
+      const locSnap = await fbDb.ref('vynd/locations/' + config.locationId).once('value').catch(() => null);
+      const loc = locSnap?.val();
+      if (loc) {
+        const addrEl    = el('mkt-loc-address');
+        const cityEl    = el('mkt-loc-city');
+        const accessEl  = el('mkt-loc-access');
+        const contactEl = el('mkt-loc-contact');
+        const mapsBtn   = el('mkt-maps-btn');
+        if (addrEl)  addrEl.textContent  = loc.address || loc.addr || '';
+        if (cityEl)  cityEl.textContent  = [loc.city, loc.state, loc.postcode].filter(Boolean).join(' ');
+        if (loc.accessNotes || loc.access) {
+          accessEl.textContent = loc.accessNotes || loc.access;
+          el('mkt-loc-access-wrap').style.display = 'flex';
+        }
+        if (loc.contactName || loc.contact) {
+          contactEl.textContent = (loc.contactName || loc.contact) + (loc.contactPhone ? ' · ' + loc.contactPhone : '');
+          el('mkt-loc-contact-wrap').style.display = 'flex';
+        }
+        if ((loc.lat && loc.lng) || loc.address) {
+          currentMarketStop.lat = loc.lat;
+          currentMarketStop.lng = loc.lng;
+          currentMarketStop.locAddress = loc.address;
+          if (mapsBtn) mapsBtn.style.display = '';
+        }
+        el('mkt-location-details').style.display = '';
+      }
+    } catch(e) {}
+  }
+
+  // Load pick export quantities
   const pickQtyByBarcode = {};
   let hasPickExport = false;
   if (fbDb && run) {
     try {
-      const dateKey = (run.plannedDate || new Date().toLocaleDateString('en-CA')).replace(/-/g,'');
+      const dateKey  = (run.plannedDate || new Date().toLocaleDateString('en-CA')).replace(/-/g,'');
       const exportKey = dateKey + '_' + (run.routeId || 'all');
       const snap = await fbDb.ref('vynd/pickExports/' + exportKey).once('value');
       const data = snap.val();
@@ -2139,7 +2285,6 @@ async function showMarketStop(stopId) {
     } catch(e) {}
   }
 
-  // Pre-fill loaded qty from pick export if available, else from par - soh
   assets.forEach(p => {
     const pickQty = pickQtyByBarcode[p.barcode];
     mktLoadedQty[p.barcode] = pickQty != null ? pickQty : Math.max(0, p.totalPar - p.stock);
@@ -2153,7 +2298,7 @@ function renderMktStopProducts(products, hasPickExport) {
   const low = products.filter(p => p.stock < p.totalPar).length;
   const totalUnits = products.reduce((sum, p) => sum + (mktLoadedQty[p.barcode] || 0), 0);
 
-  el('mkt-stop-low-count').textContent  = low;
+  el('mkt-stop-low-count').textContent   = low;
   el('mkt-stop-product-count').textContent = products.length;
   el('mkt-stop-total-units').textContent = totalUnits;
 
@@ -2179,7 +2324,10 @@ function renderMktStopProducts(products, hasPickExport) {
     return `<div class="card" style="cursor:default;margin-bottom:4px;${isLow?'border-left:3px solid var(--warn)':''}">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
         <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:600;color:var(--text)">${p.name}</div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="font-size:13px;font-weight:600;color:var(--text)">${p.name}</div>
+            <button onclick="openMktSwap('${p.barcode}','${p.name.replace(/'/g,"\\'")}','${p.assetId||''}',${p.slotIdx||0})" style="background:none;border:none;color:var(--muted);cursor:pointer;padding:0;font-size:10px;flex-shrink:0" title="Change product">⇄</button>
+          </div>
           <div style="font-size:11px;font-family:'DM Mono',monospace;color:var(--muted);margin-top:2px">${p.barcode}</div>
           ${laneHint}
           <div style="display:flex;gap:12px;margin-top:8px">
@@ -2219,6 +2367,188 @@ window.mktAdjQty = function(barcode, delta) {
   if (currentMarketStop?.products) renderMktStopProducts(currentMarketStop.products, false);
 };
 
+// ── Maps ────────────────────────────────────────────────────────
+function openMktMaps() {
+  const s = currentMarketStop;
+  if (!s) return;
+  const query = (s.lat && s.lng) ? `${s.lat},${s.lng}` : encodeURIComponent(s.locAddress || s.addr || s.name);
+  window.open('https://maps.apple.com/?q=' + query, '_blank');
+}
+
+// ── Adjustments ─────────────────────────────────────────────────
+function showMktAdjustments() {
+  const adjSection = document.getElementById('mkt-adjustments-section');
+  if (adjSection) adjSection.style.display = 'flex';
+  addMktAdjustment();
+}
+
+function addMktAdjustment() {
+  const modal = document.getElementById('mkt-adj-modal');
+  if (!modal) return;
+  // Populate product dropdown
+  const sel = document.getElementById('mkt-adj-product');
+  if (sel && currentMarketStop?.products) {
+    sel.innerHTML = '<option value="">— Select product —</option>' +
+      currentMarketStop.products.map(p =>
+        `<option value="${p.barcode}" data-stock="${p.stock}" data-name="${p.name.replace(/"/g,'&quot;')}">${p.name}</option>`
+      ).join('');
+  }
+  document.getElementById('mkt-adj-qty').value = 1;
+  document.getElementById('mkt-adj-stock-hint').textContent = '';
+  modal.style.display = 'flex';
+}
+
+function onMktAdjProductChange() {
+  const sel  = document.getElementById('mkt-adj-product');
+  const hint = document.getElementById('mkt-adj-stock-hint');
+  const opt  = sel?.options[sel.selectedIndex];
+  if (opt && opt.value) {
+    const stock = parseInt(opt.dataset.stock) || 0;
+    if (hint) hint.textContent = `Current SOH: ${stock}`;
+  } else {
+    if (hint) hint.textContent = '';
+  }
+}
+
+function adjQtyStep(delta) {
+  const inp = document.getElementById('mkt-adj-qty');
+  if (inp) inp.value = Math.max(1, (parseInt(inp.value) || 1) + delta);
+}
+
+function closeMktAdjModal() {
+  const modal = document.getElementById('mkt-adj-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+function saveMktAdjustment() {
+  const sel    = document.getElementById('mkt-adj-product');
+  const reason = document.getElementById('mkt-adj-reason')?.value || 'other';
+  const qty    = parseInt(document.getElementById('mkt-adj-qty')?.value) || 0;
+  const opt    = sel?.options[sel.selectedIndex];
+  if (!opt?.value || qty <= 0) { showToast('Select a product and quantity'); return; }
+
+  const barcode = opt.value;
+  const name    = opt.dataset.name || barcode;
+  mktAdjustments.push({ barcode, name, qty, reason });
+
+  // Reduce current SOH on the product in memory
+  const prod = currentMarketStop?.products?.find(p => p.barcode === barcode);
+  if (prod) prod.stock = Math.max(0, prod.stock - qty);
+
+  closeMktAdjModal();
+
+  // Show adjustments section and re-render
+  const adjSection = document.getElementById('mkt-adjustments-section');
+  if (adjSection) adjSection.style.display = 'flex';
+  renderMktAdjList();
+  if (currentMarketStop?.products) renderMktStopProducts(currentMarketStop.products, false);
+  showToast(`Recorded: ${qty} × ${name} removed`);
+}
+
+function renderMktAdjList() {
+  const list = document.getElementById('mkt-adjustment-list');
+  if (!list) return;
+  if (!mktAdjustments.length) { list.innerHTML = ''; return; }
+  const reasonLabels = { expired:'Expired', damaged:'Damaged', returned:'Returned to van', other:'Other' };
+  list.innerHTML = mktAdjustments.map((a, i) =>
+    `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border)">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:500">${a.name}</div>
+        <div style="font-size:11px;color:var(--muted)">${reasonLabels[a.reason]||a.reason} · ${a.qty} unit${a.qty>1?'s':''} removed</div>
+      </div>
+      <button onclick="removeMktAdj(${i})" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:16px;padding:4px">✕</button>
+    </div>`
+  ).join('');
+}
+
+window.removeMktAdj = function(i) {
+  const adj = mktAdjustments[i];
+  if (!adj) return;
+  // Restore SOH in memory
+  const prod = currentMarketStop?.products?.find(p => p.barcode === adj.barcode);
+  if (prod) prod.stock += adj.qty;
+  mktAdjustments.splice(i, 1);
+  renderMktAdjList();
+  if (currentMarketStop?.products) renderMktStopProducts(currentMarketStop.products, false);
+};
+
+// ── Product swap ─────────────────────────────────────────────────
+window.openMktSwap = function(barcode, name, assetId, slotIdx) {
+  mktSwapSlot = { barcode, name, assetId, slotIdx };
+  const modal = document.getElementById('mkt-swap-modal');
+  const label = document.getElementById('mkt-swap-slot-label');
+  if (label) label.textContent = `Currently: ${name}`;
+  document.getElementById('mkt-swap-search').value = '';
+  renderMktSwapList();
+  if (modal) modal.style.display = 'flex';
+};
+
+function closeMktSwapModal() {
+  const modal = document.getElementById('mkt-swap-modal');
+  if (modal) modal.style.display = 'none';
+  mktSwapSlot = null;
+}
+
+window.renderMktSwapList = function() {
+  const q    = (document.getElementById('mkt-swap-search')?.value || '').toLowerCase().trim();
+  const list = document.getElementById('mkt-swap-list');
+  if (!list) return;
+  const prods = mktAllProducts.filter(p =>
+    !q || p.name.toLowerCase().includes(q) || p.barcode.includes(q)
+  ).slice(0, 30);
+
+  list.innerHTML = prods.map(p =>
+    `<div onclick="confirmMktSwap('${p.barcode}')" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;active:background:var(--border)">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:500">${p.name}</div>
+        <div style="font-size:11px;font-family:'DM Mono',monospace;color:var(--muted)">${p.barcode}</div>
+      </div>
+      <div style="font-size:13px;font-weight:600;color:var(--accent)">$${((p.priceCents||0)/100).toFixed(2)}</div>
+    </div>`
+  ).join('') || '<div style="padding:20px;text-align:center;color:var(--muted)">No products found</div>';
+};
+
+window.confirmMktSwap = async function(newBarcode) {
+  if (!mktSwapSlot || !currentMarketStop) return;
+  const { assetId, slotIdx, barcode: oldBarcode, name: oldName } = mktSwapSlot;
+  const newProd = mktAllProducts.find(p => p.barcode === newBarcode);
+  if (!newProd) return;
+
+  if (!confirm(`Replace ${oldName} with ${newProd.name}?\n\nThis will update the planogram. New product SOH starts at 0.`)) return;
+
+  closeMktSwapModal();
+  showToast('Updating planogram…');
+
+  const { marketId, rawAssets } = currentMarketStop;
+  if (!fbDb || !marketId || !rawAssets) { showToast('Cannot update — not connected'); return; }
+
+  try {
+    // Find the slot path in rawAssets
+    const asset = rawAssets[assetId];
+    if (!asset) throw new Error('Asset not found');
+    const slotKeys = Object.keys(asset.slots || {});
+    const slotKey  = slotKeys[slotIdx] !== undefined ? slotKeys[slotIdx] : slotIdx;
+
+    const updates = {};
+    // Update planogram asset slot
+    updates[`vynd/micromarkets/${marketId}/planogramAssets/${assetId}/slots/${slotKey}/barcode`] = newBarcode;
+    // Set new product SOH to 0 in catalogue
+    updates[`vynd/micromarkets/${marketId}/catalogue/${newBarcode}/stock`] = 0;
+    // Copy name and price from catalogue if available
+    const catEntry = currentMarketStop.catalogue?.[newBarcode];
+    if (catEntry?.name) updates[`vynd/micromarkets/${marketId}/catalogue/${newBarcode}/name`] = catEntry.name;
+
+    await fbDb.ref().update(updates);
+    showToast(`✓ Swapped to ${newProd.name}`);
+
+    // Reload the stop to reflect changes
+    await showMarketStop(currentMarketStop.stopId);
+  } catch(e) {
+    console.warn('[Swap] Failed:', e.message);
+    showToast('Swap failed — try again');
+  }
+};
+
 async function completeMktStop() {
   if (!currentMarketStop) return;
   const { stopId, marketId, products } = currentMarketStop;
@@ -2232,22 +2562,34 @@ async function completeMktStop() {
   const restockLines = [];
   products.forEach(p => {
     const loaded = mktLoadedQty[p.barcode] || 0;
-    if (loaded === 0) return; // only write products that were actually loaded
+    if (loaded === 0) return;
     const newSOH = p.stock + loaded;
     updates['vynd/micromarkets/' + marketId + '/catalogue/' + p.barcode + '/stock'] = newSOH;
-    restockLines.push({ barcode: p.barcode, name: p.name, soHBefore: p.stock, unitsLoaded: loaded, sohAfter: newSOH });
+    restockLines.push({ barcode: p.barcode, name: p.name, sohBefore: p.stock, unitsLoaded: loaded, sohAfter: newSOH });
+  });
+
+  // Write adjustments (stock removed) — subtract from SOH
+  const adjLines = [];
+  mktAdjustments.forEach(a => {
+    // SOH was already reduced in memory — write the final value
+    const prod = products.find(p => p.barcode === a.barcode);
+    if (prod) {
+      updates['vynd/micromarkets/' + marketId + '/catalogue/' + a.barcode + '/stock'] = Math.max(0, prod.stock);
+      adjLines.push({ barcode: a.barcode, name: a.name, qty: a.qty, reason: a.reason });
+    }
   });
 
   // Restock event log
   const eventKey = 'restock_' + Date.now();
   updates['vynd/micromarkets/' + marketId + '/restockEvents/' + eventKey] = {
     restockedAt,
-    driverId:   userPrefs?.driverId || 'unknown',
-    driverName: userPrefs?.driverName || 'Driver',
+    driverId:    userPrefs?.driverId || 'unknown',
+    driverName:  userPrefs?.driverName || 'Driver',
     marketId,
     stopId,
-    lines:      restockLines,
-    runId:      currentRunData?.id || null,
+    lines:       restockLines,
+    adjustments: adjLines,
+    runId:       currentRunData?.key || null,
   };
 
   if (fbDb && restockLines.length) {

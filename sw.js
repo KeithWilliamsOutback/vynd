@@ -1,6 +1,6 @@
 // VYND Driver App — Service Worker
 // ── BUMP THIS VERSION NUMBER every time you push to GitHub ──
-const VERSION = 'vynd-driver-v1.0.0';
+const VERSION = 'vynd-driver-v1.0.1';
 
 const CACHE = VERSION;
 

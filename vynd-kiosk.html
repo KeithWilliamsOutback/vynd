@@ -793,6 +793,7 @@ const STATE = {
   session:      null,
   lastTxn:      null,
   pendingTxnRef: null,
+  processingStarted: false,   // true once SCR signals processing has begun for the current pendingTxn — gates the Cancel button
   idleTimer:    null,
   countdownInterval: null,
   scanMode:       'idle',
@@ -1245,6 +1246,30 @@ function handleBridgeMessage(msg) {
 
     case 'voidResult':
       handleVoidResult(msg);
+      break;
+
+    case 'processingStarted':
+      // Bridge tells us the terminal has started processing the card.
+      // From this point Cancel must not interrupt the transaction (Vineel's
+      // feedback 2026-05-05). Disable the cancel button on the payment screen.
+      if (STATE.pendingTxnRef === msg.txnId || STATE.screen === 'payment') {
+        STATE.processingStarted = true;
+        const btn = document.querySelector('#screen-payment .btn-cancel-pay');
+        if (btn) {
+          btn.disabled = true;
+          btn.style.opacity = '0.4';
+          btn.style.cursor = 'not-allowed';
+          btn.textContent = 'Processing — please wait';
+        }
+      }
+      break;
+
+    case 'cancelRejected':
+      // Belt-and-braces: bridge rejected our cancel because processing already
+      // started. Make sure the UI is consistent — disable the button and
+      // inform the user briefly.
+      STATE.processingStarted = true;
+      showToast('Transaction is processing — please wait');
       break;
 
     case 'pong':
@@ -1902,6 +1927,16 @@ window.initiatePayment=function(){
   // Refresh banners — reader may have come back/gone away since this screen was last shown.
   // Note: offline mode (host down but reader up) is OK — Deferred Auth handles it.
   updateReaderBanners();
+  // Reset cancel-button state for this new session — Cancel must be enabled
+  // for cancel-before-tap, then disabled after processingStarted arrives.
+  STATE.processingStarted = false;
+  const cancelBtn = document.querySelector('#screen-payment .btn-cancel-pay');
+  if (cancelBtn) {
+    cancelBtn.disabled = false;
+    cancelBtn.style.opacity = '';
+    cancelBtn.style.cursor = '';
+    cancelBtn.textContent = 'Cancel';
+  }
   showScreen('payment');
   const readerAvailable = STATE.wsReady && STATE.readerOnline;
   if(!readerAvailable){el('payment-status').textContent='Waiting for payment reader…';return;}
@@ -1924,6 +1959,14 @@ window.initiatePayment=function(){
   resetIdleTimer();
 };
 window.cancelPayment=function(){
+  // Cancel is only valid before card processing starts. After the terminal
+  // has begun processing (Display or CardIn during this pendingTxn — bridge
+  // notifies us via processingStarted), Cancel becomes a no-op with a brief
+  // toast. The bridge also rejects server-side as a safety net.
+  if (STATE.processingStarted) {
+    showToast('Transaction is processing — please wait');
+    return;
+  }
   clearPendingPayment();
   if(STATE.wsReady)STATE.ws.send(JSON.stringify({type:'cancelTransaction'}));
   backToShopping();
@@ -2053,6 +2096,7 @@ async function writeSaleToFirebase(txn){
     authCode:       txn.authCode  || '',
     cardType:       txn.cardType  || txn.cardName || 'Unknown',
     isOfflineApproval: !!txn.isOffline,   // Deferred Auth — settled separately, flag for reconciliation
+    eftposReceipt:  txn.eftposReceipt || '',  // Full SCR-supplied EFTPOS receipt (30-char lines, joined by \n) — required by Windcave compliance to be embedded in the cardholder receipt
     hasFlags:STATE.basket.some(b=>b.flagType),
     hasPromotions:totalSavings>0,
     promoAttribution:Object.values(promoAttribution),

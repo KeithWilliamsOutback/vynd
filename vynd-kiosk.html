@@ -1249,27 +1249,31 @@ function handleBridgeMessage(msg) {
       break;
 
     case 'processingStarted':
-      // Bridge tells us the terminal has started processing the card.
-      // From this point Cancel must not interrupt the transaction (Vineel's
-      // feedback 2026-05-05). Disable the cancel button on the payment screen.
+      // Bridge has informed us the terminal has begun processing the card.
+      // We track this for diagnostics but do NOT change the Cancel button's
+      // appearance — UX feedback is delivered by the bridge's cancelRejected
+      // response if the user actually presses Cancel during this window.
       if (STATE.pendingTxnRef === msg.txnId || STATE.screen === 'payment') {
         STATE.processingStarted = true;
-        const btn = document.querySelector('#screen-payment .btn-cancel-pay');
-        if (btn) {
-          btn.disabled = true;
-          btn.style.opacity = '0.4';
-          btn.style.cursor = 'not-allowed';
-          btn.textContent = 'Processing — please wait';
-        }
       }
       break;
 
     case 'cancelRejected':
-      // Belt-and-braces: bridge rejected our cancel because processing already
-      // started. Make sure the UI is consistent — disable the button and
-      // inform the user briefly.
-      STATE.processingStarted = true;
+      // Bridge declined our cancelTransaction because the terminal is mid-
+      // processing. Restore the payment-status text and tell the user briefly.
+      // The transaction continues and will resolve to approved or declined
+      // through normal handlePaymentResult flow.
+      el('payment-status').textContent = 'Waiting for card tap…';
       showToast('Transaction is processing — please wait');
+      break;
+
+    case 'payment_cancelled':
+      // Bridge confirmed our cancel before any processing began. Now safe to
+      // tear down kiosk-side state and return to shopping with basket intact.
+      clearPendingPayment();
+      STATE.pendingTxnRef = null;
+      STATE.processingStarted = false;
+      backToShopping();
       break;
 
     case 'pong':
@@ -1927,16 +1931,10 @@ window.initiatePayment=function(){
   // Refresh banners — reader may have come back/gone away since this screen was last shown.
   // Note: offline mode (host down but reader up) is OK — Deferred Auth handles it.
   updateReaderBanners();
-  // Reset cancel-button state for this new session — Cancel must be enabled
-  // for cancel-before-tap, then disabled after processingStarted arrives.
+  // Reset the per-transaction processing-started flag for diagnostics.
+  // The Cancel button no longer changes appearance — its behaviour is
+  // governed by the bridge's payment_cancelled vs cancelRejected response.
   STATE.processingStarted = false;
-  const cancelBtn = document.querySelector('#screen-payment .btn-cancel-pay');
-  if (cancelBtn) {
-    cancelBtn.disabled = false;
-    cancelBtn.style.opacity = '';
-    cancelBtn.style.cursor = '';
-    cancelBtn.textContent = 'Cancel';
-  }
   showScreen('payment');
   const readerAvailable = STATE.wsReady && STATE.readerOnline;
   if(!readerAvailable){el('payment-status').textContent='Waiting for payment reader…';return;}
@@ -1959,17 +1957,23 @@ window.initiatePayment=function(){
   resetIdleTimer();
 };
 window.cancelPayment=function(){
-  // Cancel is only valid before card processing starts. After the terminal
-  // has begun processing (Display or CardIn during this pendingTxn — bridge
-  // notifies us via processingStarted), Cancel becomes a no-op with a brief
-  // toast. The bridge also rejects server-side as a safety net.
-  if (STATE.processingStarted) {
-    showToast('Transaction is processing — please wait');
+  // Optimistic cancel. Send the request and wait for the bridge to decide:
+  //   - payment_cancelled → bridge accepted (pre-tap), kiosk goes to shopping
+  //   - cancelRejected    → bridge declined (mid-processing), kiosk stays
+  // If the bridge or WS is unavailable, fall back to the old behaviour of
+  // immediate return-to-shopping; the recovery flow handles any orphaned
+  // approval the next time the kiosk processes a transaction.
+  if (!STATE.wsReady) {
+    clearPendingPayment();
+    STATE.pendingTxnRef = null;
+    backToShopping();
     return;
   }
-  clearPendingPayment();
-  if(STATE.wsReady)STATE.ws.send(JSON.stringify({type:'cancelTransaction'}));
-  backToShopping();
+  el('payment-status').textContent = 'Cancelling…';
+  STATE.ws.send(JSON.stringify({
+    type:   'cancelTransaction',
+    txnRef: STATE.pendingTxnRef,
+  }));
 };
 
 function handlePaymentResult(msg){

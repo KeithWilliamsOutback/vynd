@@ -1268,12 +1268,14 @@ function handleBridgeMessage(msg) {
       break;
 
     case 'payment_cancelled':
-      // Bridge confirmed our cancel before any processing began. Now safe to
-      // tear down kiosk-side state and return to shopping with basket intact.
+      // Bridge confirmed our cancel before any processing began. Reset the
+      // kiosk fully — clear the basket and return to the idle/screensaver
+      // screen. This matches Cancel from the decline screen and avoids
+      // the rapid-retry timing problem (where pressing Pay again
+      // immediately can run into the SCR's post-cancel busy window).
       clearPendingPayment();
-      STATE.pendingTxnRef = null;
       STATE.processingStarted = false;
-      backToShopping();
+      resetToIdle();
       break;
 
     case 'pong':
@@ -1958,15 +1960,14 @@ window.initiatePayment=function(){
 };
 window.cancelPayment=function(){
   // Optimistic cancel. Send the request and wait for the bridge to decide:
-  //   - payment_cancelled → bridge accepted (pre-tap), kiosk goes to shopping
+  //   - payment_cancelled → bridge accepted (pre-tap), kiosk resets to idle
   //   - cancelRejected    → bridge declined (mid-processing), kiosk stays
   // If the bridge or WS is unavailable, fall back to the old behaviour of
-  // immediate return-to-shopping; the recovery flow handles any orphaned
-  // approval the next time the kiosk processes a transaction.
+  // immediate reset; the recovery flow handles any orphaned approval the
+  // next time the kiosk processes a transaction.
   if (!STATE.wsReady) {
     clearPendingPayment();
-    STATE.pendingTxnRef = null;
-    backToShopping();
+    resetToIdle();
     return;
   }
   el('payment-status').textContent = 'Cancelling…';

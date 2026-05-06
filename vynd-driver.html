@@ -6762,9 +6762,16 @@ const DRIVER_FB_CONFIG = {
   storageBucket: "vynd-pilot.firebasestorage.app",
 };
 
+let _authListenerRegistered = false;
+
 function driver_initAuth() {
-  showScreen('screen-login');
-  if (!firebase.apps.length) firebase.initializeApp(DRIVER_FB_CONFIG);
+  // Initialise Firebase app once
+  if (!firebase.apps.length) {
+    firebase.initializeApp(DRIVER_FB_CONFIG);
+  }
+  // Only register the auth listener once — multiple calls were causing double-firing
+  if (_authListenerRegistered) return;
+  _authListenerRegistered = true;
 
   firebase.auth().onAuthStateChanged(async user => {
     if (!user) { showScreen('screen-login'); return; }

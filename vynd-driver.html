@@ -6777,15 +6777,27 @@ function driver_initAuth() {
         return;
       }
       // Set driver preferences from Firebase user record
+      // Use the stored driverId for run matching (not Firebase UID)
+      // This preserves compatibility with existing runs in Firebase
       userPrefs = {
-        driverId:   user.uid,
-        driverName: userData.name || user.email.split('@')[0],
-        role:       userData.role,
+        driverId:    userData.driverId || user.uid,
+        driverName:  userData.name || user.email.split('@')[0],
+        driverEmail: user.email,
+        role:        userData.role,
       };
       try { localStorage.setItem('vynd_userPrefs', JSON.stringify(userPrefs)); } catch(e) {}
       console.log('[Auth] Driver signed in:', userPrefs.driverName, 'role:', userData.role);
-      // Init Firebase connection and load home screen
-      initFirebase();
+      // Set up Firebase database directly — don't call initFirebase() as it
+      // triggers another onAuthStateChanged cycle which resets the login screen
+      if (!fbReady && typeof firebase !== 'undefined' && firebase.apps.length) {
+        fbDb    = firebase.database();
+        fbReady = true;
+        // Set up listeners that initFirebase would normally handle
+        firebase.database().ref('.info/connected').on('value', snap => {
+          updateSyncStatus && updateSyncStatus(snap.val() === true);
+        });
+        offlineQueueFlush && offlineQueueFlush();
+      }
       loadHomeScreen();
     } catch(e) {
       driver_showLoginError('Error: ' + e.message);

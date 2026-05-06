@@ -1438,6 +1438,9 @@ function getMachineData(id) {
 let currentRunData = null;
 
 async function loadHomeScreen() {
+  // Ensure home screen is visible — may be called from auth before screen changes
+  showScreen('screen-home');
+
   // Update greeting
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
